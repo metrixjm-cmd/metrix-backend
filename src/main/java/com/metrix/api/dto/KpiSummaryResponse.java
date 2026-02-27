@@ -55,4 +55,7 @@ public class KpiSummaryResponse {
 
     // Calidad promedio
     private double avgQualityRating;        // 1.0–5.0 o -1.0
+
+    // KPI Capacitación (Sprint 10) — % de trainings COMPLETADAS en la sucursal
+    private double trainingCompletionRate;  // 0.0–100.0 (0.0 si sin datos)
 }

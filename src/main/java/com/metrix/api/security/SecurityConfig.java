@@ -63,6 +63,17 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/gerente/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers("/api/v1/reports/**").hasAnyRole("ADMIN", "GERENTE")
 
+                // ── Módulo RH (Sprint 9) ────────────────────────────
+                .requestMatchers(HttpMethod.GET,   "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.POST,  "/api/v1/users").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,   "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/users/**").hasRole("ADMIN")
+
+                // ── Módulo Capacitación (Sprint 10) ──────────────────
+                .requestMatchers(HttpMethod.GET,    "/api/v1/trainings/store/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.POST,   "/api/v1/trainings").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/trainings/**").hasRole("ADMIN")
+
                 // ── Todo lo demás requiere autenticación ───────────
                 .anyRequest().authenticated()
             )

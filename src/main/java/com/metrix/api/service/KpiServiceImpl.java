@@ -8,8 +8,10 @@ import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.model.StatusTransition;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
+import com.metrix.api.model.TrainingStatus;
 import com.metrix.api.model.User;
 import com.metrix.api.repository.TaskRepository;
+import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,8 +34,9 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 public class KpiServiceImpl implements KpiService {
 
-    private final TaskRepository taskRepository;
-    private final UserRepository userRepository;
+    private final TaskRepository     taskRepository;
+    private final UserRepository     userRepository;
+    private final TrainingRepository trainingRepository;
 
     // ── Puntos de entrada ─────────────────────────────────────────────────
 
@@ -206,6 +209,17 @@ public class KpiServiceImpl implements KpiService {
 
         List<Task> last10 = last10ClosedByCreatedAt(closed);
 
+        // KPI Capacitación: % COMPLETADAS en la sucursal (solo aplica en contexto STORE)
+        double trainingRate = 0.0;
+        if ("STORE".equals(context)) {
+            long totalTrainings = trainingRepository.countByStoreIdAndActivoTrue(contextId);
+            if (totalTrainings > 0) {
+                long completedTrainings = trainingRepository
+                        .countByStoreIdAndProgress_StatusAndActivoTrue(contextId, TrainingStatus.COMPLETADA);
+                trainingRate = round2(completedTrainings * 100.0 / totalTrainings);
+            }
+        }
+
         return KpiSummaryResponse.builder()
                 .context(context)
                 .contextId(contextId)
@@ -223,6 +237,7 @@ public class KpiServiceImpl implements KpiService {
                 .sparklineOnTime(buildOnTimeSparkline(last10))
                 .sparklineIgeo(buildIgeoSparkline(last10))
                 .avgQualityRating(round2(computeQualityRatingAvg(tasks)))
+                .trainingCompletionRate(trainingRate)
                 .build();
     }
 
@@ -404,6 +419,7 @@ public class KpiServiceImpl implements KpiService {
                 .sparklineOnTime(Collections.emptyList())
                 .sparklineIgeo(Collections.emptyList())
                 .avgQualityRating(-1.0)
+                .trainingCompletionRate(0.0)
                 .build();
     }
 

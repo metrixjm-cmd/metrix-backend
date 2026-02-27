@@ -281,9 +281,9 @@ public class TaskServiceImpl implements TaskService {
      * </ul>
      */
     private void emitStatusNotification(Task task, TaskStatus newStatus) {
-        String type;
-        String severity;
-        String title;
+        String type     = "TASK_UPDATED";
+        String severity = "info";
+        String title    = "Tarea Actualizada";
 
         switch (newStatus) {
             case IN_PROGRESS -> {

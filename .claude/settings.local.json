@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"/c/Users/carlo/Documents/proyectosWEB/Metrix-multitask/backend-api\" && mvn clean compile 2>&1)"
+    ]
+  }
+}

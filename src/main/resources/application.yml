@@ -1,0 +1,40 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: METRIX-API
+  
+  # Configuración de MongoDB
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/metrix_db
+      # Si usas Atlas: mongodb+srv://<user>:<pass>@cluster.mongodb.net/metrix_db
+
+  # Configuración de carga de archivos (Punto 12)
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# Configuración personalizada de METRIX
+metrix:
+  jwt:
+    secret: ${JWT_SECRET:esta-es-una-clave-muy-secreta-y-larga-para-metrix-2026}
+    expiration: 86400000 # 24 horas
+  
+  google-cloud:
+    bucket-name: metrix-evidences
+    project-id: metrix-project-id
+    credentials-path: classpath:gcp-service-account.json
+
+  security:
+    jwt:
+      secret-key: 3zocvWAkykphKpHKU/vkT5AUWCgzJi2fBeAVh12Gxlw=
+      expiration-ms: 86400000  # 24 horas
+
+# Logs para desarrollo
+logging:
+  level:
+    org.springframework.data.mongodb: DEBUG
+    com.metrix.api: DEBUG

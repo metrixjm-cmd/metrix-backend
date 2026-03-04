@@ -52,4 +52,10 @@ public interface UserRepository extends MongoRepository<User, String> {
      * Útil para: listar todos los GERENTES, notificaciones a ADMINS, etc.
      */
     List<User> findByRolesContaining(Role role);
+
+    /**
+     * Conteo de colaboradores activos en una sucursal.
+     * Usado por StoreServiceImpl para calcular stats denormalizados (Sprint 11).
+     */
+    long countByStoreIdAndActivoTrue(String storeId);
 }

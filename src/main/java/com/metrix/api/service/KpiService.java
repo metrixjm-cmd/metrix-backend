@@ -1,6 +1,7 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.CorrectionSpeedResponse;
+import com.metrix.api.dto.IgeoAnalyticsResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
@@ -48,4 +49,20 @@ public interface KpiService {
      * Acceso: ADMIN, GERENTE.
      */
     CorrectionSpeedResponse getCorrectionSpeed(String storeId);
+
+    /**
+     * KPI #10 — IGEO analítico (Sprint 17): delega al microservicio Python
+     * {@code analytics-service} el cálculo del IGEO compuesto de 4 pilares
+     * (Cumplimiento × 0.40 + Tiempo × 0.25 + Calidad × 0.20 + Consistencia × 0.15).
+     * <p>
+     * A diferencia de {@code getStoreSummary()} que calcula el IGEO en memoria con
+     * la fórmula simplificada del Sprint 7, este método consume el KPI completo
+     * calculado por pandas sobre toda la colección {@code tasks}.
+     * <p>
+     * Acceso: ADMIN, GERENTE.
+     *
+     * @throws org.springframework.web.client.RestClientException si el analytics-service
+     *         no está disponible en {@code metrix.analytics.url}.
+     */
+    IgeoAnalyticsResponse getGlobalIgeoAnalytics();
 }

@@ -52,6 +52,9 @@ public class NotificationEvent {
     /** MongoDB _id de la tarea relacionada (puede ser null). */
     private String taskId;
 
+    /** MongoDB _id de la incidencia relacionada (puede ser null — Sprint 15). */
+    private String incidentId;
+
     /** ID de la sucursal origen del evento. */
     private String storeId;
 

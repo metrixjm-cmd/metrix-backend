@@ -12,9 +12,12 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.metrix.api.dto.*;
+import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
+import com.metrix.api.model.User;
 import com.metrix.api.repository.TaskRepository;
+import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
@@ -37,8 +40,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReportServiceImpl implements ReportService {
 
-    private final TaskRepository taskRepository;
-    private final KpiService     kpiService;
+    private final TaskRepository     taskRepository;
+    private final UserRepository     userRepository;
+    private final KpiService         kpiService;
+    private final GamificationService gamificationService;
 
     // ── buildDailyReport ─────────────────────────────────────────────────
 
@@ -356,6 +361,105 @@ public class ReportServiceImpl implements ReportService {
 
     private String formatKpiPct(double value) {
         return value < 0 ? "S/D" : String.format("%.1f%%", value);
+    }
+
+    // ── generatePerformanceCard ───────────────────────────────────────────
+
+    @Override
+    public byte[] generatePerformanceCard(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+
+        UserResponsibilityResponse kpi = kpiService.getUsersResponsibility(user.getStoreId())
+                .stream()
+                .filter(u -> u.getUserId().equals(userId))
+                .findFirst()
+                .orElse(null);
+
+        GamificationSummaryDTO gamification = gamificationService.getMyGamification(userId, user.getStoreId());
+
+        try (var baos = new ByteArrayOutputStream()) {
+            Document doc = new Document(PageSize.A4);
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            Font titleFont   = new Font(Font.HELVETICA, 18, Font.BOLD, new Color(234, 88, 12));
+            Font headerFont  = new Font(Font.HELVETICA, 10, Font.BOLD, Color.WHITE);
+            Font labelFont   = new Font(Font.HELVETICA, 10, Font.BOLD, new Color(28, 25, 23));
+            Font cellFont    = new Font(Font.HELVETICA, 10, Font.NORMAL, new Color(28, 25, 23));
+            Font sectionFont = new Font(Font.HELVETICA, 12, Font.BOLD, new Color(28, 25, 23));
+            Font badgeFont   = new Font(Font.HELVETICA, 10, Font.NORMAL, new Color(234, 88, 12));
+
+            // ── Encabezado ──
+            doc.add(new Paragraph("METRIX — Ficha de Desempeño Individual", titleFont));
+            doc.add(Chunk.NEWLINE);
+
+            // ── Datos personales ──
+            doc.add(new Paragraph("Datos del Colaborador", sectionFont));
+            doc.add(Chunk.NEWLINE);
+            PdfPTable infoTable = new PdfPTable(2);
+            infoTable.setWidthPercentage(80);
+            addInfoRow(infoTable, "Nombre",        user.getNombre()       != null ? user.getNombre()  : "-", labelFont, cellFont);
+            addInfoRow(infoTable, "Número Usuario", user.getNumeroUsuario() != null ? user.getNumeroUsuario() : "-", labelFont, cellFont);
+            addInfoRow(infoTable, "Puesto",        user.getPuesto()        != null ? user.getPuesto() : "-", labelFont, cellFont);
+            addInfoRow(infoTable, "Turno",         user.getTurno()         != null ? user.getTurno()  : "-", labelFont, cellFont);
+            doc.add(infoTable);
+            doc.add(Chunk.NEWLINE);
+
+            // ── KPIs ──
+            doc.add(new Paragraph("Indicadores de Desempeño (KPIs)", sectionFont));
+            doc.add(Chunk.NEWLINE);
+            if (kpi != null) {
+                PdfPTable kpiTable = new PdfPTable(2);
+                kpiTable.setWidthPercentage(70);
+                addHeaderCell(kpiTable, "KPI", headerFont);
+                addHeaderCell(kpiTable, "Valor", headerFont);
+                addKpiRow(kpiTable, "IGEO (Índice Global)",       formatKpi(kpi.getIgeo()), cellFont);
+                addKpiRow(kpiTable, "On-Time Rate",               formatKpiPct(kpi.getOnTimeRate()), cellFont);
+                addKpiRow(kpiTable, "Tasa de Re-trabajo",         formatKpiPct(kpi.getReworkRate()), cellFont);
+                addKpiRow(kpiTable, "Avg. Ejecución (min)",       formatKpi(kpi.getAvgExecMinutes()), cellFont);
+                addKpiRow(kpiTable, "Tareas Totales",             String.valueOf(kpi.getTotalTasks()), cellFont);
+                addKpiRow(kpiTable, "Tareas Completadas",         String.valueOf(kpi.getCompletedTasks()), cellFont);
+                addKpiRow(kpiTable, "Ranking en Sucursal",        "#" + kpi.getRank(), cellFont);
+                doc.add(kpiTable);
+            } else {
+                doc.add(new Paragraph("Sin datos de KPIs disponibles.", cellFont));
+            }
+            doc.add(Chunk.NEWLINE);
+
+            // ── Gamificación ──
+            doc.add(new Paragraph("Gamificación e Insignias", sectionFont));
+            doc.add(Chunk.NEWLINE);
+            doc.add(new Paragraph(
+                    "Posición en ranking: #" + gamification.getRank()
+                    + " de " + gamification.getTotalInStore() + " colaboradores", cellFont));
+            doc.add(new Paragraph(
+                    "Insignias obtenidas: " + gamification.getEarnedBadgesCount()
+                    + " / " + gamification.getAvailableBadgesCount(), cellFont));
+            doc.add(Chunk.NEWLINE);
+
+            if (gamification.getBadges() != null && !gamification.getBadges().isEmpty()) {
+                for (BadgeDTO badge : gamification.getBadges()) {
+                    doc.add(new Paragraph(
+                            badge.getIcon() + "  " + badge.getTitle() + " — " + badge.getDescription(),
+                            badgeFont));
+                }
+            } else {
+                doc.add(new Paragraph("Sin insignias ganadas aún.", cellFont));
+            }
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error generando Ficha de Desempeño: " + e.getMessage(), e);
+        }
+    }
+
+    private void addInfoRow(PdfPTable table, String label, String value, Font labelFont, Font cellFont) {
+        PdfPCell labelCell = new PdfPCell(new Phrase(label, labelFont));
+        labelCell.setPadding(4);
+        table.addCell(labelCell);
+        addCell(table, value, cellFont);
     }
 
     // ── Task → TaskResponse (minimal mapper) ─────────────────────────────

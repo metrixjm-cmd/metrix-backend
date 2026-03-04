@@ -3,6 +3,7 @@ package com.metrix;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * METRIX - Sistema de Gestión de Ejecución Operativa y Analítica
@@ -12,6 +13,7 @@ import org.springframework.data.mongodb.config.EnableMongoAuditing;
  */
 @SpringBootApplication
 @EnableMongoAuditing  // Habilita @CreatedDate y @LastModifiedDate en las entidades
+@EnableScheduling     // Habilita @Scheduled para alertas preventivas (Sprint 16)
 public class MetrixApplication {
 
     public static void main(String[] args) {

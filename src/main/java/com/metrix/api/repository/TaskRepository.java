@@ -6,6 +6,7 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -90,6 +91,24 @@ public interface TaskRepository extends MongoRepository<Task, String> {
     /** KPI #6: Ranking Inter-Sucursal. Todas las tareas activas en el sistema. Solo ADMIN. */
     List<Task> findByActivoTrue();
 
+    // ── Alertas preventivas programadas (Sprint 16) ──────────────────────
+
+    /**
+     * Tareas próximas a vencer: status IN (PENDING, IN_PROGRESS) y dueAt entre [from, to].
+     * Usado por {@code AlertScheduler.checkUpcomingDeadlines()} cada 5 minutos.
+     * Reutiliza el índice {@code idx_store_due}.
+     */
+    List<Task> findByExecution_StatusInAndDueAtBetweenAndActivoTrue(
+            Collection<TaskStatus> statuses, Instant from, Instant to);
+
+    /**
+     * Tareas ya vencidas: status IN (PENDING, IN_PROGRESS) y dueAt antes de now.
+     * Usado por {@code AlertScheduler.checkOverdueTasks()} cada 10 minutos.
+     * Reutiliza el índice {@code idx_store_due}.
+     */
+    List<Task> findByExecution_StatusInAndDueAtBeforeAndActivoTrue(
+            Collection<TaskStatus> statuses, Instant now);
+
     // ── Conteos para KPIs ────────────────────────────────────────────────
 
     /** Total de tareas activas de un usuario. Denominador del On-Time Rate (KPI #1). */
@@ -97,4 +116,10 @@ public interface TaskRepository extends MongoRepository<Task, String> {
 
     /** Tareas completadas a tiempo de un usuario. Numerador del On-Time Rate (KPI #1). */
     long countByAssignedUserIdAndExecution_OnTimeTrueAndActivoTrue(String assignedUserId);
+
+    /**
+     * Conteo de tareas activas en una sucursal.
+     * Usado por StoreServiceImpl para calcular stats denormalizados (Sprint 11).
+     */
+    long countByStoreIdAndActivoTrue(String storeId);
 }

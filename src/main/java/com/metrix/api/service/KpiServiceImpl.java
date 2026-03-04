@@ -1,6 +1,7 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.CorrectionSpeedResponse;
+import com.metrix.api.dto.IgeoAnalyticsResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.ShiftBreakdownResponse;
 import com.metrix.api.dto.StoreRankingResponse;
@@ -14,7 +15,12 @@ import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.util.*;
@@ -34,9 +40,22 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 public class KpiServiceImpl implements KpiService {
 
+    private static final Logger log = LoggerFactory.getLogger(KpiServiceImpl.class);
+
+    // ── Repositorios (inyección por constructor vía @RequiredArgsConstructor) ─
     private final TaskRepository     taskRepository;
     private final UserRepository     userRepository;
     private final TrainingRepository trainingRepository;
+
+    // ── Cliente HTTP para analytics-service Python (Sprint 17) ───────────────
+    // RestTemplate se inyecta por constructor junto con los repositorios.
+    private final RestTemplate restTemplate;
+
+    // @Value usa inyección de campo (field injection). Funciona correctamente
+    // en paralelo al constructor de Lombok — Spring aplica @Value después
+    // de construir el bean.
+    @Value("${metrix.analytics.url}")
+    private String analyticsUrl;
 
     // ── Puntos de entrada ─────────────────────────────────────────────────
 
@@ -125,6 +144,40 @@ public class KpiServiceImpl implements KpiService {
             result.get(i).setRank(i + 1);
         }
         return result;
+    }
+
+    // ── KPI #10 — IGEO analítico (analytics-service Python, Sprint 17) ──────
+
+    /**
+     * Delega el cálculo del IGEO completo (4 pilares) al microservicio Python.
+     * <p>
+     * Flujo:
+     * <ol>
+     *   <li>Llama {@code GET {analyticsUrl}/igeo} vía {@link RestTemplate}.</li>
+     *   <li>Deserializa el JSON en {@link IgeoAnalyticsResponse} (records Java 21).</li>
+     *   <li>Si el servicio no responde, lanza {@link RestClientException} con mensaje
+     *       claro para que el controller devuelva HTTP 503.</li>
+     * </ol>
+     * <p>
+     * No cache: cada llamada ejecuta el cálculo en tiempo real contra MongoDB.
+     * Para producción considerar añadir {@code @Cacheable("igeo")} con TTL de 5 min.
+     */
+    @Override
+    public IgeoAnalyticsResponse getGlobalIgeoAnalytics() {
+        String url = analyticsUrl + "/igeo";
+        log.debug("[KPI#10] Llamando analytics-service: GET {}", url);
+        try {
+            IgeoAnalyticsResponse response = restTemplate.getForObject(url, IgeoAnalyticsResponse.class);
+            if (response == null) {
+                throw new RestClientException("analytics-service devolvió cuerpo vacío en " + url);
+            }
+            log.debug("[KPI#10] IGEO global recibido: {}", response.data() != null
+                    ? response.data().global().igeo() : "sin datos");
+            return response;
+        } catch (RestClientException ex) {
+            log.error("[KPI#10] analytics-service no disponible en {}: {}", url, ex.getMessage());
+            throw ex;
+        }
     }
 
     // ── KPI #9 — Velocidad de Corrección ─────────────────────────────────

@@ -79,4 +79,22 @@ public class ReportController {
                         "attachment; filename=\"cierre-" + date + ".xlsx\"")
                 .body(excel);
     }
+
+    /**
+     * GET /api/v1/reports/user/{userId}/performance-card
+     * <p>
+     * Descarga la Ficha de Desempeño Individual de un colaborador en PDF.
+     * Incluye datos personales, KPIs acumulados e insignias de gamificación.
+     * Sprint 12.
+     */
+    @GetMapping("/user/{userId}/performance-card")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<byte[]> getPerformanceCard(@PathVariable String userId) {
+        byte[] pdf = reportService.generatePerformanceCard(userId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"ficha-desempeno-" + userId + ".pdf\"")
+                .body(pdf);
+    }
 }

@@ -5,10 +5,10 @@ import com.metrix.api.dto.DailyReportResponse;
 import java.time.LocalDate;
 
 /**
- * Contrato del servicio de reportes de cierre diario para METRIX.
+ * Contrato del servicio de reportes para METRIX.
  * <p>
- * Sprint 8: genera reportes PDF (OpenPDF) y Excel (Apache POI)
- * filtrados por sucursal y fecha.
+ * Sprint 8: reportes de cierre diario PDF + Excel.
+ * Sprint 12: ficha de desempeño individual por colaborador.
  */
 public interface ReportService {
 
@@ -29,4 +29,11 @@ public interface ReportService {
      * Usa Apache POI (org.apache.poi.xssf.usermodel).
      */
     byte[] generateExcel(DailyReportResponse report);
+
+    /**
+     * Genera una Ficha de Desempeño Individual en PDF para un colaborador.
+     * Incluye: datos personales, KPIs acumulados, insignias de gamificación.
+     * Sprint 12.
+     */
+    byte[] generatePerformanceCard(String userId);
 }

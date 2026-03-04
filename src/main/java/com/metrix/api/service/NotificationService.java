@@ -112,6 +112,17 @@ public class NotificationService {
                 .forEach(managerId -> sendToUser(managerId, event));
     }
 
+    /**
+     * Envía una notificación a todos los usuarios con rol ADMIN que tengan una conexión SSE activa.
+     * Usado por el {@code AlertScheduler} para alertas diarias de IGEO (Sprint 16).
+     *
+     * @param event payload del evento
+     */
+    public void sendToAllAdmins(NotificationEvent event) {
+        userRepository.findByRolesContaining(Role.ADMIN)
+                .forEach(admin -> sendToUser(admin.getId(), event));
+    }
+
     /** Retorna el número de conexiones SSE activas en este momento. */
     public int activeConnections() {
         return emitters.size();

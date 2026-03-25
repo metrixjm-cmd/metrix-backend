@@ -5,6 +5,10 @@ import com.metrix.api.dto.LeaderboardEntryDTO;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.GamificationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +31,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/gamification")
 @RequiredArgsConstructor
+@Tag(name = "Gamificación", description = "Ranking, insignias y leaderboard (Sprint 12)")
 public class GamificationController {
 
     private final GamificationService gamificationService;
@@ -38,6 +43,8 @@ public class GamificationController {
      * Ranking de colaboradores de una sucursal para el período indicado.
      * Por defecto: {@code weekly}.
      */
+    @Operation(summary = "Leaderboard de sucursal", description = "Ranking de colaboradores de una sucursal para el período indicado (weekly o monthly). Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Leaderboard de la sucursal")
     @GetMapping("/store/{storeId}/leaderboard")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<List<LeaderboardEntryDTO>> getLeaderboard(
@@ -52,6 +59,8 @@ public class GamificationController {
      * Resumen personal de gamificación del usuario autenticado:
      * posición en la sucursal, IGEO acumulado e insignias ganadas.
      */
+    @Operation(summary = "Mi resumen de gamificación", description = "Resumen personal del usuario autenticado: posición en sucursal, IGEO acumulado e insignias ganadas.")
+    @ApiResponse(responseCode = "200", description = "Resumen de gamificación del usuario")
     @GetMapping("/me")
     public ResponseEntity<GamificationSummaryDTO> getMyGamification(Authentication auth) {
         String numeroUsuario = auth.getName();

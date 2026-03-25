@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
 
 /**
@@ -27,6 +28,8 @@ public class UserResponse {
     private String numeroUsuario;
     private Set<Role> roles;
     private boolean activo;
+    private String email;
+    private LocalDate fechaNacimiento;
     private Instant createdAt;
     private Instant updatedAt;
 }

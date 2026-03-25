@@ -1,6 +1,6 @@
 package com.metrix.api.dto;
 
-import com.metrix.api.model.TaskCategory;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.metrix.api.model.TaskStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -28,11 +29,15 @@ public class TaskResponse {
     // task_definition
     private String title;
     private String description;
-    private TaskCategory category;
+    private String category;
+    @JsonProperty("isCritical")
     private boolean critical;
 
     // assignment
+    @JsonProperty("assignedToId")
     private String assignedUserId;
+    @JsonProperty("assignedToName")
+    private String assignedUserName;
     private String position;
     private String storeId;
     private String shift;
@@ -50,6 +55,18 @@ public class TaskResponse {
     private int reworkCount;
     private Double qualityRating;
     private String comments;
+
+    // processes
+    @Builder.Default
+    private List<ProcessStepResponse> processes = new ArrayList<>();
+
+    // recurrence
+    @JsonProperty("isRecurring")
+    private boolean recurring;
+    @Builder.Default
+    private List<String> recurrenceDays = new ArrayList<>();
+    private String recurrenceStartTime;
+    private String recurrenceEndTime;
 
     // meta
     private String createdBy;

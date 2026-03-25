@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+      Lombok @Data/@Builder genera getters/setters mutables.
+      En un proyecto Spring Boot + MongoDB con DTOs inmutables de facto,
+      EI_EXPOSE_REP es falso positivo en todos los packages.
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- ReportServiceImpl catch(Exception) para PDF/Excel generation — intencional -->
+    <Match>
+        <Bug pattern="REC_CATCH_EXCEPTION"/>
+        <Class name="com.metrix.api.service.ReportServiceImpl"/>
+    </Match>
+</FindBugsFilter>

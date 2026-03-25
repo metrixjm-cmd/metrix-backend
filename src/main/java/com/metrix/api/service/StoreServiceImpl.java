@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementación del módulo de Sucursales — Sprint 11.
@@ -29,19 +31,28 @@ public class StoreServiceImpl implements StoreService {
     private final UserRepository     userRepository;
     private final TaskRepository     taskRepository;
     private final TrainingRepository trainingRepository;
+    private final SequenceService    sequenceService;
 
     // ── Crear ────────────────────────────────────────────────────────────────
 
     @Override
     public StoreResponse create(CreateStoreRequest request, String createdBy) {
-        if (storeRepository.existsByCodigo(request.getCodigo())) {
+        // Auto-generar código si no se envía
+        String codigo = request.getCodigo();
+        if (codigo == null || codigo.isBlank()) {
+            codigo = sequenceService.generateStoreCode();
+        } else {
+            codigo = codigo.toUpperCase();
+        }
+
+        if (storeRepository.existsByCodigo(codigo)) {
             throw new IllegalStateException(
-                    "Ya existe una sucursal con el código: " + request.getCodigo());
+                    "Ya existe una sucursal con el código: " + codigo);
         }
 
         Store.StoreBuilder builder = Store.builder()
                 .nombre(request.getNombre())
-                .codigo(request.getCodigo().toUpperCase())
+                .codigo(codigo)
                 .createdBy(createdBy);
 
         if (request.getDireccion() != null) builder.direccion(request.getDireccion());
@@ -57,8 +68,33 @@ public class StoreServiceImpl implements StoreService {
 
     @Override
     public List<StoreResponse> getAll() {
-        return storeRepository.findByActivoTrue()
-                .stream().map(this::toResponse).toList();
+        List<Store> stores = storeRepository.findByActivoTrue();
+        if (stores.isEmpty()) return List.of();
+
+        // Batch-load counts for ALL stores in 3 queries (instead of 3 × N)
+        List<String> storeIds = stores.stream().map(Store::getId).toList();
+        Map<String, Long> userCounts = countByStoreIds(
+                userRepository.findByActivoTrue(), com.metrix.api.model.User::getStoreId, storeIds);
+        Map<String, Long> taskCounts = countByStoreIds(
+                taskRepository.findByActivoTrue(), com.metrix.api.model.Task::getStoreId, storeIds);
+        Map<String, Long> trainingCounts = countByStoreIds(
+                trainingRepository.findByActivoTrue(), t -> t.getStoreId(), storeIds);
+
+        return stores.stream()
+                .map(s -> toResponse(s,
+                        userCounts.getOrDefault(s.getId(), 0L),
+                        taskCounts.getOrDefault(s.getId(), 0L),
+                        trainingCounts.getOrDefault(s.getId(), 0L)))
+                .toList();
+    }
+
+    /** Groups entities by storeId and counts per store — eliminates N+1. */
+    private <T> Map<String, Long> countByStoreIds(
+            List<T> entities, java.util.function.Function<T, String> storeIdExtractor,
+            List<String> storeIds) {
+        return entities.stream()
+                .filter(e -> storeIdExtractor.apply(e) != null)
+                .collect(Collectors.groupingBy(storeIdExtractor, Collectors.counting()));
     }
 
     // ── Detalle ──────────────────────────────────────────────────────────────
@@ -108,12 +144,21 @@ public class StoreServiceImpl implements StoreService {
         storeRepository.save(store);
     }
 
-    // ── Mapper ───────────────────────────────────────────────────────────────
+    // ── Mappers ──────────────────────────────────────────────────────────────
 
+    /** Single store detail — 3 count queries (acceptable for detail view). */
     private StoreResponse toResponse(Store store) {
         String storeId = store.getId();
+        return toResponse(store,
+                userRepository.countByStoreIdAndActivoTrue(storeId),
+                taskRepository.countByStoreIdAndActivoTrue(storeId),
+                trainingRepository.countByStoreIdAndActivoTrue(storeId));
+    }
+
+    /** Batch-friendly mapper with pre-computed counts (eliminates N+1 in getAll). */
+    private StoreResponse toResponse(Store store, long totalUsers, long totalTasks, long totalTrainings) {
         return StoreResponse.builder()
-                .id(storeId)
+                .id(store.getId())
                 .nombre(store.getNombre())
                 .codigo(store.getCodigo())
                 .direccion(store.getDireccion())
@@ -123,9 +168,9 @@ public class StoreServiceImpl implements StoreService {
                 .createdBy(store.getCreatedBy())
                 .createdAt(store.getCreatedAt())
                 .updatedAt(store.getUpdatedAt())
-                .totalUsers(userRepository.countByStoreIdAndActivoTrue(storeId))
-                .totalTasks(taskRepository.countByStoreIdAndActivoTrue(storeId))
-                .totalTrainings(trainingRepository.countByStoreIdAndActivoTrue(storeId))
+                .totalUsers(totalUsers)
+                .totalTasks(totalTasks)
+                .totalTrainings(totalTrainings)
                 .build();
     }
 }

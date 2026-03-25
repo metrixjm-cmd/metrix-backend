@@ -2,19 +2,32 @@ package com.metrix.api.service;
 
 import com.metrix.api.dto.CreateTaskRequest;
 import com.metrix.api.dto.EvidenceUploadResponse;
-import com.metrix.api.dto.NotificationEvent;
+import com.metrix.api.dto.ProcessStepRequest;
+import com.metrix.api.dto.ProcessStepResponse;
+import com.metrix.api.dto.QualityRatingRequest;
 import com.metrix.api.dto.TaskResponse;
 import com.metrix.api.dto.UpdateStatusRequest;
+import com.metrix.api.event.DomainEvents.TaskCreatedEvent;
+import com.metrix.api.event.DomainEvents.TaskStatusChangedEvent;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.*;
+import com.metrix.api.repository.TaskEvidenceRepository;
 import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Implementación del motor de tareas para METRIX (Sprint 2).
@@ -29,14 +42,16 @@ import java.util.UUID;
  *       no de MongoTemplate ni clases concretas de infraestructura.</li>
  * </ul>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TaskServiceImpl implements TaskService {
 
-    private final TaskRepository    taskRepository;
-    private final UserRepository    userRepository;
-    private final GcsService        gcsService;
-    private final NotificationService notificationService;
+    private final TaskRepository            taskRepository;
+    private final TaskEvidenceRepository   taskEvidenceRepository;
+    private final UserRepository           userRepository;
+    private final GcsService               gcsService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ── Crear Tarea ──────────────────────────────────────────────────────
 
@@ -49,7 +64,9 @@ public class TaskServiceImpl implements TaskService {
      */
     @Override
     public TaskResponse createTask(CreateTaskRequest request, String createdBy) {
+        // Buscar por ObjectId primero, fallback a numeroUsuario
         User assignedUser = userRepository.findById(request.getAssignedUserId())
+                .or(() -> userRepository.findByNumeroUsuario(request.getAssignedUserId()))
                 .filter(User::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario asignado no encontrado o inactivo: " + request.getAssignedUserId()));
@@ -64,6 +81,11 @@ public class TaskServiceImpl implements TaskService {
                 .storeId(request.getStoreId())
                 .shift(request.getShift())
                 .dueAt(request.getDueAt())
+                .processes(mapProcessSteps(request.getProcesses()))
+                .recurring(request.isRecurring())
+                .recurrenceDays(request.getRecurrenceDays() != null ? request.getRecurrenceDays() : List.of())
+                .recurrenceStartTime(request.getRecurrenceStartTime())
+                .recurrenceEndTime(request.getRecurrenceEndTime())
                 .execution(Execution.builder()
                         .status(TaskStatus.PENDING)
                         .evidence(new Evidence())
@@ -73,53 +95,48 @@ public class TaskServiceImpl implements TaskService {
                 .build();
 
         Task saved = taskRepository.save(task);
+        log.info("[AUDIT] Task created: id={}, title='{}', assignee={}, store={}, createdBy={}",
+                saved.getId(), saved.getTitle(), saved.getAssignedUserId(), saved.getStoreId(), createdBy);
 
-        // Notifica al EJECUTADOR asignado (Sprint 6)
-        notificationService.sendToUser(saved.getAssignedUserId(), NotificationEvent.builder()
-                .id(UUID.randomUUID().toString())
-                .type("TASK_ASSIGNED")
-                .severity("info")
-                .title("Nueva tarea asignada")
-                .body(saved.getTitle() + " · " + saved.getShift())
-                .taskId(saved.getId())
-                .storeId(saved.getStoreId())
-                .timestamp(Instant.now())
-                .build());
+        // Emit domain event — TaskEventListener handles SSE notification
+        eventPublisher.publishEvent(new TaskCreatedEvent(
+                saved.getId(), saved.getAssignedUserId(),
+                saved.getStoreId(), saved.getTitle(), saved.getShift()));
 
-        return toResponse(saved);
+        return toResponse(saved, assignedUser.getNombre());
     }
 
     // ── Consultas ────────────────────────────────────────────────────────
 
     @Override
     public List<TaskResponse> getTasksByUser(String assignedUserId) {
-        return taskRepository.findByAssignedUserIdAndActivoTrue(assignedUserId)
-                .stream().map(this::toResponse).toList();
+        List<Task> tasks = taskRepository.findByAssignedUserIdAndActivoTrue(assignedUserId);
+        return toResponseList(tasks);
     }
 
     @Override
     public List<TaskResponse> getTasksByUserAndShift(String assignedUserId, String shift) {
-        return taskRepository.findByAssignedUserIdAndShiftAndActivoTrue(assignedUserId, shift)
-                .stream().map(this::toResponse).toList();
+        List<Task> tasks = taskRepository.findByAssignedUserIdAndShiftAndActivoTrue(assignedUserId, shift);
+        return toResponseList(tasks);
     }
 
     @Override
     public List<TaskResponse> getTasksByStore(String storeId) {
-        return taskRepository.findByStoreIdAndActivoTrue(storeId)
-                .stream().map(this::toResponse).toList();
+        List<Task> tasks = taskRepository.findByStoreIdAndActivoTrue(storeId);
+        return toResponseList(tasks);
     }
 
     @Override
     public List<TaskResponse> getTasksByStoreAndShift(String storeId, String shift) {
-        return taskRepository.findByStoreIdAndShiftAndActivoTrue(storeId, shift)
-                .stream().map(this::toResponse).toList();
+        List<Task> tasks = taskRepository.findByStoreIdAndShiftAndActivoTrue(storeId, shift);
+        return toResponseList(tasks);
     }
 
     @Override
     public TaskResponse getById(String taskId) {
         return taskRepository.findById(taskId)
                 .filter(Task::isActivo)
-                .map(this::toResponse)
+                .map(t -> toResponse(t, resolveUserName(t.getAssignedUserId())))
                 .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
     }
 
@@ -172,16 +189,18 @@ public class TaskServiceImpl implements TaskService {
         if (request.getComments() != null && !request.getComments().isBlank()) {
             task.setComments(request.getComments());
         }
-        if (request.getQualityRating() != null) {
-            task.setQualityRating(request.getQualityRating());
-        }
 
         Task saved = taskRepository.save(task);
+        log.info("[AUDIT] Task status changed: id={}, {}→{}, user={}, reworkCount={}",
+                taskId, current, next, currentUser, saved.getReworkCount());
 
-        // Notificaciones en tiempo real por cambio de estado (Sprint 6)
-        emitStatusNotification(saved, next);
+        // Emit domain event — TaskEventListener handles SSE notification
+        eventPublisher.publishEvent(new TaskStatusChangedEvent(
+                saved.getId(), current, next, saved.getStoreId(),
+                saved.getAssignedUserId(), saved.getTitle(),
+                saved.getPosition(), saved.getComments()));
 
-        return toResponse(saved);
+        return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
     }
 
     // ── Lógica de Transiciones ───────────────────────────────────────────
@@ -269,61 +288,29 @@ public class TaskServiceImpl implements TaskService {
         execution.setOnTime(null);
     }
 
-    // ── Notificaciones de estado ─────────────────────────────────────────
+    // ── Calificación de Calidad (Sprint 18) ─────────────────────────────
 
-    /**
-     * Emite el evento SSE correspondiente al nuevo estado de la tarea.
-     *
-     * <ul>
-     *   <li>IN_PROGRESS → avisa a los gerentes/admins de la sucursal.</li>
-     *   <li>COMPLETED   → avisa a los gerentes/admins de la sucursal.</li>
-     *   <li>FAILED      → avisa a los gerentes/admins de la sucursal (severity: critical).</li>
-     * </ul>
-     */
-    private void emitStatusNotification(Task task, TaskStatus newStatus) {
-        String type     = "TASK_UPDATED";
-        String severity = "info";
-        String title    = "Tarea Actualizada";
+    @Override
+    public TaskResponse rateQuality(String taskId, QualityRatingRequest request, String currentUser) {
+        Task task = taskRepository.findById(taskId)
+                .filter(Task::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
 
-        switch (newStatus) {
-            case IN_PROGRESS -> {
-                type     = "TASK_STARTED";
-                severity = "info";
-                title    = "Tarea Iniciada";
-            }
-            case COMPLETED -> {
-                type     = "TASK_COMPLETED";
-                severity = "info";
-                title    = "Tarea Completada";
-            }
-            case FAILED -> {
-                type     = "TASK_FAILED";
-                severity = "critical";
-                title    = "Tarea Fallida";
-            }
-            case PENDING -> {
-                type     = "TASK_REOPENED";
-                severity = "warning";
-                title    = "Tarea Reabierta";
-            }
+        if (task.getExecution().getStatus() != TaskStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Solo se puede calificar la calidad de tareas en estado COMPLETED. " +
+                    "Estado actual: " + task.getExecution().getStatus());
         }
 
-        String comments = task.getComments();
-        String body = task.getTitle() + " · " + task.getPosition()
-                + (comments != null && !comments.isBlank()
-                        ? " — " + comments.substring(0, Math.min(60, comments.length()))
-                        : "");
+        task.setQualityRating(request.getRating());
+        if (request.getComments() != null && !request.getComments().isBlank()) {
+            task.setComments(request.getComments());
+        }
 
-        notificationService.sendToStoreManagers(task.getStoreId(), NotificationEvent.builder()
-                .id(UUID.randomUUID().toString())
-                .type(type)
-                .severity(severity)
-                .title(title)
-                .body(body)
-                .taskId(task.getId())
-                .storeId(task.getStoreId())
-                .timestamp(Instant.now())
-                .build());
+        Task saved = taskRepository.save(task);
+        log.info("[AUDIT] Quality rated: taskId={}, rating={}, ratedBy={}",
+                taskId, request.getRating(), currentUser);
+        return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
     }
 
     // ── Evidencias ───────────────────────────────────────────────────────
@@ -367,6 +354,16 @@ public class TaskServiceImpl implements TaskService {
         String url  = gcsService.uploadFile(task.getStoreId(), taskId, tipo,
                                             fileBytes, contentType, extension);
 
+        // Save to separate collection (new architecture)
+        taskEvidenceRepository.save(TaskEvidence.builder()
+                .taskId(taskId)
+                .storeId(task.getStoreId())
+                .type(mediaType.toUpperCase())
+                .url(url)
+                .uploadedBy(numeroUsuario)
+                .build());
+
+        // Also update embedded evidence for backward compatibility
         Evidence evidence = task.getExecution().getEvidence();
         if (evidence == null) {
             evidence = new Evidence();
@@ -388,9 +385,167 @@ public class TaskServiceImpl implements TaskService {
                 .build();
     }
 
+    @Override
+    public TaskResponse updateProcessStep(String taskId, String stepId, boolean completed, String notes) {
+        Task task = taskRepository.findById(taskId)
+                .filter(Task::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+
+        boolean found = false;
+        for (ProcessStep step : task.getProcesses()) {
+            if (step.getStepId().equals(stepId)) {
+                step.setCompleted(completed);
+                step.setCompletedAt(completed ? java.time.Instant.now() : null);
+                step.setNotes(notes);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            throw new ResourceNotFoundException("Paso de proceso no encontrado: " + stepId);
+        }
+
+        Task saved = taskRepository.save(task);
+        return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
+    }
+
+    @Override
+    public TaskResponse editProcessStep(String taskId, String stepId, String title, String description) {
+        Task task = taskRepository.findById(taskId)
+                .filter(Task::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+
+        for (ProcessStep step : task.getProcesses()) {
+            if (step.getStepId().equals(stepId)) {
+                step.setTitle(title);
+                step.setDescription(description);
+                break;
+            }
+        }
+        Task saved = taskRepository.save(task);
+        return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
+    }
+
+    @Override
+    public TaskResponse deleteProcessStep(String taskId, String stepId) {
+        Task task = taskRepository.findById(taskId)
+                .filter(Task::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+
+        task.getProcesses().removeIf(step -> step.getStepId().equals(stepId));
+        Task saved = taskRepository.save(task);
+        return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
+    }
+
+    @Override
+    public void deactivateTask(String taskId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+        task.setActivo(false);
+        taskRepository.save(task);
+        log.info("[AUDIT] Task deactivated: id={}", taskId);
+    }
+
+    @Override
+    public List<TaskResponse> getAllTasks() {
+        List<Task> tasks = taskRepository.findByActivoTrue();
+        return toResponseList(tasks);
+    }
+
+    // ── Paginated queries ────────────────────────────────────────────────
+
+    @Override
+    public Page<TaskResponse> getTasksByStore(String storeId, Pageable pageable) {
+        Page<Task> page = taskRepository.findByStoreIdAndActivoTrue(storeId, pageable);
+        Map<String, String> names = batchResolveUserNames(page.getContent());
+        return page.map(t -> toResponse(t, names.getOrDefault(t.getAssignedUserId(), t.getPosition())));
+    }
+
+    @Override
+    public Page<TaskResponse> getTasksByUser(String assignedUserId, Pageable pageable) {
+        Page<Task> page = taskRepository.findByAssignedUserIdAndActivoTrue(assignedUserId, pageable);
+        Map<String, String> names = batchResolveUserNames(page.getContent());
+        return page.map(t -> toResponse(t, names.getOrDefault(t.getAssignedUserId(), t.getPosition())));
+    }
+
+    @Override
+    public Page<TaskResponse> getAllTasks(Pageable pageable) {
+        Page<Task> page = taskRepository.findByActivoTrue(pageable);
+        Map<String, String> names = batchResolveUserNames(page.getContent());
+        return page.map(t -> toResponse(t, names.getOrDefault(t.getAssignedUserId(), t.getPosition())));
+    }
+
+    @Override
+    public void deleteAll() {
+        taskRepository.deleteAll();
+        log.info("[AUDIT] All tasks purged by admin");
+    }
+
+    // ── Process Steps mappers ────────────────────────────────────────────
+
+    private List<ProcessStep> mapProcessSteps(List<ProcessStepRequest> requests) {
+        if (requests == null || requests.isEmpty()) return List.of();
+        List<ProcessStep> steps = new java.util.ArrayList<>();
+        for (int i = 0; i < requests.size(); i++) {
+            ProcessStepRequest r = requests.get(i);
+            steps.add(ProcessStep.builder()
+                    .stepId(java.util.UUID.randomUUID().toString().substring(0, 8))
+                    .title(r.getTitle())
+                    .description(r.getDescription())
+                    .tags(r.getTags() != null ? r.getTags() : List.of())
+                    .completed(false)
+                    .order(i)
+                    .build());
+        }
+        return steps;
+    }
+
+    private List<ProcessStepResponse> mapProcessStepsToResponse(List<ProcessStep> steps) {
+        if (steps == null || steps.isEmpty()) return List.of();
+        return steps.stream().map(s -> ProcessStepResponse.builder()
+                .stepId(s.getStepId())
+                .title(s.getTitle())
+                .description(s.getDescription())
+                .tags(s.getTags() != null ? s.getTags() : List.of())
+                .completed(s.isCompleted())
+                .completedAt(s.getCompletedAt())
+                .notes(s.getNotes())
+                .order(s.getOrder())
+                .build()).toList();
+    }
+
+    // ── Batch user name resolution (eliminates N+1) ─────────────────────
+
+    /** Resolves user names in 1 query for an entire list of tasks. */
+    private Map<String, String> batchResolveUserNames(List<Task> tasks) {
+        Set<String> userIds = tasks.stream()
+                .map(Task::getAssignedUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIds.isEmpty()) return Map.of();
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, User::getNombre, (a, b) -> a));
+    }
+
+    /** Single user name resolve for detail endpoints. */
+    private String resolveUserName(String userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId)
+                .map(User::getNombre)
+                .orElse(null);
+    }
+
+    /** Converts a list of tasks with batch-resolved names (eliminates N+1). */
+    private List<TaskResponse> toResponseList(List<Task> tasks) {
+        Map<String, String> names = batchResolveUserNames(tasks);
+        return tasks.stream()
+                .map(t -> toResponse(t, names.getOrDefault(t.getAssignedUserId(), t.getPosition())))
+                .toList();
+    }
+
     // ── Mapper Task → TaskResponse ───────────────────────────────────────
 
-    private TaskResponse toResponse(Task task) {
+    private TaskResponse toResponse(Task task, String assignedName) {
         Execution exec     = task.getExecution();
         Evidence  evidence = exec.getEvidence() != null ? exec.getEvidence() : new Evidence();
 
@@ -401,6 +556,7 @@ public class TaskServiceImpl implements TaskService {
                 .category(task.getCategory())
                 .critical(task.isCritical())
                 .assignedUserId(task.getAssignedUserId())
+                .assignedUserName(assignedName != null ? assignedName : task.getPosition())
                 .position(task.getPosition())
                 .storeId(task.getStoreId())
                 .shift(task.getShift())
@@ -414,6 +570,11 @@ public class TaskServiceImpl implements TaskService {
                 .reworkCount(task.getReworkCount())
                 .qualityRating(task.getQualityRating())
                 .comments(task.getComments())
+                .processes(mapProcessStepsToResponse(task.getProcesses()))
+                .recurring(task.isRecurring())
+                .recurrenceDays(task.getRecurrenceDays() != null ? task.getRecurrenceDays() : List.of())
+                .recurrenceStartTime(task.getRecurrenceStartTime())
+                .recurrenceEndTime(task.getRecurrenceEndTime())
                 .createdBy(task.getCreatedBy())
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())

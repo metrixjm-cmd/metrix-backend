@@ -1,8 +1,6 @@
 package com.metrix.api.dto;
 
 import com.metrix.api.model.TaskStatus;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,12 +36,4 @@ public class UpdateStatusRequest {
      */
     private String comments;
 
-    /**
-     * Calificación de calidad de 1.0 a 5.0.
-     * Opcional. Solo procesada al marcar COMPLETED por un GERENTE/ADMIN.
-     * Alimenta el componente Calidad del IGEO (KPI #10).
-     */
-    @DecimalMin(value = "1.0", message = "La calificación mínima es 1.0")
-    @DecimalMax(value = "5.0", message = "La calificación máxima es 5.0")
-    private Double qualityRating;
 }

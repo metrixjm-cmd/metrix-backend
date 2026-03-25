@@ -15,7 +15,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class StoreRankingResponse {
     private int    rank;           // 1-based
-    private String storeId;        // display name — no existe colección stores aún
+    private String storeId;
+    private String storeName;      // nombre legible de la sucursal
     private double igeo;           // KPI #10 composite
     private double onTimeRate;     // KPI #1
     private double reworkRate;     // KPI #3

@@ -148,7 +148,7 @@ public class ReportServiceImpl implements ReportService {
                 }
                 for (TaskResponse t : report.getTasks()) {
                     addCell(tasksTable, t.getTitle(), cellFont);
-                    addCell(tasksTable, t.getCategory() != null ? t.getCategory().name() : "-", cellFont);
+                    addCell(tasksTable, t.getCategory() != null ? t.getCategory() : "-", cellFont);
                     addCell(tasksTable, t.getStatus() != null ? t.getStatus().name() : "-", cellFont);
                     addCell(tasksTable, t.getShift() != null ? t.getShift() : "-", cellFont);
                     addCell(tasksTable, t.getOnTime() != null ? (t.getOnTime() ? "Sí" : "No") : "-", cellFont);
@@ -250,7 +250,7 @@ public class ReportServiceImpl implements ReportService {
                     createDataRow(tasksSheet, r++, dataStyle,
                             t.getId() != null ? t.getId() : "",
                             t.getTitle() != null ? t.getTitle() : "",
-                            t.getCategory() != null ? t.getCategory().name() : "",
+                            t.getCategory() != null ? t.getCategory() : "",
                             t.getStatus() != null ? t.getStatus().name() : "",
                             t.getShift() != null ? t.getShift() : "",
                             t.getOnTime() != null ? (t.getOnTime() ? "Sí" : "No") : "-",

@@ -1,6 +1,7 @@
 package com.metrix.api.dto;
 
 import com.metrix.api.model.Role;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -8,6 +9,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.util.Set;
 
 /**
@@ -31,7 +33,7 @@ public class CreateUserRequest {
     @NotBlank(message = "El turno es obligatorio")
     private String turno;
 
-    @NotBlank(message = "El número de usuario es obligatorio")
+    /** Opcional: si se omite, se auto-genera como [PUESTO_PREFIX]+[FOLIO] (ej. CAJ001) */
     private String numeroUsuario;
 
     @NotBlank(message = "La contraseña es obligatoria")
@@ -40,4 +42,11 @@ public class CreateUserRequest {
 
     @NotEmpty(message = "Debe asignar al menos un rol")
     private Set<Role> roles;
+
+    /** Correo electrónico (opcional). */
+    @Email(message = "El email no tiene un formato válido")
+    private String email;
+
+    /** Fecha de nacimiento (opcional). Formato ISO: yyyy-MM-dd */
+    private LocalDate fechaNacimiento;
 }

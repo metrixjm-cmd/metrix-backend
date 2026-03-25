@@ -58,4 +58,7 @@ public interface UserRepository extends MongoRepository<User, String> {
      * Usado por StoreServiceImpl para calcular stats denormalizados (Sprint 11).
      */
     long countByStoreIdAndActivoTrue(String storeId);
+
+    /** All active users — used for batch count operations. */
+    List<User> findByActivoTrue();
 }

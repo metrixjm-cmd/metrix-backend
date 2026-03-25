@@ -21,6 +21,9 @@ public class UpdateUserRequest {
     private String puesto;
     private String turno;
 
+    /** Solo ADMIN puede cambiar storeId (reasignar sucursal). */
+    private String storeId;
+
     /** Solo ADMIN puede cambiar roles. Si GERENTE envía este campo, se ignora. */
     private Set<Role> roles;
 }

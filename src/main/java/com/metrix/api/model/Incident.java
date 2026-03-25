@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -47,6 +48,9 @@ public class Incident {
     @Id
     private String id;
 
+    @Version
+    private Long version;
+
     // ── Definición ──────────────────────────────────────────────────────────
 
     @Field("title")
@@ -82,6 +86,11 @@ public class Incident {
     @Field("reporter_position")
     private String reporterPosition;
 
+    /** Rol principal del reportador desnormalizado (ADMIN, GERENTE, EJECUTADOR). */
+    @Indexed
+    @Field("reporter_role")
+    private String reporterRole;
+
     @Indexed
     @Field("store_id")
     private String storeId;
@@ -95,11 +104,30 @@ public class Incident {
     @Field("status")
     private IncidentStatus status = IncidentStatus.ABIERTA;
 
+    // ── Roles y Actores ──────────────────────────────────────────────────────
+
+    /** Personas involucradas en el evento (estructura enriquecida con tipo y responsabilidad). */
+    @Builder.Default
+    @Field("implicados")
+    private List<ImplicadoEntry> implicados = new ArrayList<>();
+
+    /** Nombre o identificador del responsable asignado para gestionar la solución. */
+    @Field("follow_up_responsible")
+    private String followUpResponsible;
+
     // ── Resolución ───────────────────────────────────────────────────────────
 
     /** numeroUsuario del colaborador que cierra la incidencia. */
     @Field("resolved_by_user_id")
     private String resolvedByUserId;
+
+    /** Nombre completo del usuario que realizó el cierre definitivo (desnormalizado). */
+    @Field("closed_by_name")
+    private String closedByName;
+
+    /** Número de usuario del que realizó el cierre definitivo (desnormalizado). */
+    @Field("closed_by_numero")
+    private String closedByNumero;
 
     /** Obligatorio al mover a CERRADA. Describe la acción correctiva tomada. */
     @Field("resolution_notes")

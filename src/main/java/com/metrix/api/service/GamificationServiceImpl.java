@@ -15,10 +15,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.OptionalDouble;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -56,12 +53,15 @@ public class GamificationServiceImpl implements GamificationService {
         Instant periodStart  = now.minus(days, ChronoUnit.DAYS);
         Instant prevStart    = now.minus(days * 2L, ChronoUnit.DAYS);
 
-        // Promedio de ejecución de la sucursal completa para el badge VELOCIDAD_RAYO
+        // Batch fetch: 1 query para TODAS las tareas (elimina N+1 en buildEntry)
         List<Task> allStoreTasks = taskRepository.findByStoreIdAndActivoTrue(storeId);
+        Map<String, List<Task>> tasksByUser = allStoreTasks.stream()
+                .filter(t -> t.getAssignedUserId() != null)
+                .collect(Collectors.groupingBy(Task::getAssignedUserId));
         double storeAvgExec = computeAvgExecMin(completedTasks(allStoreTasks));
 
         List<LeaderboardEntryDTO> entries = users.stream()
-                .map(u -> buildEntry(u, periodStart, now, prevStart, periodStart, storeAvgExec))
+                .map(u -> buildEntry(u, periodStart, now, prevStart, periodStart, storeAvgExec, tasksByUser))
                 .sorted(Comparator.comparingDouble(LeaderboardEntryDTO::getIgeo).reversed())
                 .collect(Collectors.toList());
 
@@ -100,20 +100,25 @@ public class GamificationServiceImpl implements GamificationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
 
-        List<Task> userTasks     = taskRepository.findByAssignedUserIdAndActivoTrue(userId);
+        // Batch fetch: 1 query para TODAS las tareas de la sucursal (elimina N+1)
         List<Task> allStoreTasks = taskRepository.findByStoreIdAndActivoTrue(storeId);
+        Map<String, List<Task>> tasksByUser = allStoreTasks.stream()
+                .filter(t -> t.getAssignedUserId() != null)
+                .collect(Collectors.groupingBy(Task::getAssignedUserId));
+
+        List<Task> userTasks = tasksByUser.getOrDefault(userId, List.of());
 
         double storeAvgExec = computeAvgExecMin(completedTasks(allStoreTasks));
         List<BadgeDTO> badges = computeBadges(userTasks, storeAvgExec, false);
 
         double igeo = Math.max(computeUserIgeo(userTasks), 0.0);
 
-        // Rank: cuántos usuarios activos de la sucursal tienen IGEO mayor al propio
+        // Rank: usar el mapa pre-calculado en vez de N queries
         List<User> storeUsers = userRepository.findByStoreIdAndActivoTrue(storeId);
         int rank = 1;
         for (User su : storeUsers) {
             if (su.getId().equals(userId)) continue;
-            List<Task> suTasks = taskRepository.findByAssignedUserIdAndActivoTrue(su.getId());
+            List<Task> suTasks = tasksByUser.getOrDefault(su.getId(), List.of());
             double suIgeo = Math.max(computeUserIgeo(suTasks), 0.0);
             if (suIgeo > igeo) rank++;
         }
@@ -135,8 +140,9 @@ public class GamificationServiceImpl implements GamificationService {
     private LeaderboardEntryDTO buildEntry(User user,
                                            Instant periodStart, Instant periodEnd,
                                            Instant prevStart,   Instant prevEnd,
-                                           double storeAvgExec) {
-        List<Task> allUserTasks   = taskRepository.findByAssignedUserIdAndActivoTrue(user.getId());
+                                           double storeAvgExec,
+                                           Map<String, List<Task>> tasksByUser) {
+        List<Task> allUserTasks   = tasksByUser.getOrDefault(user.getId(), List.of());
         List<Task> periodTasks    = filterByPeriod(allUserTasks, periodStart, periodEnd);
         List<Task> prevTasks      = filterByPeriod(allUserTasks, prevStart, prevEnd);
 

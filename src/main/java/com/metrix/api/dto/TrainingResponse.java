@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 /** Respuesta aplanada de Training + TrainingProgress — Sprint 10. */
 @Data
@@ -41,6 +42,12 @@ public class TrainingResponse {
     private Double grade;
     private Boolean passed;
     private String comments;
+
+    // Materiales y plantilla
+    private String templateId;
+    private List<TrainingMaterialRefResponse> materials;
+    private String category;
+    private List<String> tags;
 
     // Auditoría
     private String createdBy;

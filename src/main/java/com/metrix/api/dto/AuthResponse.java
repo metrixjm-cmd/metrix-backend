@@ -27,6 +27,7 @@ public class AuthResponse {
     private String numeroUsuario;
     private String nombre;
     private String storeId;
+    private String storeName;
     private String turno;
     private Set<Role> roles;
 }

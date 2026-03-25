@@ -21,6 +21,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.beans.factory.annotation.Value;
+
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -42,6 +45,9 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
 
+    @Value("${metrix.cors.allowed-origins}")
+    private String allowedOriginsRaw;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -54,6 +60,8 @@ public class SecurityConfig {
                 // ── Rutas públicas ─────────────────────────────────
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/api/v1/evidence/local/**").permitAll()
+                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
                 // ── SSE: token viaja como query param, validación manual en el controller ──
                 .requestMatchers("/api/v1/notifications/stream").permitAll()
@@ -69,9 +77,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT,   "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/users/**").hasRole("ADMIN")
 
-                // ── Módulo Capacitación (Sprint 10) ──────────────────
+                // ── Módulo Capacitación (Sprint 10 + flujo roles) ────
                 .requestMatchers(HttpMethod.GET,    "/api/v1/trainings/store/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.GET,    "/api/v1/trainings").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST,   "/api/v1/trainings").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.POST,   "/api/v1/trainings/from-template/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PATCH,  "/api/v1/trainings/*/materials/*/view").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/trainings/**").hasRole("ADMIN")
 
                 // ── Módulo Configuración / Stores (Sprint 11) ────────
@@ -80,15 +91,49 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT,   "/api/v1/stores/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/stores/**").hasRole("ADMIN")
 
+                // ── Catálogos dinámicos ─────────────────────────────
+                .requestMatchers(HttpMethod.GET,    "/api/v1/catalogs/**").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/catalogs/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/catalogs/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/catalogs/**").hasAnyRole("ADMIN", "GERENTE")
+
                 // ── Módulo Gamificación (Sprint 12) ──────────────────
                 .requestMatchers(HttpMethod.GET, "/api/v1/gamification/store/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.GET, "/api/v1/gamification/me").authenticated()
 
                 // ── Módulo Contingencias (Sprint 15) ──────────────────
                 .requestMatchers(HttpMethod.POST,  "/api/v1/incidents").authenticated()
+                .requestMatchers(HttpMethod.POST,  "/api/v1/incidents/*/evidence").authenticated()
+                .requestMatchers(HttpMethod.GET,   "/api/v1/incidents/visible").authenticated()
                 .requestMatchers(HttpMethod.GET,   "/api/v1/incidents/my").authenticated()
                 .requestMatchers(HttpMethod.GET,   "/api/v1/incidents/store/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.PATCH, "/api/v1/incidents/**").hasAnyRole("ADMIN", "GERENTE")
+
+                // ── Calificación de Calidad (Sprint 18) ───────────────
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/tasks/*/quality").hasAnyRole("ADMIN", "GERENTE")
+
+                // ── Banco de Preguntas (E3) ────────────────────────────
+                .requestMatchers(HttpMethod.GET,    "/api/v1/question-bank/**").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/question-bank/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/question-bank/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/question-bank/**").hasRole("ADMIN")
+
+                // ── Banco de Materiales + Plantillas ──────────────────
+                .requestMatchers(HttpMethod.GET,    "/api/v1/training-materials/**").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/training-materials/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/training-materials/**").hasRole("ADMIN")
+
+                .requestMatchers(HttpMethod.GET,    "/api/v1/training-templates/**").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/training-templates/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/training-templates/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/training-templates/**").hasRole("ADMIN")
+
+                // ── Módulo Trainer / Exámenes (Sprint 19) ─────────────
+                .requestMatchers(HttpMethod.POST,  "/api/v1/exams").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.GET,   "/api/v1/exams/store/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.GET,   "/api/v1/exams/*/submissions").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.GET,   "/api/v1/exams/**").authenticated()
+                .requestMatchers(HttpMethod.POST,  "/api/v1/exams/*/submit").authenticated()
 
                 // ── Todo lo demás requiere autenticación ───────────
                 .anyRequest().authenticated()
@@ -128,10 +173,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
-                "http://localhost:4200",   // Angular dev
-                "http://localhost:8080"    // Backend local
-        ));
+        List<String> origins = Arrays.stream(allowedOriginsRaw.split(","))
+                .map(String::trim)
+                .toList();
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -60,6 +61,9 @@ public class Task {
     @Id
     private String id;
 
+    @Version
+    private Long version;
+
     // ── Definición de la Tarea (task_definition) ─────────────────────────
 
     /** Título corto y descriptivo de la actividad (max 200 chars). */
@@ -70,9 +74,9 @@ public class Task {
     @Field("description")
     private String description;
 
-    /** Categoría para dashboards especializados (Obj. #22). */
+    /** Categoría para dashboards especializados (Obj. #22). Ahora dinámica vía catálogo. */
     @Field("category")
-    private TaskCategory category;
+    private String category;
 
     /**
      * Marca la tarea como estratégica.
@@ -120,6 +124,38 @@ public class Task {
      */
     @Field("due_at")
     private Instant dueAt;
+
+    // ── Procesos (checklist por tags) ─────────────────────────────────────
+
+    @Builder.Default
+    @Field("processes")
+    private List<ProcessStep> processes = new ArrayList<>();
+
+    // ── Recurrencia ───────────────────────────────────────────────────────
+
+    /**
+     * Indica si la tarea se repite periódicamente.
+     * Cuando {@code true}, los campos {@code recurrenceDays},
+     * {@code recurrenceStartTime} y {@code recurrenceEndTime} son obligatorios.
+     */
+    @Builder.Default
+    @Field("is_recurring")
+    private boolean recurring = false;
+
+    /**
+     * Días de la semana en que se repite: LUN, MAR, MIE, JUE, VIE, SAB, DOM.
+     */
+    @Builder.Default
+    @Field("recurrence_days")
+    private List<String> recurrenceDays = new ArrayList<>();
+
+    /** Hora de inicio de la tarea recurrente (formato HH:mm, ej. "08:00"). */
+    @Field("recurrence_start_time")
+    private String recurrenceStartTime;
+
+    /** Hora de fin de la tarea recurrente (formato HH:mm, ej. "17:00"). */
+    @Field("recurrence_end_time")
+    private String recurrenceEndTime;
 
     // ── Ejecución (execution) ────────────────────────────────────────────
 

@@ -13,6 +13,9 @@ public class UpdateIncidentStatusRequest {
     /** Obligatorio cuando newStatus == CERRADA. */
     private String resolutionNotes;
 
+    /** Nombre de quien realizó el cierre. Si se provee, sobreescribe el del usuario autenticado. */
+    private String closedByName;
+
     /** Notas opcionales de la transición para el historial. */
     private String notes;
 }

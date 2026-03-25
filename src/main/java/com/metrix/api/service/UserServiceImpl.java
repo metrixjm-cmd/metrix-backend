@@ -26,6 +26,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository  userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SequenceService sequenceService;
 
     // ── Listar colaboradores ─────────────────────────────────────────────
 
@@ -47,6 +48,12 @@ public class UserServiceImpl implements UserService {
                 .stream().map(this::toResponse).toList();
     }
 
+    @Override
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findByActivoTrue()
+                .stream().map(this::toResponse).toList();
+    }
+
     // ── Perfil individual ────────────────────────────────────────────────
 
     @Override
@@ -60,9 +67,19 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse createUser(CreateUserRequest request) {
-        if (userRepository.existsByNumeroUsuario(request.getNumeroUsuario())) {
+        // Auto-generar folio si no se envía numeroUsuario
+        // Prefijo: rol ADMIN/GERENTE tienen prefijo fijo; EJECUTADOR usa el puesto
+        String numeroUsuario = request.getNumeroUsuario();
+        if (numeroUsuario == null || numeroUsuario.isBlank()) {
+            String rolPrincipal = (request.getRoles() != null && !request.getRoles().isEmpty())
+                    ? request.getRoles().iterator().next().name()
+                    : null;
+            numeroUsuario = sequenceService.generateUserFolio(rolPrincipal, request.getPuesto());
+        }
+
+        if (userRepository.existsByNumeroUsuario(numeroUsuario)) {
             throw new IllegalArgumentException(
-                    "El número de usuario ya está registrado: " + request.getNumeroUsuario());
+                    "El número de usuario ya está registrado: " + numeroUsuario);
         }
 
         User user = User.builder()
@@ -70,9 +87,11 @@ public class UserServiceImpl implements UserService {
                 .puesto(request.getPuesto())
                 .storeId(request.getStoreId())
                 .turno(request.getTurno())
-                .numeroUsuario(request.getNumeroUsuario())
+                .numeroUsuario(numeroUsuario)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .roles(request.getRoles())
+                .email(request.getEmail())
+                .fechaNacimiento(request.getFechaNacimiento())
                 .activo(true)
                 .build();
 
@@ -102,7 +121,10 @@ public class UserServiceImpl implements UserService {
         if (request.getTurno() != null && !request.getTurno().isBlank()) {
             user.setTurno(request.getTurno());
         }
-        // Solo ADMIN puede cambiar roles
+        // Solo ADMIN puede cambiar storeId y roles
+        if (isAdmin && request.getStoreId() != null && !request.getStoreId().isBlank()) {
+            user.setStoreId(request.getStoreId());
+        }
         if (isAdmin && request.getRoles() != null && !request.getRoles().isEmpty()) {
             user.setRoles(request.getRoles());
         }
@@ -137,6 +159,8 @@ public class UserServiceImpl implements UserService {
                 .numeroUsuario(user.getNumeroUsuario())
                 .roles(user.getRoles())
                 .activo(user.isActivo())
+                .email(user.getEmail())
+                .fechaNacimiento(user.getFechaNacimiento())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

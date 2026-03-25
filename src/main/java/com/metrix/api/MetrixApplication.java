@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * METRIX - Sistema de Gestión de Ejecución Operativa y Analítica
  *
- * Clase principal de arranque de la aplicación.
+ * Clase principal de arranque de la aplicación.tenge
  * Ruta: backend-api/src/main/java/com/metrix/MetrixApplication.java
  */
 @SpringBootApplication

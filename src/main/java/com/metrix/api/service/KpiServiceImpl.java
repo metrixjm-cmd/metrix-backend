@@ -11,6 +11,8 @@ import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
 import com.metrix.api.model.TrainingStatus;
 import com.metrix.api.model.User;
+import com.metrix.api.model.Store;
+import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
@@ -18,9 +20,17 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+
+import com.metrix.api.dto.StatusCount;
 
 import java.time.Duration;
 import java.util.*;
@@ -46,6 +56,7 @@ public class KpiServiceImpl implements KpiService {
     private final TaskRepository     taskRepository;
     private final UserRepository     userRepository;
     private final TrainingRepository trainingRepository;
+    private final StoreRepository    storeRepository;
 
     // ── Cliente HTTP para analytics-service Python (Sprint 17) ───────────────
     // RestTemplate se inyecta por constructor junto con los repositorios.
@@ -57,8 +68,12 @@ public class KpiServiceImpl implements KpiService {
     @Value("${metrix.analytics.url}")
     private String analyticsUrl;
 
+    @Value("${metrix.analytics.api-key:dev-internal-key}")
+    private String analyticsApiKey;
+
     // ── Puntos de entrada ─────────────────────────────────────────────────
 
+    @Cacheable(value = "kpiSummary", key = "#storeId")
     @Override
     public KpiSummaryResponse getStoreSummary(String storeId) {
         List<Task> tasks = taskRepository.findByStoreIdAndActivoTrue(storeId);
@@ -71,11 +86,16 @@ public class KpiServiceImpl implements KpiService {
         return buildSummary(tasks, "USER", userId);
     }
 
+    @Cacheable(value = "storeRanking")
     @Override
     public List<StoreRankingResponse> getStoreRanking() {
         List<Task> all = taskRepository.findByActivoTrue();
         Map<String, List<Task>> byStore = all.stream()
                 .collect(Collectors.groupingBy(Task::getStoreId));
+
+        // Pre-cargar nombres de sucursales para evitar N+1
+        Map<String, String> storeNames = storeRepository.findByActivoTrue().stream()
+                .collect(Collectors.toMap(Store::getId, Store::getNombre, (a, b) -> a));
 
         List<StoreRankingResponse> ranking = byStore.entrySet().stream()
                 .map(e -> {
@@ -87,6 +107,7 @@ public class KpiServiceImpl implements KpiService {
                     double igeo = computeIgeo(otr, rwr, qsc);
                     return StoreRankingResponse.builder()
                             .storeId(e.getKey())
+                            .storeName(storeNames.getOrDefault(e.getKey(), e.getKey()))
                             .igeo(round2(igeo))
                             .onTimeRate(round2(otr))
                             .reworkRate(round2(rwr))
@@ -107,13 +128,20 @@ public class KpiServiceImpl implements KpiService {
 
     // ── KPI #7 — Responsabilidad Individual ──────────────────────────────
 
+    @Cacheable(value = "kpiSummary", key = "'users-' + #storeId")
     @Override
     public List<UserResponsibilityResponse> getUsersResponsibility(String storeId) {
         List<User> users = userRepository.findByStoreIdAndActivoTrue(storeId);
 
+        // Batch fetch: 1 sola query para TODAS las tareas de la sucursal (elimina N+1)
+        List<Task> allStoreTasks = taskRepository.findByStoreIdAndActivoTrue(storeId);
+        Map<String, List<Task>> tasksByUser = allStoreTasks.stream()
+                .filter(t -> t.getAssignedUserId() != null)
+                .collect(Collectors.groupingBy(Task::getAssignedUserId));
+
         List<UserResponsibilityResponse> result = users.stream()
                 .map(user -> {
-                    List<Task> tasks = taskRepository.findByAssignedUserIdAndActivoTrue(user.getId());
+                    List<Task> tasks     = tasksByUser.getOrDefault(user.getId(), List.of());
                     List<Task> closed    = closedTasks(tasks);
                     List<Task> completed = completedTasks(tasks);
 
@@ -167,7 +195,11 @@ public class KpiServiceImpl implements KpiService {
         String url = analyticsUrl + "/igeo";
         log.debug("[KPI#10] Llamando analytics-service: GET {}", url);
         try {
-            IgeoAnalyticsResponse response = restTemplate.getForObject(url, IgeoAnalyticsResponse.class);
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-API-Key", analyticsApiKey);
+            ResponseEntity<IgeoAnalyticsResponse> entity = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), IgeoAnalyticsResponse.class);
+            IgeoAnalyticsResponse response = entity.getBody();
             if (response == null) {
                 throw new RestClientException("analytics-service devolvió cuerpo vacío en " + url);
             }
@@ -224,16 +256,20 @@ public class KpiServiceImpl implements KpiService {
      */
     private List<double[]> extractCorrectionMinutes(Task task) {
         List<StatusTransition> transitions = task.getTransitions();
+        if (transitions == null || transitions.size() < 2) {
+            return List.of();
+        }
+
         List<double[]> durations = new ArrayList<>();
 
         for (int i = 0; i < transitions.size() - 1; i++) {
             StatusTransition t = transitions.get(i);
-            if (t.getToStatus() == TaskStatus.FAILED) {
-                // Buscar la siguiente transición que llega a COMPLETED
+            if (t.getToStatus() == TaskStatus.FAILED && t.getChangedAt() != null) {
                 for (int j = i + 1; j < transitions.size(); j++) {
-                    if (transitions.get(j).getToStatus() == TaskStatus.COMPLETED) {
+                    StatusTransition next = transitions.get(j);
+                    if (next.getToStatus() == TaskStatus.COMPLETED && next.getChangedAt() != null) {
                         long minutes = Duration.between(t.getChangedAt(),
-                                transitions.get(j).getChangedAt()).toMinutes();
+                                next.getChangedAt()).toMinutes();
                         if (minutes >= 0) {
                             durations.add(new double[]{minutes});
                         }
@@ -283,10 +319,10 @@ public class KpiServiceImpl implements KpiService {
                 .shiftBreakdown(computeShiftBreakdown(tasks))
                 .criticalPending(computeCriticalPending(tasks))
                 .igeo(round2(igeo))
-                .pipelinePending(countByStatus(tasks, TaskStatus.PENDING))
-                .pipelineInProgress(countByStatus(tasks, TaskStatus.IN_PROGRESS))
-                .pipelineCompleted(countByStatus(tasks, TaskStatus.COMPLETED))
-                .pipelineFailed(countByStatus(tasks, TaskStatus.FAILED))
+                .pipelinePending(pipelineCount(context, contextId, tasks, "PENDING"))
+                .pipelineInProgress(pipelineCount(context, contextId, tasks, "IN_PROGRESS"))
+                .pipelineCompleted(pipelineCount(context, contextId, tasks, "COMPLETED"))
+                .pipelineFailed(pipelineCount(context, contextId, tasks, "FAILED"))
                 .sparklineOnTime(buildOnTimeSparkline(last10))
                 .sparklineIgeo(buildIgeoSparkline(last10))
                 .avgQualityRating(round2(computeQualityRatingAvg(tasks)))
@@ -383,6 +419,32 @@ public class KpiServiceImpl implements KpiService {
         if (otr < 0) return -1.0;
         double effectiveQ = (qScore < 0) ? 50.0 : qScore;
         return otr * 0.5 + (100.0 - rwr) * 0.3 + effectiveQ * 0.2;
+    }
+
+    /**
+     * Pipeline count: uses MongoDB aggregation for STORE context (efficient),
+     * falls back to in-memory count for USER context (small dataset).
+     */
+    private long pipelineCount(String context, String contextId, List<Task> tasks, String status) {
+        if ("STORE".equals(context)) {
+            // Use cached aggregation result
+            return getStorePipelineCounts(contextId).getOrDefault(status, 0L);
+        }
+        // Fallback for USER context — in-memory from already-loaded tasks
+        TaskStatus ts = TaskStatus.valueOf(status);
+        return countByStatus(tasks, ts);
+    }
+
+    /** Lazy-loaded aggregation result per store, cached within the method call scope. */
+    private Map<String, Long> getStorePipelineCounts(String storeId) {
+        List<StatusCount> counts = taskRepository.countByStoreGroupedByStatus(storeId);
+        Map<String, Long> map = new HashMap<>();
+        for (StatusCount sc : counts) {
+            if (sc.getId() != null) {
+                map.put(sc.getId(), sc.getCount());
+            }
+        }
+        return map;
     }
 
     // ── Helpers auxiliares ────────────────────────────────────────────────

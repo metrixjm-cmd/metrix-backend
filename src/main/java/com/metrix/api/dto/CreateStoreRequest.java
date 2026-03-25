@@ -14,7 +14,7 @@ public class CreateStoreRequest {
     @NotBlank(message = "El nombre de la sucursal es obligatorio")
     private String nombre;
 
-    @NotBlank(message = "El código de la sucursal es obligatorio")
+    /** Opcional: si se omite, se auto-genera como SUC001, SUC002, etc. */
     private String codigo;
 
     private String direccion;

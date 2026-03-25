@@ -4,7 +4,9 @@ import com.metrix.api.dto.CreateTrainingRequest;
 import com.metrix.api.dto.TrainingResponse;
 import com.metrix.api.dto.UpdateTrainingProgressRequest;
 
+import org.springframework.data.domain.Page;
 import java.util.List;
+import java.time.Instant;
 
 /**
  * Contrato del módulo de Capacitación — Sprint 10.
@@ -28,6 +30,26 @@ public interface TrainingService {
     /** Actualiza el progreso/estado de una capacitación. */
     TrainingResponse updateProgress(String id, UpdateTrainingProgressRequest req, String currentUser);
 
+    /** Retorna TODAS las capacitaciones activas de todas las sucursales (solo ADMIN). */
+    List<TrainingResponse> getAll();
+
     /** Soft-delete: marca activo = false. */
     void deactivate(String id);
+
+    // ── Variantes paginadas ───────────────────────────────────────────────
+    Page<TrainingResponse> getMyTrainingsPaged(String userId, int page, int size);
+    Page<TrainingResponse> getByStorePaged(String storeId, int page, int size);
+    Page<TrainingResponse> getAllPaged(int page, int size);
+
+    /**
+     * Crea una capacitación usando una plantilla como base.
+     * Copia metadata + materiales de la plantilla. El creador puede
+     * sobreescribir assignedUserId, storeId, shift y dueAt.
+     */
+    TrainingResponse createFromTemplate(String templateId, String assignedUserId,
+                                        String storeId, String shift, Instant dueAt,
+                                        String createdBy);
+
+    /** Marca un material como visto por el ejecutador asignado. */
+    TrainingResponse markMaterialViewed(String trainingId, String materialId, String currentUser);
 }

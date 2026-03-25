@@ -2,6 +2,8 @@ package com.metrix.api.repository;
 
 import com.metrix.api.model.Training;
 import com.metrix.api.model.TrainingStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -29,6 +31,19 @@ public interface TrainingRepository extends MongoRepository<Training, String> {
 
     List<Training> findByStoreIdAndProgress_StatusAndActivoTrue(
             String storeId, TrainingStatus status);
+
+    // ── Vista global ADMIN ───────────────────────────────────────────────
+
+    /** Todas las capacitaciones activas en todas las sucursales (uso exclusivo ADMIN). */
+    List<Training> findByActivoTrue();
+
+    // ── Versiones paginadas ──────────────────────────────────────────────
+
+    Page<Training> findByAssignedUserIdAndActivoTrue(String assignedUserId, Pageable pageable);
+
+    Page<Training> findByStoreIdAndActivoTrue(String storeId, Pageable pageable);
+
+    Page<Training> findByActivoTrue(Pageable pageable);
 
     // ── Conteos para KPI de Completación ────────────────────────────────
 

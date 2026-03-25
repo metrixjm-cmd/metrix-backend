@@ -1,11 +1,14 @@
 package com.metrix.api.exception;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -81,6 +84,35 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
         return buildResponse(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+    }
+
+    /**
+     * 403 Forbidden — acceso denegado por @PreAuthorize.
+     * Debe ir ANTES del catch-all Exception para que Spring Security
+     * no sea atrapado como 500 genérico.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        return buildResponse(HttpStatus.FORBIDDEN, "Acceso denegado: no tienes permisos para esta operación");
+    }
+
+    /**
+     * 400 Bad Request — JSON malformado o valor de enum no válido.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleMessageNotReadable(HttpMessageNotReadableException ex) {
+        String detail = ex.getMostSpecificCause().getMessage();
+        return buildResponse(HttpStatus.BAD_REQUEST, "Error en el cuerpo de la solicitud: " + detail);
+    }
+
+    /**
+     * 409 Conflict — modificación concurrente detectada por @Version.
+     * El frontend debe recargar el recurso e intentar de nuevo.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<Map<String, Object>> handleOptimisticLock(OptimisticLockingFailureException ex) {
+        return buildResponse(HttpStatus.CONFLICT,
+                "El recurso fue modificado por otro usuario. Recarga e intenta de nuevo.");
     }
 
     @ExceptionHandler(Exception.class)

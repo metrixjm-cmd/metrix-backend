@@ -1,7 +1,11 @@
 package com.metrix.api.repository;
 
+import com.metrix.api.dto.StatusCount;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -67,6 +71,17 @@ public interface TaskRepository extends MongoRepository<Task, String> {
     List<Task> findByStoreIdAndShiftAndExecution_StatusAndActivoTrue(
             String storeId, String shift, TaskStatus status);
 
+    // ── Paginated queries ────────────────────────────────────────────────
+
+    /** Paginated: all active tasks for a store. */
+    Page<Task> findByStoreIdAndActivoTrue(String storeId, Pageable pageable);
+
+    /** Paginated: all active tasks for a user. */
+    Page<Task> findByAssignedUserIdAndActivoTrue(String assignedUserId, Pageable pageable);
+
+    /** Paginated: all active tasks in the system (ADMIN). */
+    Page<Task> findByActivoTrue(Pageable pageable);
+
     // ── KPIs ─────────────────────────────────────────────────────────────
 
     /**
@@ -108,6 +123,22 @@ public interface TaskRepository extends MongoRepository<Task, String> {
      */
     List<Task> findByExecution_StatusInAndDueAtBeforeAndActivoTrue(
             Collection<TaskStatus> statuses, Instant now);
+
+    // ── Aggregation queries for KPIs (avoid loading all tasks into memory) ─
+
+    /** Pipeline status counts for a store — returns 4 rows max instead of N tasks. */
+    @Aggregation(pipeline = {
+            "{ $match: { store_id: ?0, activo: true } }",
+            "{ $group: { _id: '$execution.status', count: { $sum: 1 } } }"
+    })
+    List<StatusCount> countByStoreGroupedByStatus(String storeId);
+
+    /** Pipeline status counts for the entire system (ADMIN ranking). */
+    @Aggregation(pipeline = {
+            "{ $match: { activo: true } }",
+            "{ $group: { _id: { store_id: '$store_id', status: '$execution.status' }, count: { $sum: 1 } } }"
+    })
+    List<org.bson.Document> countAllGroupedByStoreAndStatus();
 
     // ── Conteos para KPIs ────────────────────────────────────────────────
 

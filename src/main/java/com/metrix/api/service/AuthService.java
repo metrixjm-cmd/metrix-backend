@@ -4,6 +4,7 @@ import com.metrix.api.dto.AuthRequest;
 import com.metrix.api.dto.AuthResponse;
 import com.metrix.api.dto.RegisterRequest;
 import com.metrix.api.model.User;
+import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.security.JwtService;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.util.Map;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final StoreRepository storeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -82,13 +84,20 @@ public class AuthService {
     // ── Helper ─────────────────────────────────────────────────────────
 
     private AuthResponse buildAuthResponse(User user) {
+        // Resolver nombre de sucursal para evitar que el frontend necesite GET /stores
+        String storeName = "";
+        if (user.getStoreId() != null && !user.getStoreId().isBlank()) {
+            storeName = storeRepository.findById(user.getStoreId())
+                    .map(s -> s.getNombre() != null ? s.getNombre() : s.getCodigo())
+                    .orElse("");
+        }
+
         // Claims extra en el JWT para que Angular tenga contexto inmediato
-        Map<String, Object> extraClaims = Map.of(
-                "roles", user.getRoles(),
-                "storeId", user.getStoreId(),
-                "turno", user.getTurno(),
-                "nombre", user.getNombre()
-        );
+        Map<String, Object> extraClaims = new java.util.HashMap<>();
+        extraClaims.put("roles", user.getRoles());
+        extraClaims.put("storeId", user.getStoreId() != null ? user.getStoreId() : "");
+        extraClaims.put("turno", user.getTurno() != null ? user.getTurno() : "");
+        extraClaims.put("nombre", user.getNombre() != null ? user.getNombre() : "");
 
         org.springframework.security.core.userdetails.User userDetails =
                 new org.springframework.security.core.userdetails.User(
@@ -104,6 +113,7 @@ public class AuthService {
                 .numeroUsuario(user.getNumeroUsuario())
                 .nombre(user.getNombre())
                 .storeId(user.getStoreId())
+                .storeName(storeName)
                 .turno(user.getTurno())
                 .roles(user.getRoles())
                 .build();

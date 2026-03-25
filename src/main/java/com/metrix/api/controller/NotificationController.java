@@ -1,18 +1,26 @@
 package com.metrix.api.controller;
 
 import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.security.JwtService;
 import com.metrix.api.security.UserDetailsServiceImpl;
 import com.metrix.api.service.NotificationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.util.stream.Collectors;
 
 /**
  * Controller para el stream SSE de notificaciones en tiempo real (Sprint 6).
@@ -29,6 +37,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @RestController
 @RequestMapping("/api/v1/notifications")
 @RequiredArgsConstructor
+@Tag(name = "Notificaciones", description = "Stream SSE de notificaciones en tiempo real (Sprint 6)")
 public class NotificationController {
 
     private final NotificationService    notificationService;
@@ -54,9 +63,11 @@ public class NotificationController {
      * @return SseEmitter con stream de eventos
      * @throws IllegalArgumentException si el token es inválido o expirado
      */
+    @Operation(summary = "Conectar al stream SSE de notificaciones", description = "Establece una conexión SSE persistente para recibir notificaciones en tiempo real. El JWT se pasa como query param por limitación del EventSource API del navegador.")
+    @ApiResponse(responseCode = "200", description = "Conexión SSE establecida exitosamente")
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@RequestParam("token") String token) {
-        // 1. Extraer y validar el JWT manualmente
+        // 1. Extraer username del JWT
         String numeroUsuario;
         try {
             numeroUsuario = jwtService.extractUsername(token);
@@ -64,18 +75,25 @@ public class NotificationController {
             throw new IllegalArgumentException("Token de autenticación inválido o malformado.");
         }
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(numeroUsuario);
+        // 2. UNA SOLA query a MongoDB — resuelve User + construye UserDetails
+        User user = userRepository.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + numeroUsuario));
+
+        var authorities = user.getRoles().stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                .collect(Collectors.toSet());
+        UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
+                .username(user.getNumeroUsuario())
+                .password(user.getPassword())
+                .authorities(authorities)
+                .build();
+
         if (!jwtService.isTokenValid(token, userDetails)) {
             throw new IllegalArgumentException("Token de autenticación expirado o inválido.");
         }
 
-        // 2. Resolver el MongoDB _id del usuario
-        String userId = userRepository.findByNumeroUsuario(numeroUsuario)
-                .map(u -> u.getId())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Usuario no encontrado: " + numeroUsuario));
-
-        // 3. Registrar y retornar el emitter SSE
-        return notificationService.subscribe(userId);
+        // 3. Registrar emitter SSE
+        return notificationService.subscribe(user.getId());
     }
 }

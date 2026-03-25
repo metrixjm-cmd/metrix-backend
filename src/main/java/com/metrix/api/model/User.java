@@ -7,11 +7,13 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
 
 /**
@@ -40,6 +42,9 @@ public class User {
 
     @Id
     private String id;
+
+    @Version
+    private Long version;
 
     // ── Gestión de Perfiles (Obj. #3) ──────────────────────────────────
 
@@ -70,6 +75,14 @@ public class User {
     @Indexed(unique = true)
     @Field("numero_usuario")
     private String numeroUsuario;
+
+    /** Correo electrónico del colaborador (opcional). */
+    @Field("email")
+    private String email;
+
+    /** Fecha de nacimiento del colaborador (opcional). */
+    @Field("fecha_nacimiento")
+    private LocalDate fechaNacimiento;
 
     // ── Seguridad (Spring Security + JWT) ──────────────────────────────
 

@@ -1,19 +1,25 @@
 package com.metrix.api.service;
 
-import com.metrix.api.dto.CreateTrainingRequest;
-import com.metrix.api.dto.NotificationEvent;
-import com.metrix.api.dto.TrainingResponse;
-import com.metrix.api.dto.UpdateTrainingProgressRequest;
+import com.metrix.api.dto.*;
+import com.metrix.api.event.DomainEvents.TrainingCreatedEvent;
+import com.metrix.api.event.DomainEvents.TrainingProgressChangedEvent;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.*;
+import com.metrix.api.repository.TrainingMaterialRepository;
 import com.metrix.api.repository.TrainingRepository;
+import com.metrix.api.repository.TrainingTemplateRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Implementación del motor de capacitaciones para METRIX (Sprint 10).
@@ -30,18 +36,27 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TrainingServiceImpl implements TrainingService {
 
-    private final TrainingRepository    trainingRepository;
-    private final UserRepository        userRepository;
-    private final NotificationService   notificationService;
+    private final TrainingRepository         trainingRepository;
+    private final TrainingMaterialRepository materialRepository;
+    private final TrainingTemplateRepository templateRepository;
+    private final TrainingMaterialService    materialService;
+    private final TrainingTemplateService    templateService;
+    private final UserRepository             userRepository;
+    private final ApplicationEventPublisher  eventPublisher;
 
     // ── Crear ────────────────────────────────────────────────────────────
 
     @Override
     public TrainingResponse create(CreateTrainingRequest req, String createdBy) {
+        // Buscar por ObjectId primero, fallback a numeroUsuario
         User assignedUser = userRepository.findById(req.getAssignedUserId())
+                .or(() -> userRepository.findByNumeroUsuario(req.getAssignedUserId()))
                 .filter(User::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario asignado no encontrado o inactivo: " + req.getAssignedUserId()));
+
+        // Construir lista de materiales referenciados
+        List<TrainingMaterialRef> materialRefs = buildMaterialRefs(req.getMaterialIds());
 
         Training training = Training.builder()
                 .title(req.getTitle())
@@ -54,6 +69,10 @@ public class TrainingServiceImpl implements TrainingService {
                 .storeId(req.getStoreId())
                 .shift(req.getShift())
                 .dueAt(req.getDueAt())
+                .templateId(req.getTemplateId())
+                .materials(materialRefs)
+                .category(req.getCategory())
+                .tags(req.getTags() != null ? req.getTags() : new ArrayList<>())
                 .progress(TrainingProgress.builder().build())
                 .createdBy(createdBy)
                 .activo(true)
@@ -61,16 +80,12 @@ public class TrainingServiceImpl implements TrainingService {
 
         Training saved = trainingRepository.save(training);
 
-        notificationService.sendToUser(saved.getAssignedUserId(), NotificationEvent.builder()
-                .id(UUID.randomUUID().toString())
-                .type("TRAINING_ASSIGNED")
-                .severity("info")
-                .title("Nueva capacitación asignada")
-                .body(saved.getTitle() + " · " + saved.getShift())
-                .taskId(saved.getId())
-                .storeId(saved.getStoreId())
-                .timestamp(Instant.now())
-                .build());
+        // Incrementar usageCount de cada material asignado
+        materialRefs.forEach(r -> materialService.incrementUsage(r.getMaterialId()));
+
+        eventPublisher.publishEvent(new TrainingCreatedEvent(
+                saved.getId(), saved.getAssignedUserId(),
+                saved.getStoreId(), saved.getTitle(), saved.getShift()));
 
         return toResponse(saved);
     }
@@ -80,6 +95,12 @@ public class TrainingServiceImpl implements TrainingService {
     @Override
     public List<TrainingResponse> getMyTrainings(String userId) {
         return trainingRepository.findByAssignedUserIdAndActivoTrue(userId)
+                .stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public List<TrainingResponse> getAll() {
+        return trainingRepository.findByActivoTrue()
                 .stream().map(this::toResponse).toList();
     }
 
@@ -107,6 +128,10 @@ public class TrainingServiceImpl implements TrainingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
 
         TrainingProgress progress = training.getProgress();
+        if (progress == null) {
+            progress = TrainingProgress.builder().build();
+            training.setProgress(progress);
+        }
         TrainingStatus current    = progress.getStatus();
         TrainingStatus next       = req.getNewStatus();
 
@@ -125,7 +150,9 @@ public class TrainingServiceImpl implements TrainingService {
 
         Training saved = trainingRepository.save(training);
 
-        emitProgressNotification(saved, next);
+        eventPublisher.publishEvent(new TrainingProgressChangedEvent(
+                saved.getId(), next, saved.getStoreId(),
+                saved.getTitle(), saved.getPosition()));
 
         return toResponse(saved);
     }
@@ -211,46 +238,171 @@ public class TrainingServiceImpl implements TrainingService {
         }
     }
 
-    // ── Notificaciones ───────────────────────────────────────────────────
+    // ── Consultas paginadas ───────────────────────────────────────────────
 
-    private void emitProgressNotification(Training training, TrainingStatus newStatus) {
-        String type     = "TRAINING_UPDATED";
-        String severity = "info";
-        String title    = "Capacitación Actualizada";
+    @Override
+    public Page<TrainingResponse> getMyTrainingsPaged(String userId, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, Math.min(size, 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        return trainingRepository.findByAssignedUserIdAndActivoTrue(userId, pageable)
+                .map(this::toResponse);
+    }
 
-        switch (newStatus) {
-            case EN_CURSO -> {
-                type  = "TRAINING_STARTED";
-                title = "Capacitación Iniciada";
-            }
-            case COMPLETADA -> {
-                type     = "TRAINING_COMPLETED";
-                title    = "Capacitación Completada";
-            }
-            case NO_COMPLETADA -> {
-                type     = "TRAINING_FAILED";
-                severity = "warning";
-                title    = "Capacitación No Completada";
-            }
-            default -> { }
+    @Override
+    public Page<TrainingResponse> getByStorePaged(String storeId, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, Math.min(size, 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        return trainingRepository.findByStoreIdAndActivoTrue(storeId, pageable)
+                .map(this::toResponse);
+    }
+
+    @Override
+    public Page<TrainingResponse> getAllPaged(int page, int size) {
+        PageRequest pageable = PageRequest.of(page, Math.min(size, 200),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        return trainingRepository.findByActivoTrue(pageable)
+                .map(this::toResponse);
+    }
+
+    // ── Crear desde plantilla ─────────────────────────────────────────────
+
+    @Override
+    public TrainingResponse createFromTemplate(String templateId, String assignedUserId,
+                                               String storeId, String shift, Instant dueAt,
+                                               String createdBy) {
+        TrainingTemplate template = templateRepository.findById(templateId)
+                .filter(TrainingTemplate::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Plantilla no encontrada: " + templateId));
+
+        User assignedUser = userRepository.findById(assignedUserId)
+                .or(() -> userRepository.findByNumeroUsuario(assignedUserId))
+                .filter(User::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario asignado no encontrado o inactivo: " + assignedUserId));
+
+        // Copiar materiales de la plantilla como refs de training
+        List<TrainingMaterialRef> materialRefs = template.getMaterials().stream()
+                .map(tm -> TrainingMaterialRef.builder()
+                        .materialId(tm.getMaterialId())
+                        .order(tm.getOrder())
+                        .required(tm.isRequired())
+                        .notes(tm.getNotes())
+                        .build())
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        Training training = Training.builder()
+                .title(template.getTitle())
+                .description(template.getDescription())
+                .level(template.getLevel())
+                .durationHours(template.getDurationHours())
+                .minPassGrade(template.getMinPassGrade())
+                .assignedUserId(assignedUser.getId())
+                .position(assignedUser.getPuesto())
+                .storeId(storeId)
+                .shift(shift)
+                .dueAt(dueAt)
+                .templateId(templateId)
+                .materials(materialRefs)
+                .category(template.getCategory())
+                .tags(new ArrayList<>(template.getTags()))
+                .progress(TrainingProgress.builder().build())
+                .createdBy(createdBy)
+                .activo(true)
+                .build();
+
+        Training saved = trainingRepository.save(training);
+
+        // Métricas: usageCount en materiales + timesUsed en plantilla
+        materialRefs.forEach(r -> materialService.incrementUsage(r.getMaterialId()));
+        templateService.incrementTimesUsed(templateId);
+
+        eventPublisher.publishEvent(new TrainingCreatedEvent(
+                saved.getId(), saved.getAssignedUserId(),
+                saved.getStoreId(), saved.getTitle(), saved.getShift()));
+
+        return toResponse(saved);
+    }
+
+    // ── Marcar material como visto ────────────────────────────────────────
+
+    @Override
+    public TrainingResponse markMaterialViewed(String trainingId, String materialId,
+                                               String currentUser) {
+        Training training = trainingRepository.findById(trainingId)
+                .filter(Training::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Capacitación no encontrada: " + trainingId));
+
+        training.getMaterials().stream()
+                .filter(r -> r.getMaterialId().equals(materialId))
+                .findFirst()
+                .ifPresent(r -> {
+                    r.setViewed(true);
+                    r.setViewedAt(Instant.now());
+                });
+
+        return toResponse(trainingRepository.save(training));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private List<TrainingMaterialRef> buildMaterialRefs(List<String> materialIds) {
+        if (materialIds == null || materialIds.isEmpty()) return new ArrayList<>();
+        List<TrainingMaterialRef> refs = new ArrayList<>();
+        for (int i = 0; i < materialIds.size(); i++) {
+            refs.add(TrainingMaterialRef.builder()
+                    .materialId(materialIds.get(i))
+                    .order(i + 1)
+                    .required(true)
+                    .build());
         }
+        return refs;
+    }
 
-        notificationService.sendToStoreManagers(training.getStoreId(), NotificationEvent.builder()
-                .id(UUID.randomUUID().toString())
-                .type(type)
-                .severity(severity)
-                .title(title)
-                .body(training.getTitle() + " · " + training.getPosition())
-                .taskId(training.getId())
-                .storeId(training.getStoreId())
-                .timestamp(Instant.now())
-                .build());
+    /** Resuelve materiales en lote (1 query) para evitar N+1. */
+    private Map<String, TrainingMaterial> resolveMaterialMap(List<TrainingMaterialRef> refs) {
+        if (refs == null || refs.isEmpty()) return Map.of();
+        List<String> ids = refs.stream().map(TrainingMaterialRef::getMaterialId).toList();
+        return materialRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(TrainingMaterial::getId, Function.identity()));
     }
 
     // ── Mapper Training → TrainingResponse ──────────────────────────────
 
     private TrainingResponse toResponse(Training t) {
-        TrainingProgress p = t.getProgress();
+        TrainingProgress p = t.getProgress() != null ? t.getProgress() : TrainingProgress.builder().build();
+
+        // Resolver materiales en 1 query
+        Map<String, TrainingMaterial> materialMap = resolveMaterialMap(t.getMaterials());
+
+        List<TrainingMaterialRefResponse> resolvedMaterials = (t.getMaterials() == null)
+                ? List.of()
+                : t.getMaterials().stream()
+                        .map(ref -> {
+                            TrainingMaterial m = materialMap.get(ref.getMaterialId());
+                            var b = TrainingMaterialRefResponse.builder()
+                                    .materialId(ref.getMaterialId())
+                                    .order(ref.getOrder())
+                                    .required(ref.isRequired())
+                                    .notes(ref.getNotes())
+                                    .viewed(ref.isViewed())
+                                    .viewedAt(ref.getViewedAt());
+                            if (m != null) {
+                                b.title(m.getTitle())
+                                 .description(m.getDescription())
+                                 .type(m.getType())
+                                 .url(m.getUrl())
+                                 .originalFileName(m.getOriginalFileName())
+                                 .fileSizeBytes(m.getFileSizeBytes())
+                                 .mimeType(m.getMimeType())
+                                 .category(m.getCategory())
+                                 .tags(m.getTags());
+                            }
+                            return b.build();
+                        })
+                        .toList();
+
         return TrainingResponse.builder()
                 .id(t.getId())
                 .title(t.getTitle())
@@ -263,6 +415,10 @@ public class TrainingServiceImpl implements TrainingService {
                 .storeId(t.getStoreId())
                 .shift(t.getShift())
                 .dueAt(t.getDueAt())
+                .templateId(t.getTemplateId())
+                .materials(resolvedMaterials)
+                .category(t.getCategory())
+                .tags(t.getTags())
                 .status(p.getStatus())
                 .startedAt(p.getStartedAt())
                 .completedAt(p.getCompletedAt())

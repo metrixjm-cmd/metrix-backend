@@ -2,6 +2,10 @@ package com.metrix.api.controller;
 
 import com.metrix.api.dto.DailyReportResponse;
 import com.metrix.api.service.ReportService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +31,7 @@ import java.time.LocalDate;
 @RestController
 @RequestMapping("/api/v1/reports")
 @RequiredArgsConstructor
+@Tag(name = "Reportes", description = "Reportes de cierre diario y fichas de desempeño (Sprint 8)")
 public class ReportController {
 
     private final ReportService reportService;
@@ -35,6 +40,8 @@ public class ReportController {
      * GET /api/v1/reports/daily?storeId=&date=YYYY-MM-DD
      * Preview del reporte como JSON para mostrar en la UI antes de descargar.
      */
+    @Operation(summary = "Preview de reporte diario (JSON)", description = "Genera una vista previa del reporte de cierre diario en formato JSON para mostrar en la UI. Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Datos del reporte diario")
     @GetMapping("/daily")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<DailyReportResponse> getDailyReport(
@@ -47,6 +54,8 @@ public class ReportController {
      * GET /api/v1/reports/daily/pdf?storeId=&date=YYYY-MM-DD
      * Descarga del reporte como archivo PDF.
      */
+    @Operation(summary = "Descargar reporte diario (PDF)", description = "Genera y descarga el reporte de cierre diario en formato PDF. Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Archivo PDF del reporte diario")
     @GetMapping("/daily/pdf")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<byte[]> getDailyPdf(
@@ -65,6 +74,8 @@ public class ReportController {
      * GET /api/v1/reports/daily/excel?storeId=&date=YYYY-MM-DD
      * Descarga del reporte como archivo Excel (XLSX).
      */
+    @Operation(summary = "Descargar reporte diario (Excel)", description = "Genera y descarga el reporte de cierre diario en formato Excel (XLSX). Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Archivo Excel del reporte diario")
     @GetMapping("/daily/excel")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<byte[]> getDailyExcel(
@@ -87,6 +98,8 @@ public class ReportController {
      * Incluye datos personales, KPIs acumulados e insignias de gamificación.
      * Sprint 12.
      */
+    @Operation(summary = "Ficha de desempeño individual (PDF)", description = "Genera y descarga la ficha de desempeño de un colaborador en PDF. Incluye datos personales, KPIs e insignias. Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Archivo PDF con la ficha de desempeño")
     @GetMapping("/user/{userId}/performance-card")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<byte[]> getPerformanceCard(@PathVariable String userId) {

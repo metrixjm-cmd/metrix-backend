@@ -18,6 +18,13 @@ public interface IncidentRepository extends MongoRepository<Incident, String> {
     List<Incident> findByStoreIdAndStatusAndActivoTrue(String storeId, IncidentStatus status);
     List<Incident> findByStoreIdAndSeverityAndActivoTrue(String storeId, IncidentSeverity severity);
 
+    // ── Vista jerárquica ──────────────────────────────────────────────────────
+    /** Todas las incidencias activas con reporterRole en la lista dada */
+    List<Incident> findByActivoTrueAndReporterRoleIn(java.util.Collection<String> roles);
+
+    /** Incidencias de una sucursal con reporterRole en la lista dada */
+    List<Incident> findByStoreIdAndActivoTrueAndReporterRoleIn(String storeId, java.util.Collection<String> roles);
+
     // ── Conteos para dashboard ────────────────────────────────────────────────
     long countByStoreIdAndStatusAndActivoTrue(String storeId, IncidentStatus status);
     long countByStoreIdAndSeverityAndStatusAndActivoTrue(String storeId, IncidentSeverity severity, IncidentStatus status);

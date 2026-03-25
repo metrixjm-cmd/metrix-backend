@@ -2,6 +2,10 @@ package com.metrix.api.controller;
 
 import com.metrix.api.dto.EvidenceUploadResponse;
 import com.metrix.api.service.TaskService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,6 +39,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/v1/tasks/{taskId}/evidence")
 @RequiredArgsConstructor
+@Tag(name = "Evidencias", description = "Upload de evidencias multimedia (Sprint 5)")
 public class EvidenceController {
 
     private final TaskService taskService;
@@ -59,6 +64,8 @@ public class EvidenceController {
      * @param auth     contexto de autenticación JWT del EJECUTADOR
      * @return {@link EvidenceUploadResponse} con la URL persistida en GCS
      */
+    @Operation(summary = "Subir evidencia de ejecución (imagen o video)", description = "Sube una imagen o video como evidencia de ejecución de una tarea. Solo EJECUTADOR asignado a la tarea, que debe estar en estado IN_PROGRESS.")
+    @ApiResponse(responseCode = "201", description = "Evidencia subida exitosamente a GCS")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('EJECUTADOR')")
     public ResponseEntity<EvidenceUploadResponse> upload(

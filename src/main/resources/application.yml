@@ -1,43 +1,54 @@
 server:
   port: 8080
+  shutdown: graceful
 
 spring:
   application:
     name: METRIX-API
-  
-  # Configuración de MongoDB
+
+  # MongoDB
   data:
     mongodb:
-      uri: mongodb://localhost:27017/metrix_db
-      # Si usas Atlas: mongodb+srv://<user>:<pass>@cluster.mongodb.net/metrix_db
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/metrix_db}
 
-  # Configuración de carga de archivos (Punto 12)
+  # Archivos
   servlet:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
 
+  lifecycle:
+    timeout-per-shutdown-phase: 15s
+
+  # Desactivar auto-config de Redis (no lo usamos en modo single-instance)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+
 # Configuración personalizada de METRIX
 metrix:
-  jwt:
-    secret: ${JWT_SECRET:esta-es-una-clave-muy-secreta-y-larga-para-metrix-2026}
-    expiration: 86400000 # 24 horas
-  
   google-cloud:
-    bucket-name: metrix-evidences
-    project-id: metrix-project-id
-    credentials-path: classpath:gcp-service-account.json
+    bucket-name: ${GCS_BUCKET_NAME:metrix-evidences}
+    project-id: ${GCS_PROJECT_ID:metrix-project-id}
+    credentials-path: ${GCS_CREDENTIALS_PATH:classpath:gcp-service-account.json}
 
   security:
     jwt:
-      secret-key: 3zocvWAkykphKpHKU/vkT5AUWCgzJi2fBeAVh12Gxlw=
-      expiration-ms: 86400000  # 24 horas
+      secret-key: ${METRIX_SECURITY_JWT_SECRET_KEY:bWV0cml4LWRldi1zZWNyZXQta2V5LWZvci1sb2NhbC1kZXZlbG9wbWVudC1vbmx5LTI2Ynl0ZXM=}
+      expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
   analytics:
-    url: http://localhost:8001/api/v1/analytics
+    url: ${METRIX_ANALYTICS_URL:http://localhost:8001/api/v1/analytics}
+    api-key: ${METRIX_API_KEY:dev-internal-key}
 
-# Logs para desarrollo
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:8080}
+
+# Logging
 logging:
   level:
-    org.springframework.data.mongodb: DEBUG
-    com.metrix.api: DEBUG
+    root: INFO
+    org.springframework.data.mongodb: ${LOG_LEVEL_MONGO:WARN}
+    com.metrix.api: ${LOG_LEVEL_APP:INFO}
+    com.metrix.api.security: ${LOG_LEVEL_SECURITY:WARN}

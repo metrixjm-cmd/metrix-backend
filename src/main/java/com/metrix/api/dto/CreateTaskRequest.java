@@ -1,6 +1,6 @@
 package com.metrix.api.dto;
 
-import com.metrix.api.model.TaskCategory;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * DTO de entrada para la creación de tareas (solo ADMIN / GERENTE).
@@ -37,15 +38,17 @@ public class CreateTaskRequest {
     @NotBlank(message = "La descripción es obligatoria")
     private String description;
 
-    @NotNull(message = "La categoría es obligatoria")
-    private TaskCategory category;
+    @NotBlank(message = "La categoría es obligatoria")
+    private String category;
 
     /** {@code false} por defecto. Marcar {@code true} para tareas estratégicas (KPI #8). */
+    @JsonProperty("isCritical")
     private boolean critical;
 
     // ── assignment ──────────────────────────────────────────────────────
 
     @NotBlank(message = "Debe asignar la tarea a un usuario")
+    @JsonProperty("assignedToId")
     private String assignedUserId;
 
     @NotBlank(message = "La tienda es obligatoria")
@@ -57,4 +60,23 @@ public class CreateTaskRequest {
     @NotNull(message = "La fecha límite es obligatoria")
     @Future(message = "La fecha límite debe ser una fecha futura")
     private Instant dueAt;
+
+    // ── processes (checklist) ───────────────────────────────────────
+
+    private List<ProcessStepRequest> processes;
+
+    // ── recurrence ────────────────────────────────────────────────────
+
+    /** {@code true} si la tarea se repite periódicamente. */
+    @JsonProperty("isRecurring")
+    private boolean recurring;
+
+    /** Días de la semana: LUN, MAR, MIE, JUE, VIE, SAB, DOM. */
+    private List<String> recurrenceDays;
+
+    /** Hora de inicio (formato HH:mm). */
+    private String recurrenceStartTime;
+
+    /** Hora de fin (formato HH:mm). */
+    private String recurrenceEndTime;
 }

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -14,6 +15,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Entidad principal de capacitación en METRIX (Sprint 10).
@@ -43,6 +46,9 @@ public class Training {
 
     @Id
     private String id;
+
+    @Version
+    private Long version;
 
     // ── Definición ───────────────────────────────────────────────────────
 
@@ -83,6 +89,27 @@ public class Training {
 
     @Field("due_at")
     private Instant dueAt;
+
+    // ── Plantilla de origen ───────────────────────────────────────────────
+
+    /** _id de la TrainingTemplate de la que se creó. Null si fue desde cero. */
+    @Field("template_id")
+    private String templateId;
+
+    // ── Materiales referenciados del banco ───────────────────────────────
+
+    @Builder.Default
+    @Field("materials")
+    private List<TrainingMaterialRef> materials = new ArrayList<>();
+
+    // ── Categoría y tags ─────────────────────────────────────────────────
+
+    @Field("category")
+    private String category;
+
+    @Builder.Default
+    @Field("tags")
+    private List<String> tags = new ArrayList<>();
 
     // ── Progreso (embedded) ──────────────────────────────────────────────
 

@@ -72,10 +72,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/reports/**").hasAnyRole("ADMIN", "GERENTE")
 
                 // ── Módulo RH (Sprint 9) ────────────────────────────
-                .requestMatchers(HttpMethod.GET,   "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.POST,  "/api/v1/users").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT,   "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.PATCH, "/api/v1/users/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET,    "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.POST,   "/api/v1/users").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PATCH,  "/api/v1/users/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**").hasRole("ADMIN")
 
                 // ── Módulo Capacitación (Sprint 10 + flujo roles) ────
                 .requestMatchers(HttpMethod.GET,    "/api/v1/trainings/store/**").hasAnyRole("ADMIN", "GERENTE")

@@ -147,6 +147,16 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
+    // ── Eliminar colaborador (hard-delete) ───────────────────────────────
+
+    @Override
+    public void deleteUser(String id) {
+        if (!userRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Colaborador no encontrado: " + id);
+        }
+        userRepository.deleteById(id);
+    }
+
     // ── Mapper ────────────────────────────────────────────────────────────
 
     private UserResponse toResponse(User user) {

@@ -43,4 +43,10 @@ public interface UserService {
      * Solo ADMIN. Los datos históricos se conservan para KPIs.
      */
     void deactivateUser(String id);
+
+    /**
+     * Hard-delete: elimina el registro permanentemente de la base de datos.
+     * Solo ADMIN.
+     */
+    void deleteUser(String id);
 }

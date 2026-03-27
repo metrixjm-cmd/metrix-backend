@@ -145,4 +145,20 @@ public class UserController {
         userService.deactivateUser(id);
         return ResponseEntity.noContent().build();
     }
+
+    // ── Eliminar colaborador (hard-delete) ───────────────────────────────
+
+    @Operation(summary = "Eliminar colaborador permanentemente",
+               description = "Elimina el registro del colaborador de la base de datos. Solo ADMIN. Irreversible.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Colaborador eliminado exitosamente"),
+            @ApiResponse(responseCode = "404", description = "Colaborador no encontrado"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
+    })
+    @DeleteMapping("/{id:[a-f0-9]{24}}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> deleteUser(@Parameter(description = "ID del colaborador") @PathVariable String id) {
+        userService.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
 }

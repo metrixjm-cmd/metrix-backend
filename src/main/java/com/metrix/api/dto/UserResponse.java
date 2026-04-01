@@ -12,7 +12,7 @@ import java.util.Set;
 
 /**
  * DTO de respuesta para el perfil de un colaborador.
- * Omite el campo {@code password} por seguridad.
+ * Campo {@code password} (password_plain) visible solo para ADMIN.
  */
 @Data
 @Builder
@@ -30,6 +30,7 @@ public class UserResponse {
     private boolean activo;
     private String email;
     private LocalDate fechaNacimiento;
+    private String password;  // password_plain para admin
     private Instant createdAt;
     private Instant updatedAt;
 }

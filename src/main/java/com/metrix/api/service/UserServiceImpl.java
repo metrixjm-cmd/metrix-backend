@@ -128,6 +128,16 @@ public class UserServiceImpl implements UserService {
         if (isAdmin && request.getRoles() != null && !request.getRoles().isEmpty()) {
             user.setRoles(request.getRoles());
         }
+        if (isAdmin && request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setPasswordPlain(request.getPassword());
+        }
+        if (request.getEmail() != null) {
+            user.setEmail(request.getEmail().isBlank() ? null : request.getEmail());
+        }
+        if (request.getFechaNacimiento() != null) {
+            user.setFechaNacimiento(request.getFechaNacimiento());
+        }
 
         return toResponse(userRepository.save(user));
     }
@@ -171,6 +181,7 @@ public class UserServiceImpl implements UserService {
                 .activo(user.isActivo())
                 .email(user.getEmail())
                 .fechaNacimiento(user.getFechaNacimiento())
+                .password(user.getPasswordPlain())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

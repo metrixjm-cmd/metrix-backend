@@ -130,7 +130,6 @@ public class UserServiceImpl implements UserService {
         }
         if (isAdmin && request.getPassword() != null && !request.getPassword().isBlank()) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
-            user.setPasswordPlain(request.getPassword());
         }
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail().isBlank() ? null : request.getEmail());
@@ -181,7 +180,7 @@ public class UserServiceImpl implements UserService {
                 .activo(user.isActivo())
                 .email(user.getEmail())
                 .fechaNacimiento(user.getFechaNacimiento())
-                .password(user.getPasswordPlain())
+                .password(null)
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

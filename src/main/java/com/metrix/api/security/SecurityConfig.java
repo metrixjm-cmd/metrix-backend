@@ -78,13 +78,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH,  "/api/v1/users/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**").hasRole("ADMIN")
 
-                // ── Módulo Capacitación (Sprint 10 + flujo roles) ────
-                .requestMatchers(HttpMethod.GET,    "/api/v1/trainings/store/**").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.GET,    "/api/v1/trainings").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST,   "/api/v1/trainings").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.POST,   "/api/v1/trainings/from-template/**").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.PATCH,  "/api/v1/trainings/*/materials/*/view").authenticated()
-                .requestMatchers(HttpMethod.DELETE, "/api/v1/trainings/**").hasRole("ADMIN")
+                // ── Módulo Capacitación — autorización delegada a @PreAuthorize en controller ──
+                .requestMatchers("/api/v1/trainings/**").authenticated()
 
                 // ── Módulo Configuración / Stores (Sprint 11) ────────
                 .requestMatchers(HttpMethod.GET,   "/api/v1/stores/**").hasAnyRole("ADMIN", "GERENTE")

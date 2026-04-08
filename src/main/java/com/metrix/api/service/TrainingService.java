@@ -2,6 +2,7 @@ package com.metrix.api.service;
 
 import com.metrix.api.dto.CreateTrainingRequest;
 import com.metrix.api.dto.TrainingResponse;
+import com.metrix.api.dto.UpdateTrainingRequest;
 import com.metrix.api.dto.UpdateTrainingProgressRequest;
 
 import org.springframework.data.domain.Page;
@@ -27,6 +28,9 @@ public interface TrainingService {
 
     /** Retorna una capacitación por ID. */
     TrainingResponse getById(String id);
+
+    /** Edita metadata de una capacitacion. */
+    TrainingResponse update(String id, UpdateTrainingRequest req);
 
     /** Actualiza el progreso/estado de una capacitación. */
     TrainingResponse updateProgress(String id, UpdateTrainingProgressRequest req, String currentUser);

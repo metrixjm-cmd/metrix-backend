@@ -1,0 +1,73 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGION: us-central1
+  SERVICE: metrix-backend
+  REGISTRY: us-central1-docker.pkg.dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build \
+          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/metrix/backend:${{ github.sha }} \
+          -t ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/metrix/backend:latest \
+          .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/metrix/backend:${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/metrix/backend:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+          --image=${{ env.REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/metrix/backend:${{ github.sha }} \
+          --region=${{ env.REGION }} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --memory=1Gi \
+          --cpu=1 \
+          --cpu-boost \
+          --min-instances=0 \
+          --max-instances=1 \
+          --concurrency=80 \
+          --timeout=300 \
+          --set-env-vars="^;;^SPRING_DATA_MONGODB_URI=${{ secrets.MONGO_URI }};;METRIX_SECURITY_JWT_SECRET_KEY=${{ secrets.JWT_SECRET }};;METRIX_ANALYTICS_URL=${{ secrets.ANALYTICS_URL }};;CORS_ALLOWED_ORIGINS=https://metrix-app.web.app,https://project-c0ecce2b-41ee-48b7-8b3.web.app;;SPRING_PROFILES_ACTIVE=docker" \
+          --quiet
+
+      - name: Verify deployment
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }} --region=${{ env.REGION }} --format="value(status.url)")
+          echo "Deployed to: $URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/api/v1/auth/login" -X POST -H "Content-Type: application/json" -d '{"numeroUsuario":"test","password":"test"}')
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" = "000" ]; then
+            echo "ERROR: Backend not responding"
+            exit 1
+          fi
+          echo "Backend is up and responding"

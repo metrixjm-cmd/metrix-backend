@@ -7,3 +7,9 @@ target/
 *.iml
 .mvn/wrapper/maven-wrapper.jar
 *.log
+
+# Runtime uploads
+uploads/
+
+# Local Claude Code settings
+.claude/settings.local.json

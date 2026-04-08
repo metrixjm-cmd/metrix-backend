@@ -24,12 +24,12 @@ import java.util.stream.Collectors;
 /**
  * Implementación del motor de capacitaciones para METRIX (Sprint 10).
  * <p>
- * Transiciones de estado permitidas:
+ * Arquitectura refactorizada:
  * <ul>
- *   <li>PROGRAMADA  → EN_CURSO       : registra startedAt</li>
- *   <li>EN_CURSO    → COMPLETADA     : requiere grade; calcula passed y onTime</li>
- *   <li>EN_CURSO    → NO_COMPLETADA  : requiere comments; onTime = false</li>
- *   <li>COMPLETADA / NO_COMPLETADA   : estados terminales</li>
+ *   <li>{@link TrainingStateMachine} — fuente única de transiciones de estado</li>
+ *   <li>{@link RolePolicy} — fuente única de reglas de asignación por rol</li>
+ *   <li>GETs son PUROS — no mutan ni persisten DB (CQRS ligero)</li>
+ *   <li>Porcentaje se calcula on-read en toResponse() sin side-effects</li>
  * </ul>
  */
 @Service
@@ -45,19 +45,17 @@ public class TrainingServiceImpl implements TrainingService {
     private final TrainingTemplateService    templateService;
     private final UserRepository             userRepository;
     private final ApplicationEventPublisher  eventPublisher;
+    private final TrainingStateMachine       stateMachine;
+    private final RolePolicy                 rolePolicy;
 
     // ── Crear ────────────────────────────────────────────────────────────
 
     @Override
     public TrainingResponse create(CreateTrainingRequest req, String createdBy) {
-        // Buscar por ObjectId primero, fallback a numeroUsuario
-        User assignedUser = userRepository.findById(req.getAssignedUserId())
-                .or(() -> userRepository.findByNumeroUsuario(req.getAssignedUserId()))
-                .filter(User::isActivo)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Usuario asignado no encontrado o inactivo: " + req.getAssignedUserId()));
+        User creator = resolveUser(createdBy);
+        User assignedUser = resolveUser(req.getAssignedUserId());
+        rolePolicy.validateAssignment(creator, assignedUser, req.getStoreId());
 
-        // Construir lista de materiales referenciados
         List<TrainingMaterialRef> materialRefs = buildMaterialRefs(req.getMaterialIds());
 
         Training training = Training.builder()
@@ -66,7 +64,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .level(req.getLevel())
                 .durationHours(DEFAULT_DURATION_HOURS)
                 .minPassGrade(DEFAULT_MIN_PASS_GRADE)
-                .assignedUserId(req.getAssignedUserId())
+                .assignedUserId(assignedUser.getId())
                 .assignedUserName(assignedUser.getNombre())
                 .position(assignedUser.getPuesto())
                 .storeId(req.getStoreId())
@@ -84,7 +82,6 @@ public class TrainingServiceImpl implements TrainingService {
 
         Training saved = trainingRepository.save(training);
 
-        // Incrementar usageCount de cada material asignado
         materialRefs.forEach(r -> materialService.incrementUsage(r.getMaterialId()));
 
         eventPublisher.publishEvent(new TrainingCreatedEvent(
@@ -94,7 +91,7 @@ public class TrainingServiceImpl implements TrainingService {
         return toResponse(saved);
     }
 
-    // ── Consultas ────────────────────────────────────────────────────────
+    // ── Consultas (PURAS — no mutan DB) ──────────────────────────────────
 
     @Override
     public List<TrainingResponse> getMyTrainings(String userId) {
@@ -118,20 +115,47 @@ public class TrainingServiceImpl implements TrainingService {
     public List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId) {
         return trainingRepository.findByAssignmentGroupIdAndActivoTrue(assignmentGroupId)
                 .stream()
-                .sorted(Comparator.comparing(Training::getAssignedUserName, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .sorted(Comparator.comparing(Training::getAssignedUserName,
+                        Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(this::toResponse)
                 .toList();
     }
 
     @Override
     public TrainingResponse getById(String id) {
-        return trainingRepository.findById(id)
+        Training training = trainingRepository.findById(id)
                 .filter(Training::isActivo)
-                .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
+        return toResponse(training);
     }
 
-    // ── Actualizar Progreso ──────────────────────────────────────────────
+    // ── Actualizar Progreso (via StateMachine) ──────────────────────────
+
+    @Override
+    public TrainingResponse update(String id, UpdateTrainingRequest req) {
+        Training target = trainingRepository.findById(id)
+                .filter(Training::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Capacitacion no encontrada: " + id));
+        ensureTrainingEditable(target);
+
+        String groupId = target.getAssignmentGroupId();
+        if (groupId != null && !groupId.isBlank()) {
+            List<Training> grouped = trainingRepository.findByAssignmentGroupIdAndActivoTrue(groupId);
+            if (!grouped.isEmpty()) {
+                grouped.forEach(this::ensureTrainingEditable);
+                grouped.forEach(training -> applyEditableFields(training, req));
+                List<Training> saved = trainingRepository.saveAll(grouped);
+                return saved.stream()
+                        .filter(training -> training.getId().equals(id))
+                        .findFirst()
+                        .map(this::toResponse)
+                        .orElseGet(() -> toResponse(saved.get(0)));
+            }
+        }
+
+        applyEditableFields(target, req);
+        return toResponse(trainingRepository.save(target));
+    }
 
     @Override
     public TrainingResponse updateProgress(String id, UpdateTrainingProgressRequest req,
@@ -140,31 +164,16 @@ public class TrainingServiceImpl implements TrainingService {
                 .filter(Training::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
 
-        TrainingProgress progress = training.getProgress();
-        if (progress == null) {
-            progress = TrainingProgress.builder().build();
-            training.setProgress(progress);
-        }
-        TrainingStatus current    = progress.getStatus();
-        TrainingStatus next       = req.getNewStatus();
+        User operator = resolveUser(currentUser);
+        rolePolicy.validateOperationScope(operator, training.getAssignedUserId(), training.getStoreId());
 
-        validateTransition(current, next);
-
-        Instant now = Instant.now();
-
-        switch (next) {
-            case EN_CURSO -> applyEnCurso(progress, now, req.getPercentage());
-            case COMPLETADA -> applyCompletada(progress, training.getDueAt(), now,
-                    training.getMinPassGrade(), req.getGrade(), req.getPercentage());
-            case NO_COMPLETADA -> applyNoCompletada(progress, now, req.getComments(),
-                    req.getPercentage());
-            default -> { /* PROGRAMADA no es destino válido desde otro estado */ }
-        }
+        stateMachine.transitionByCommand(training, req.getNewStatus(),
+                req.getGrade(), req.getComments(), req.getPercentage());
 
         Training saved = trainingRepository.save(training);
 
         eventPublisher.publishEvent(new TrainingProgressChangedEvent(
-                saved.getId(), next, saved.getStoreId(),
+                saved.getId(), req.getNewStatus(), saved.getStoreId(),
                 saved.getTitle(), saved.getPosition()));
 
         return toResponse(saved);
@@ -176,79 +185,20 @@ public class TrainingServiceImpl implements TrainingService {
     public void deactivate(String id) {
         Training training = trainingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
+        ensureTrainingDeletable(training);
+        String groupId = training.getAssignmentGroupId();
+        if (groupId != null && !groupId.isBlank()) {
+            List<Training> grouped = trainingRepository.findByAssignmentGroupIdAndActivoTrue(groupId);
+            if (!grouped.isEmpty()) {
+                grouped.forEach(this::ensureTrainingDeletable);
+                grouped.forEach(item -> item.setActivo(false));
+                trainingRepository.saveAll(grouped);
+                return;
+            }
+        }
+
         training.setActivo(false);
         trainingRepository.save(training);
-    }
-
-    // ── Lógica de Transiciones ───────────────────────────────────────────
-
-    private void validateTransition(TrainingStatus current, TrainingStatus next) {
-        boolean valid = switch (current) {
-            case PROGRAMADA    -> next == TrainingStatus.EN_CURSO;
-            case EN_CURSO      -> next == TrainingStatus.COMPLETADA || next == TrainingStatus.NO_COMPLETADA
-                                  || next == TrainingStatus.EN_CURSO; // permitir actualizar % en EN_CURSO
-            case COMPLETADA    -> false;
-            case NO_COMPLETADA -> false;
-        };
-
-        if (!valid) {
-            throw new IllegalStateException(
-                    String.format("Transición inválida: %s → %s. " +
-                            "Flujo permitido: PROGRAMADA→EN_CURSO, EN_CURSO→COMPLETADA|NO_COMPLETADA.",
-                            current, next));
-        }
-    }
-
-    /** PROGRAMADA → EN_CURSO: registra inicio; opcionalmente setea porcentaje. */
-    private void applyEnCurso(TrainingProgress progress, Instant now, Integer percentage) {
-        if (progress.getStatus() == TrainingStatus.PROGRAMADA) {
-            progress.setStartedAt(now);
-        }
-        progress.setStatus(TrainingStatus.EN_CURSO);
-        if (percentage != null) {
-            progress.setPercentage(percentage);
-        }
-    }
-
-    /**
-     * EN_CURSO → COMPLETADA.
-     * Requiere grade. Calcula passed y onTime.
-     */
-    private void applyCompletada(TrainingProgress progress, Instant dueAt, Instant now,
-                                  double minPassGrade, Double grade, Integer percentage) {
-        if (grade == null) {
-            throw new IllegalStateException(
-                    "Al marcar una capacitación como COMPLETADA debe proporcionar el campo 'grade' (0–10).");
-        }
-        progress.setStatus(TrainingStatus.COMPLETADA);
-        progress.setCompletedAt(now);
-        progress.setGrade(grade);
-        progress.setPassed(grade >= minPassGrade);
-        progress.setOnTime(!now.isAfter(dueAt));
-        if (percentage != null) {
-            progress.setPercentage(percentage);
-        } else {
-            progress.setPercentage(100);
-        }
-    }
-
-    /**
-     * EN_CURSO → NO_COMPLETADA.
-     * Requiere comments. onTime siempre false.
-     */
-    private void applyNoCompletada(TrainingProgress progress, Instant now,
-                                    String comments, Integer percentage) {
-        if (comments == null || comments.isBlank()) {
-            throw new IllegalStateException(
-                    "Al marcar una capacitación como NO_COMPLETADA debe proporcionar el campo 'comments' con la causa.");
-        }
-        progress.setStatus(TrainingStatus.NO_COMPLETADA);
-        progress.setCompletedAt(now);
-        progress.setOnTime(false);
-        progress.setComments(comments);
-        if (percentage != null) {
-            progress.setPercentage(percentage);
-        }
     }
 
     // ── Consultas paginadas ───────────────────────────────────────────────
@@ -284,18 +234,16 @@ public class TrainingServiceImpl implements TrainingService {
                                                String storeId, String shift, Instant dueAt,
                                                String assignmentGroupId,
                                                String createdBy) {
+        User creator = resolveUser(createdBy);
+
         TrainingTemplate template = templateRepository.findById(templateId)
                 .filter(TrainingTemplate::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Plantilla no encontrada: " + templateId));
 
-        User assignedUser = userRepository.findById(assignedUserId)
-                .or(() -> userRepository.findByNumeroUsuario(assignedUserId))
-                .filter(User::isActivo)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Usuario asignado no encontrado o inactivo: " + assignedUserId));
+        User assignedUser = resolveUser(assignedUserId);
+        rolePolicy.validateAssignment(creator, assignedUser, storeId);
 
-        // Copiar materiales de la plantilla como refs de training
         List<TrainingMaterialRef> materialRefs = template.getMaterials().stream()
                 .map(tm -> TrainingMaterialRef.builder()
                         .materialId(tm.getMaterialId())
@@ -329,7 +277,6 @@ public class TrainingServiceImpl implements TrainingService {
 
         Training saved = trainingRepository.save(training);
 
-        // Métricas: usageCount en materiales + timesUsed en plantilla
         materialRefs.forEach(r -> materialService.incrementUsage(r.getMaterialId()));
         templateService.incrementTimesUsed(templateId);
 
@@ -340,7 +287,7 @@ public class TrainingServiceImpl implements TrainingService {
         return toResponse(saved);
     }
 
-    // ── Marcar material como visto ────────────────────────────────────────
+    // ── Marcar material como visto (via StateMachine) ────────────────────
 
     @Override
     public TrainingResponse markMaterialViewed(String trainingId, String materialId,
@@ -349,6 +296,9 @@ public class TrainingServiceImpl implements TrainingService {
                 .filter(Training::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Capacitación no encontrada: " + trainingId));
+
+        User operator = resolveUser(currentUser);
+        rolePolicy.validateOperationScope(operator, training.getAssignedUserId(), training.getStoreId());
 
         Instant now = Instant.now();
         training.getMaterials().stream()
@@ -359,9 +309,17 @@ public class TrainingServiceImpl implements TrainingService {
                     r.setViewedAt(now);
                 });
 
-        syncProgressFromMaterials(training, now);
+        boolean statusChanged = stateMachine.tryAutoCompleteByMaterials(training);
 
-        return toResponse(trainingRepository.save(training));
+        Training saved = trainingRepository.save(training);
+
+        if (statusChanged) {
+            eventPublisher.publishEvent(new TrainingProgressChangedEvent(
+                    saved.getId(), saved.getProgress().getStatus(),
+                    saved.getStoreId(), saved.getTitle(), saved.getPosition()));
+        }
+
+        return toResponse(saved);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -379,26 +337,37 @@ public class TrainingServiceImpl implements TrainingService {
         return refs;
     }
 
-    private void syncProgressFromMaterials(Training training, Instant now) {
-        List<TrainingMaterialRef> materials = training.getMaterials();
-        if (materials == null || materials.isEmpty()) return;
+    private void applyEditableFields(Training training, UpdateTrainingRequest req) {
+        training.setTitle(req.getTitle());
+        training.setDescription(req.getDescription());
+        training.setLevel(req.getLevel());
+        training.setStoreId(req.getStoreId());
+        training.setShift(req.getShift());
+        training.setDueAt(req.getDueAt());
+    }
 
+    private void ensureTrainingEditable(Training training) {
+        TrainingStatus status = currentStatus(training);
+        if (status == TrainingStatus.COMPLETADA) {
+            throw new IllegalStateException(
+                    "No se puede editar una capacitación en estado COMPLETADA.");
+        }
+    }
+
+    private void ensureTrainingDeletable(Training training) {
+        TrainingStatus status = currentStatus(training);
+        if (status == TrainingStatus.COMPLETADA) {
+            throw new IllegalStateException(
+                    "No se puede eliminar una capacitación en estado COMPLETADA.");
+        }
+    }
+
+    private TrainingStatus currentStatus(Training training) {
         TrainingProgress progress = training.getProgress();
-        if (progress == null) {
-            progress = TrainingProgress.builder().build();
-            training.setProgress(progress);
+        if (progress == null || progress.getStatus() == null) {
+            return TrainingStatus.PROGRAMADA;
         }
-
-        long viewedCount = materials.stream().filter(TrainingMaterialRef::isViewed).count();
-        int percentage = (int) Math.round((viewedCount * 100.0) / materials.size());
-        progress.setPercentage(percentage);
-
-        if (viewedCount > 0 && progress.getStatus() == TrainingStatus.PROGRAMADA) {
-            progress.setStatus(TrainingStatus.EN_CURSO);
-            if (progress.getStartedAt() == null) {
-                progress.setStartedAt(now);
-            }
-        }
+        return progress.getStatus();
     }
 
     /** Resuelve materiales en lote (1 query) para evitar N+1. */
@@ -409,12 +378,14 @@ public class TrainingServiceImpl implements TrainingService {
                 .collect(Collectors.toMap(TrainingMaterial::getId, Function.identity()));
     }
 
-    // ── Mapper Training → TrainingResponse ──────────────────────────────
+    // ── Mapper Training → TrainingResponse (PURO — sin side-effects) ────
 
     private TrainingResponse toResponse(Training t) {
         TrainingProgress p = t.getProgress() != null ? t.getProgress() : TrainingProgress.builder().build();
 
-        // Resolver materiales en 1 query
+        // Calcular porcentaje on-read sin persistir
+        int computedPercentage = stateMachine.computePercentage(t);
+
         Map<String, TrainingMaterial> materialMap = resolveMaterialMap(t.getMaterials());
 
         List<TrainingMaterialRefResponse> resolvedMaterials = (t.getMaterials() == null)
@@ -466,7 +437,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .startedAt(p.getStartedAt())
                 .completedAt(p.getCompletedAt())
                 .onTime(p.getOnTime())
-                .percentage(p.getPercentage())
+                .percentage(computedPercentage)
                 .grade(p.getGrade())
                 .passed(p.getPassed())
                 .comments(p.getComments())
@@ -474,5 +445,17 @@ public class TrainingServiceImpl implements TrainingService {
                 .createdAt(t.getCreatedAt())
                 .updatedAt(t.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Resuelve un usuario por ID o por numeroUsuario.
+     * Orden unificado: siempre findById primero, luego findByNumeroUsuario.
+     */
+    private User resolveUser(String identifier) {
+        return userRepository.findById(identifier)
+                .or(() -> userRepository.findByNumeroUsuario(identifier))
+                .filter(User::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado o inactivo: " + identifier));
     }
 }

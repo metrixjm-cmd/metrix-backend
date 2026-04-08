@@ -3,6 +3,7 @@ package com.metrix.api.controller;
 import com.metrix.api.dto.CreateTrainingRequest;
 import com.metrix.api.dto.CreateFromTemplateRequest;
 import com.metrix.api.dto.TrainingResponse;
+import com.metrix.api.dto.UpdateTrainingRequest;
 import com.metrix.api.dto.UpdateTrainingProgressRequest;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.TrainingService;
@@ -120,6 +121,21 @@ public class TrainingController {
                 .body(trainingService.create(request, auth.getName()));
     }
 
+    @Operation(summary = "Editar capacitacion",
+               description = "Actualiza datos generales de una capacitacion (titulo, descripcion, nivel, sucursal, turno y fecha limite).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Capacitacion actualizada exitosamente"),
+            @ApiResponse(responseCode = "404", description = "Capacitacion no encontrada"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
+    })
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<TrainingResponse> update(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateTrainingRequest request) {
+        return ResponseEntity.ok(trainingService.update(id, request));
+    }
+
     // ── Actualizar Progreso ──────────────────────────────────────────────
 
     @Operation(summary = "Actualizar progreso",
@@ -213,7 +229,7 @@ public class TrainingController {
             @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
     })
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<Void> deactivate(@Parameter(description = "ID de la capacitación") @PathVariable String id) {
         trainingService.deactivate(id);
         return ResponseEntity.noContent().build();

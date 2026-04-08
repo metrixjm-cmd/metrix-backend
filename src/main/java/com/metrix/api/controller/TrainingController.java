@@ -83,6 +83,12 @@ public class TrainingController {
         return ResponseEntity.ok(trainingService.getByStore(storeId));
     }
 
+    @GetMapping("/group/{groupId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<List<TrainingResponse>> getByAssignmentGroupId(@PathVariable String groupId) {
+        return ResponseEntity.ok(trainingService.getByAssignmentGroupId(groupId));
+    }
+
     // ── Detalle ──────────────────────────────────────────────────────────
 
     @Operation(summary = "Detalle de capacitación",
@@ -180,6 +186,7 @@ public class TrainingController {
                         request.getStoreId(),
                         request.getShift(),
                         request.getDueAt(),
+                        request.getAssignmentGroupId(),
                         auth.getName()));
     }
 

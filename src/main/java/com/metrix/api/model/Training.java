@@ -76,6 +76,9 @@ public class Training {
     @Field("assigned_user_id")
     private String assignedUserId;
 
+    @Field("assigned_user_name")
+    private String assignedUserName;
+
     /** Puesto desnormalizado del colaborador al momento de la asignación. */
     @Field("position")
     private String position;
@@ -95,6 +98,10 @@ public class Training {
     /** _id de la TrainingTemplate de la que se creó. Null si fue desde cero. */
     @Field("template_id")
     private String templateId;
+
+    @Indexed
+    @Field("assignment_group_id")
+    private String assignmentGroupId;
 
     // ── Materiales referenciados del banco ───────────────────────────────
 

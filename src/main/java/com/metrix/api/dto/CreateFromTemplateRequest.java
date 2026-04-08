@@ -26,4 +26,6 @@ public class CreateFromTemplateRequest {
 
     @NotNull @Future
     private Instant dueAt;
+
+    private String assignmentGroupId;
 }

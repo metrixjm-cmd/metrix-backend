@@ -28,10 +28,12 @@ public class TrainingResponse {
 
     // Asignación
     private String assignedUserId;
+    private String assignedUserName;
     private String position;
     private String storeId;
     private String shift;
     private Instant dueAt;
+    private String assignmentGroupId;
 
     // Progreso (aplanado de TrainingProgress)
     private TrainingStatus status;

@@ -27,12 +27,6 @@ public class CreateTrainingRequest {
     @NotNull
     private TrainingLevel level;
 
-    @Min(1) @Max(40)
-    private int durationHours;
-
-    @DecimalMin("0") @DecimalMax("10")
-    private double minPassGrade;
-
     @NotBlank
     private String assignedUserId;
 
@@ -44,6 +38,8 @@ public class CreateTrainingRequest {
 
     @NotNull @Future
     private Instant dueAt;
+
+    private String assignmentGroupId;
 
     // ── Opcionales: reutilización de contenido ────────────────────────────
 

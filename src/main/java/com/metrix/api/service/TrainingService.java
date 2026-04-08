@@ -23,6 +23,7 @@ public interface TrainingService {
 
     /** Retorna todas las capacitaciones activas de una sucursal (gerencial). */
     List<TrainingResponse> getByStore(String storeId);
+    List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId);
 
     /** Retorna una capacitación por ID. */
     TrainingResponse getById(String id);
@@ -48,6 +49,7 @@ public interface TrainingService {
      */
     TrainingResponse createFromTemplate(String templateId, String assignedUserId,
                                         String storeId, String shift, Instant dueAt,
+                                        String assignmentGroupId,
                                         String createdBy);
 
     /** Marca un material como visto por el ejecutador asignado. */

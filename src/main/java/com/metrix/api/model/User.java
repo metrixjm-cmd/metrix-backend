@@ -90,6 +90,10 @@ public class User {
     @Field("password")
     private String password;
 
+    /** Password en texto plano (visible solo para admin). */
+    @Field("password_plain")
+    private String passwordPlain;
+
     /** Roles asignados. Set para multi-rol (Obj. #6). */
     @Field("roles")
     private Set<Role> roles;

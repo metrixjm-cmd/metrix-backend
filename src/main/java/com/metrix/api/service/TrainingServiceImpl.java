@@ -35,6 +35,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class TrainingServiceImpl implements TrainingService {
+    private static final double DEFAULT_MIN_PASS_GRADE = 7.0;
+    private static final int DEFAULT_DURATION_HOURS = 1;
 
     private final TrainingRepository         trainingRepository;
     private final TrainingMaterialRepository materialRepository;
@@ -62,14 +64,16 @@ public class TrainingServiceImpl implements TrainingService {
                 .title(req.getTitle())
                 .description(req.getDescription())
                 .level(req.getLevel())
-                .durationHours(req.getDurationHours())
-                .minPassGrade(req.getMinPassGrade())
+                .durationHours(DEFAULT_DURATION_HOURS)
+                .minPassGrade(DEFAULT_MIN_PASS_GRADE)
                 .assignedUserId(req.getAssignedUserId())
+                .assignedUserName(assignedUser.getNombre())
                 .position(assignedUser.getPuesto())
                 .storeId(req.getStoreId())
                 .shift(req.getShift())
                 .dueAt(req.getDueAt())
                 .templateId(req.getTemplateId())
+                .assignmentGroupId(req.getAssignmentGroupId())
                 .materials(materialRefs)
                 .category(req.getCategory())
                 .tags(req.getTags() != null ? req.getTags() : new ArrayList<>())
@@ -108,6 +112,15 @@ public class TrainingServiceImpl implements TrainingService {
     public List<TrainingResponse> getByStore(String storeId) {
         return trainingRepository.findByStoreIdAndActivoTrue(storeId)
                 .stream().map(this::toResponse).toList();
+    }
+
+    @Override
+    public List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId) {
+        return trainingRepository.findByAssignmentGroupIdAndActivoTrue(assignmentGroupId)
+                .stream()
+                .sorted(Comparator.comparing(Training::getAssignedUserName, Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
@@ -269,6 +282,7 @@ public class TrainingServiceImpl implements TrainingService {
     @Override
     public TrainingResponse createFromTemplate(String templateId, String assignedUserId,
                                                String storeId, String shift, Instant dueAt,
+                                               String assignmentGroupId,
                                                String createdBy) {
         TrainingTemplate template = templateRepository.findById(templateId)
                 .filter(TrainingTemplate::isActivo)
@@ -298,11 +312,13 @@ public class TrainingServiceImpl implements TrainingService {
                 .durationHours(template.getDurationHours())
                 .minPassGrade(template.getMinPassGrade())
                 .assignedUserId(assignedUser.getId())
+                .assignedUserName(assignedUser.getNombre())
                 .position(assignedUser.getPuesto())
                 .storeId(storeId)
                 .shift(shift)
                 .dueAt(dueAt)
                 .templateId(templateId)
+                .assignmentGroupId(assignmentGroupId)
                 .materials(materialRefs)
                 .category(template.getCategory())
                 .tags(new ArrayList<>(template.getTags()))
@@ -334,13 +350,16 @@ public class TrainingServiceImpl implements TrainingService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Capacitación no encontrada: " + trainingId));
 
+        Instant now = Instant.now();
         training.getMaterials().stream()
                 .filter(r -> r.getMaterialId().equals(materialId))
                 .findFirst()
                 .ifPresent(r -> {
                     r.setViewed(true);
-                    r.setViewedAt(Instant.now());
+                    r.setViewedAt(now);
                 });
+
+        syncProgressFromMaterials(training, now);
 
         return toResponse(trainingRepository.save(training));
     }
@@ -358,6 +377,28 @@ public class TrainingServiceImpl implements TrainingService {
                     .build());
         }
         return refs;
+    }
+
+    private void syncProgressFromMaterials(Training training, Instant now) {
+        List<TrainingMaterialRef> materials = training.getMaterials();
+        if (materials == null || materials.isEmpty()) return;
+
+        TrainingProgress progress = training.getProgress();
+        if (progress == null) {
+            progress = TrainingProgress.builder().build();
+            training.setProgress(progress);
+        }
+
+        long viewedCount = materials.stream().filter(TrainingMaterialRef::isViewed).count();
+        int percentage = (int) Math.round((viewedCount * 100.0) / materials.size());
+        progress.setPercentage(percentage);
+
+        if (viewedCount > 0 && progress.getStatus() == TrainingStatus.PROGRAMADA) {
+            progress.setStatus(TrainingStatus.EN_CURSO);
+            if (progress.getStartedAt() == null) {
+                progress.setStartedAt(now);
+            }
+        }
     }
 
     /** Resuelve materiales en lote (1 query) para evitar N+1. */
@@ -411,10 +452,12 @@ public class TrainingServiceImpl implements TrainingService {
                 .durationHours(t.getDurationHours())
                 .minPassGrade(t.getMinPassGrade())
                 .assignedUserId(t.getAssignedUserId())
+                .assignedUserName(t.getAssignedUserName())
                 .position(t.getPosition())
                 .storeId(t.getStoreId())
                 .shift(t.getShift())
                 .dueAt(t.getDueAt())
+                .assignmentGroupId(t.getAssignmentGroupId())
                 .templateId(t.getTemplateId())
                 .materials(resolvedMaterials)
                 .category(t.getCategory())

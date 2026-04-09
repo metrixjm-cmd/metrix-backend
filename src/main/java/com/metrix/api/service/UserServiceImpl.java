@@ -1,8 +1,10 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.CreateUserRequest;
+import com.metrix.api.dto.ResetUserPasswordRequest;
 import com.metrix.api.dto.UpdateUserRequest;
 import com.metrix.api.dto.UserResponse;
+import com.metrix.api.dto.VerifyAdminPasswordRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
@@ -11,7 +13,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -46,12 +51,9 @@ public class UserServiceImpl implements UserService {
                     "Acceso denegado: solo puede consultar los colaboradores de su propia sucursal.");
         }
 
-        List<User> users = userRepository.findByStoreIdAndActivoTrue(storeId);
-        if (!isAdmin) {
-            users = users.stream()
-                    .filter(u -> hasRole(u, Role.EJECUTADOR))
-                    .toList();
-        }
+        List<User> users = isAdmin
+                ? userRepository.findByStoreIdAndActivoTrue(storeId)
+                : getManagerOwnedUsers(storeId, requestor);
 
         return users.stream().map(this::toResponse).toList();
     }
@@ -65,10 +67,12 @@ public class UserServiceImpl implements UserService {
     // ── Perfil individual ────────────────────────────────────────────────
 
     @Override
-    public UserResponse getUserById(String id) {
-        return userRepository.findById(id)
-                .map(this::toResponse)
+    public UserResponse getUserById(String id, String requestorNumeroUsuario) {
+        User target = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Colaborador no encontrado: " + id));
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+        validateProfileScope(target, requestor);
+        return toResponse(target);
     }
 
     // ── Crear colaborador ────────────────────────────────────────────────
@@ -122,6 +126,8 @@ public class UserServiceImpl implements UserService {
                 .roles(effectiveRoles)
                 .email(request.getEmail())
                 .fechaNacimiento(request.getFechaNacimiento())
+                .managerOwnerId(isAdmin ? null : requestor.getId())
+                .managerOwnerNumeroUsuario(isAdmin ? null : requestor.getNumeroUsuario())
                 .activo(true)
                 .build();
 
@@ -140,6 +146,9 @@ public class UserServiceImpl implements UserService {
                         "Usuario solicitante no encontrado: " + requestorNumeroUsuario));
 
         boolean isAdmin = requestor.getRoles() != null && requestor.getRoles().contains(Role.ADMIN);
+        if (!isAdmin) {
+            validateProfileScope(user, requestor);
+        }
 
         // Aplicar campos no-null
         if (request.getNombre() != null && !request.getNombre().isBlank()) {
@@ -158,10 +167,6 @@ public class UserServiceImpl implements UserService {
         if (isAdmin && request.getRoles() != null && !request.getRoles().isEmpty()) {
             user.setRoles(request.getRoles());
         }
-        if (isAdmin && request.getPassword() != null && !request.getPassword().isBlank()) {
-            user.setPassword(passwordEncoder.encode(request.getPassword()));
-            user.setPasswordPlain(request.getPassword());
-        }
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail().isBlank() ? null : request.getEmail());
         }
@@ -170,6 +175,25 @@ public class UserServiceImpl implements UserService {
         }
 
         return toResponse(userRepository.save(user));
+    }
+
+    @Override
+    public void resetUserPassword(String id, ResetUserPasswordRequest request, String requestorNumeroUsuario) {
+        User target = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Colaborador no encontrado: " + id));
+
+        assertValidAdminPassword(requestorNumeroUsuario, request.getAdminPassword());
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new IllegalArgumentException("La nueva contrasena y la confirmacion no coinciden.");
+        }
+
+        target.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(target);
+    }
+
+    @Override
+    public void verifyAdminPassword(VerifyAdminPasswordRequest request, String requestorNumeroUsuario) {
+        assertValidAdminPassword(requestorNumeroUsuario, request.getAdminPassword());
     }
 
     // ── Desactivar colaborador (soft-delete) ─────────────────────────────
@@ -190,9 +214,13 @@ public class UserServiceImpl implements UserService {
     // ── Eliminar colaborador (hard-delete) ───────────────────────────────
 
     @Override
-    public void deleteUser(String id) {
-        if (!userRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Colaborador no encontrado: " + id);
+    public void deleteUser(String id, String requestorNumeroUsuario) {
+        User target = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Colaborador no encontrado: " + id));
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+
+        if (!hasRole(requestor, Role.ADMIN)) {
+            validateProfileScope(target, requestor);
         }
         userRepository.deleteById(id);
     }
@@ -211,7 +239,6 @@ public class UserServiceImpl implements UserService {
                 .activo(user.isActivo())
                 .email(user.getEmail())
                 .fechaNacimiento(user.getFechaNacimiento())
-                .password(user.getPasswordPlain())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
@@ -222,6 +249,56 @@ public class UserServiceImpl implements UserService {
                 .or(() -> userRepository.findById(requestorNumeroUsuario))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario solicitante no encontrado: " + requestorNumeroUsuario));
+    }
+
+    private void assertValidAdminPassword(String requestorNumeroUsuario, String adminPassword) {
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+        if (!hasRole(requestor, Role.ADMIN)) {
+            throw new IllegalStateException("Solo ADMIN puede regenerar contrasenas.");
+        }
+        if (!passwordEncoder.matches(adminPassword, requestor.getPassword())) {
+            throw new IllegalStateException("La contrasena del administrador no es correcta.");
+        }
+    }
+
+    private void validateProfileScope(User target, User requestor) {
+        if (target.getId().equals(requestor.getId()) || hasRole(requestor, Role.ADMIN)) {
+            return;
+        }
+        if (!hasRole(requestor, Role.GERENTE)) {
+            throw new IllegalStateException("Sin permisos para consultar este colaborador.");
+        }
+        boolean sameStore = requestor.getStoreId() != null && requestor.getStoreId().equals(target.getStoreId());
+        boolean ownedByManager = isOwnedByManager(target, requestor);
+        if (!sameStore || !ownedByManager || !hasRole(target, Role.EJECUTADOR)) {
+            throw new IllegalStateException("Solo puedes consultar colaboradores de tu propia plantilla.");
+        }
+    }
+
+    private List<User> getManagerOwnedUsers(String storeId, User manager) {
+        Map<String, User> byId = new LinkedHashMap<>();
+        List<User> candidates = new ArrayList<>();
+
+        if (manager.getId() != null) {
+            candidates.addAll(userRepository.findByStoreIdAndManagerOwnerIdAndActivoTrue(storeId, manager.getId()));
+        }
+        if (manager.getNumeroUsuario() != null) {
+            candidates.addAll(userRepository.findByStoreIdAndManagerOwnerNumeroUsuarioAndActivoTrue(
+                    storeId, manager.getNumeroUsuario()));
+        }
+
+        candidates.stream()
+                .filter(u -> hasRole(u, Role.EJECUTADOR))
+                .filter(u -> isOwnedByManager(u, manager))
+                .forEach(u -> byId.put(u.getId(), u));
+        return new ArrayList<>(byId.values());
+    }
+
+    private boolean isOwnedByManager(User target, User manager) {
+        boolean byId = manager.getId() != null && manager.getId().equals(target.getManagerOwnerId());
+        boolean byNumero = manager.getNumeroUsuario() != null
+                && manager.getNumeroUsuario().equals(target.getManagerOwnerNumeroUsuario());
+        return byId || byNumero;
     }
 
     private boolean hasRole(User user, Role role) {

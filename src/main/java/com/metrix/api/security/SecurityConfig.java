@@ -76,7 +76,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST,   "/api/v1/users").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.PUT,    "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.PATCH,  "/api/v1/users/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
 
                 // ── Módulo Capacitación — autorización delegada a @PreAuthorize en controller ──
                 .requestMatchers("/api/v1/trainings/**").authenticated()

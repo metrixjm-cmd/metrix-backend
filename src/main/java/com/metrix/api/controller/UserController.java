@@ -1,8 +1,10 @@
 package com.metrix.api.controller;
 
 import com.metrix.api.dto.CreateUserRequest;
+import com.metrix.api.dto.ResetUserPasswordRequest;
 import com.metrix.api.dto.UpdateUserRequest;
 import com.metrix.api.dto.UserResponse;
+import com.metrix.api.dto.VerifyAdminPasswordRequest;
 import com.metrix.api.service.SequenceService;
 import com.metrix.api.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -91,8 +93,10 @@ public class UserController {
     })
     @GetMapping("/{id:[a-f0-9]{24}}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<UserResponse> getUserById(@Parameter(description = "ID del colaborador") @PathVariable String id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+    public ResponseEntity<UserResponse> getUserById(
+            @Parameter(description = "ID del colaborador") @PathVariable String id,
+            Authentication auth) {
+        return ResponseEntity.ok(userService.getUserById(id, auth.getName()));
     }
 
     // ── Crear colaborador ────────────────────────────────────────────────
@@ -132,6 +136,42 @@ public class UserController {
                 userService.updateUser(id, request, auth.getName()));
     }
 
+    // Regenerar contrasena
+
+    @Operation(summary = "Verificar contrasena de administrador",
+               description = "Solo ADMIN. Confirma la contrasena actual antes de mostrar el cambio de contrasena.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Contrasena de administrador correcta"),
+            @ApiResponse(responseCode = "400", description = "Datos de entrada invalidos"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
+    })
+    @PostMapping("/password/verify-admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> verifyAdminPassword(
+            @Valid @RequestBody VerifyAdminPasswordRequest request,
+            Authentication auth) {
+        userService.verifyAdminPassword(request, auth.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Regenerar contrasena de colaborador",
+               description = "Solo ADMIN. Requiere confirmar la contrasena actual del administrador.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Contrasena regenerada exitosamente"),
+            @ApiResponse(responseCode = "400", description = "Datos de entrada invalidos"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos suficientes"),
+            @ApiResponse(responseCode = "404", description = "Colaborador no encontrado")
+    })
+    @PatchMapping("/{id:[a-f0-9]{24}}/password")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> resetUserPassword(
+            @Parameter(description = "ID del colaborador") @PathVariable String id,
+            @Valid @RequestBody ResetUserPasswordRequest request,
+            Authentication auth) {
+        userService.resetUserPassword(id, request, auth.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     // ── Desactivar colaborador (soft-delete) ─────────────────────────────
 
     @Operation(summary = "Desactivar colaborador (soft-delete)",
@@ -151,16 +191,18 @@ public class UserController {
     // ── Eliminar colaborador (hard-delete) ───────────────────────────────
 
     @Operation(summary = "Eliminar colaborador permanentemente",
-               description = "Elimina el registro del colaborador de la base de datos. Solo ADMIN. Irreversible.")
+               description = "Elimina el registro del colaborador de la base de datos. ADMIN o GERENTE sobre ejecutadores propios.")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Colaborador eliminado exitosamente"),
             @ApiResponse(responseCode = "404", description = "Colaborador no encontrado"),
             @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
     })
     @DeleteMapping("/{id:[a-f0-9]{24}}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> deleteUser(@Parameter(description = "ID del colaborador") @PathVariable String id) {
-        userService.deleteUser(id);
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<Void> deleteUser(
+            @Parameter(description = "ID del colaborador") @PathVariable String id,
+            Authentication auth) {
+        userService.deleteUser(id, auth.getName());
         return ResponseEntity.noContent().build();
     }
 }

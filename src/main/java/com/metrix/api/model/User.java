@@ -84,15 +84,19 @@ public class User {
     @Field("fecha_nacimiento")
     private LocalDate fechaNacimiento;
 
+    @Indexed
+    @Field("manager_owner_id")
+    private String managerOwnerId;
+
+    @Indexed
+    @Field("manager_owner_numero_usuario")
+    private String managerOwnerNumeroUsuario;
+
     // ── Seguridad (Spring Security + JWT) ──────────────────────────────
 
     /** Password hasheado con BCrypt */
     @Field("password")
     private String password;
-
-    /** Password en texto plano (visible solo para admin). */
-    @Field("password_plain")
-    private String passwordPlain;
 
     /** Roles asignados. Set para multi-rol (Obj. #6). */
     @Field("roles")

@@ -41,6 +41,13 @@ public interface UserRepository extends MongoRepository<User, String> {
      */
     List<User> findByStoreIdAndActivoTrue(String storeId);
 
+    /** Ejecutadores activos que pertenecen a la plantilla de un gerente. */
+    List<User> findByStoreIdAndManagerOwnerIdAndActivoTrue(String storeId, String managerOwnerId);
+
+    /** Fallback por numeroUsuario para evitar depender solo del ObjectId en el scope del gerente. */
+    List<User> findByStoreIdAndManagerOwnerNumeroUsuarioAndActivoTrue(
+            String storeId, String managerOwnerNumeroUsuario);
+
     /**
      * Usuarios activos filtrados por sucursal y turno.
      * Alimenta el KPI #5: Cumplimiento por Turno.

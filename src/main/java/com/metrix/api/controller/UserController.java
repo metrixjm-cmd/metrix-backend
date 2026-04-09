@@ -25,9 +25,10 @@ import java.util.List;
  *
  * GET   /api/v1/users?storeId=        → lista colaboradores activos (ADMIN, GERENTE)
  * GET   /api/v1/users/{id}            → perfil individual            (ADMIN, GERENTE)
- * POST  /api/v1/users                 → crear colaborador            (ADMIN only)
+ * POST  /api/v1/users                 → crear colaborador            (ADMIN, GERENTE*)
  * PUT   /api/v1/users/{id}            → editar colaborador           (ADMIN, GERENTE)
  * PATCH /api/v1/users/{id}/deactivate → desactivar (soft-delete)     (ADMIN only)
+ * * GERENTE solo puede crear EJECUTADOR en su propia sucursal.
  */
 @RestController
 @RequestMapping("/api/v1/users")
@@ -97,18 +98,19 @@ public class UserController {
     // ── Crear colaborador ────────────────────────────────────────────────
 
     @Operation(summary = "Crear colaborador",
-               description = "Registra un nuevo colaborador en el sistema. Solo ADMIN.")
+               description = "Registra un nuevo colaborador en el sistema. ADMIN o GERENTE (con restricciones).")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Colaborador creado exitosamente"),
             @ApiResponse(responseCode = "400", description = "Datos de entrada inválidos"),
             @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
     })
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<UserResponse> createUser(
-            @Valid @RequestBody CreateUserRequest request) {
+            @Valid @RequestBody CreateUserRequest request,
+            Authentication auth) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(userService.createUser(request));
+                .body(userService.createUser(request, auth.getName()));
     }
 
     // ── Editar colaborador ───────────────────────────────────────────────

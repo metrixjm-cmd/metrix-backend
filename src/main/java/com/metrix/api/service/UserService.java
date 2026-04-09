@@ -25,9 +25,10 @@ public interface UserService {
 
     /**
      * Crea un nuevo colaborador con password hasheado.
-     * Solo ADMIN. Lanza excepción si el numeroUsuario ya existe.
+     * ADMIN puede crear cualquier rol.
+     * GERENTE solo puede crear EJECUTADOR y únicamente en su sucursal.
      */
-    UserResponse createUser(CreateUserRequest request);
+    UserResponse createUser(CreateUserRequest request, String requestorNumeroUsuario);
 
     /**
      * Actualiza campos opcionales del colaborador.

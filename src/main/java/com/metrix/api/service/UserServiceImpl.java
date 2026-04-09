@@ -12,12 +12,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Implementación del módulo de Recursos Humanos — Sprint 9.
  * <p>
  * GERENTE: solo puede listar/editar usuarios de su propio storeId;
- *          no puede modificar el campo {@code roles}.
+ *          no puede modificar el campo {@code roles};
+ *          y solo puede crear usuarios EJECUTADOR en su sucursal.
  * ADMIN: acceso sin restricción de storeId; puede modificar roles y desactivar.
  */
 @Service
@@ -44,8 +46,14 @@ public class UserServiceImpl implements UserService {
                     "Acceso denegado: solo puede consultar los colaboradores de su propia sucursal.");
         }
 
-        return userRepository.findByStoreIdAndActivoTrue(storeId)
-                .stream().map(this::toResponse).toList();
+        List<User> users = userRepository.findByStoreIdAndActivoTrue(storeId);
+        if (!isAdmin) {
+            users = users.stream()
+                    .filter(u -> hasRole(u, Role.EJECUTADOR))
+                    .toList();
+        }
+
+        return users.stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -66,13 +74,35 @@ public class UserServiceImpl implements UserService {
     // ── Crear colaborador ────────────────────────────────────────────────
 
     @Override
-    public UserResponse createUser(CreateUserRequest request) {
+    public UserResponse createUser(CreateUserRequest request, String requestorNumeroUsuario) {
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+        boolean isAdmin = hasRole(requestor, Role.ADMIN);
+        boolean isGerente = hasRole(requestor, Role.GERENTE);
+
+        if (!isAdmin && !isGerente) {
+            throw new IllegalStateException("Sin permisos para crear colaboradores.");
+        }
+
+        // Para GERENTE, la política es canónica:
+        // - siempre crea EJECUTADOR
+        // - siempre en su misma sucursal (tomada de BD, no del payload)
+        Set<Role> effectiveRoles = isAdmin
+                ? request.getRoles()
+                : Set.of(Role.EJECUTADOR);
+        String effectiveStoreId = isAdmin
+                ? request.getStoreId()
+                : requestor.getStoreId();
+
+        if (effectiveRoles == null || effectiveRoles.isEmpty()) {
+            throw new IllegalArgumentException("Debe asignar al menos un rol.");
+        }
+
         // Auto-generar folio si no se envía numeroUsuario
         // Prefijo: rol ADMIN/GERENTE tienen prefijo fijo; EJECUTADOR usa el puesto
         String numeroUsuario = request.getNumeroUsuario();
         if (numeroUsuario == null || numeroUsuario.isBlank()) {
-            String rolPrincipal = (request.getRoles() != null && !request.getRoles().isEmpty())
-                    ? request.getRoles().iterator().next().name()
+            String rolPrincipal = !effectiveRoles.isEmpty()
+                    ? effectiveRoles.iterator().next().name()
                     : null;
             numeroUsuario = sequenceService.generateUserFolio(rolPrincipal, request.getPuesto());
         }
@@ -85,11 +115,11 @@ public class UserServiceImpl implements UserService {
         User user = User.builder()
                 .nombre(request.getNombre())
                 .puesto(request.getPuesto())
-                .storeId(request.getStoreId())
+                .storeId(effectiveStoreId)
                 .turno(request.getTurno())
                 .numeroUsuario(numeroUsuario)
                 .password(passwordEncoder.encode(request.getPassword()))
-                .roles(request.getRoles())
+                .roles(effectiveRoles)
                 .email(request.getEmail())
                 .fechaNacimiento(request.getFechaNacimiento())
                 .activo(true)
@@ -185,5 +215,16 @@ public class UserServiceImpl implements UserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
+    }
+
+    private User resolveRequestor(String requestorNumeroUsuario) {
+        return userRepository.findByNumeroUsuario(requestorNumeroUsuario)
+                .or(() -> userRepository.findById(requestorNumeroUsuario))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario solicitante no encontrado: " + requestorNumeroUsuario));
+    }
+
+    private boolean hasRole(User user, Role role) {
+        return user.getRoles() != null && user.getRoles().contains(role);
     }
 }

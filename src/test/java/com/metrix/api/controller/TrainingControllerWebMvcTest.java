@@ -108,6 +108,8 @@ class TrainingControllerWebMvcTest {
 
     @Test
     void gerente_can_access_trainings_by_store() throws Exception {
+        when(userRepository.findByNumeroUsuario("GER001"))
+                .thenReturn(Optional.of(User.builder().id("ger-1").storeId("store-1").build()));
         when(trainingService.getByStore("store-1")).thenReturn(List.of(sampleTraining("t-store")));
 
         mockMvc.perform(get("/api/v1/trainings/store/store-1")
@@ -115,6 +117,16 @@ class TrainingControllerWebMvcTest {
                 .andExpect(status().isOk());
 
         verify(trainingService).getByStore("store-1");
+    }
+
+    @Test
+    void gerente_cannot_access_trainings_from_other_store() throws Exception {
+        when(userRepository.findByNumeroUsuario("GER001"))
+                .thenReturn(Optional.of(User.builder().id("ger-1").storeId("store-1").build()));
+
+        mockMvc.perform(get("/api/v1/trainings/store/store-2")
+                        .with(user("GER001").roles("GERENTE")))
+                .andExpect(status().isForbidden());
     }
 
     @Test

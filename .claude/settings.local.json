@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd \"/c/Users/carlo/Documents/proyectosWEB/Metrix-multitask/backend-api\" && mvn clean compile 2>&1)"
+      "Bash(cd \"/c/Users/carlo/Documents/proyectosWEB/Metrix-multitask/backend-api\" && mvn clean compile 2>&1)",
+      "Bash(git config:*)",
+      "Bash(gcloud auth:*)",
+      "Bash(gcloud config:*)",
+      "Bash(gcloud sql:*)",
+      "Bash(gcloud services:*)",
+      "Bash(gcloud firestore:*)",
+      "Bash(xargs grep:*)",
+      "Bash(gcloud run services list:*)",
+      "Bash(gcloud run services describe:*)",
+      "Bash(mongosh:*)",
+      "Bash(where mongosh:*)",
+      "Bash(where mongo:*)",
+      "Bash(node -e \"require\\('mongodb'\\)\")",
+      "Bash(node:*)"
     ]
   }
 }

@@ -5,6 +5,7 @@ import com.metrix.api.dto.CreateFromTemplateRequest;
 import com.metrix.api.dto.TrainingResponse;
 import com.metrix.api.dto.UpdateTrainingRequest;
 import com.metrix.api.dto.UpdateTrainingProgressRequest;
+import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.TrainingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,11 +18,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import org.springframework.data.domain.Page;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Endpoints del módulo de Capacitación — Sprint 10.
@@ -80,14 +83,28 @@ public class TrainingController {
     })
     @GetMapping("/store/{storeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<List<TrainingResponse>> getByStore(@Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+    public ResponseEntity<List<TrainingResponse>> getByStore(
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        enforceGerenteStoreScope(auth, storeId);
         return ResponseEntity.ok(trainingService.getByStore(storeId));
     }
 
     @GetMapping("/group/{groupId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<List<TrainingResponse>> getByAssignmentGroupId(@PathVariable String groupId) {
-        return ResponseEntity.ok(trainingService.getByAssignmentGroupId(groupId));
+    public ResponseEntity<List<TrainingResponse>> getByAssignmentGroupId(
+            @PathVariable String groupId,
+            Authentication auth) {
+        List<TrainingResponse> list = trainingService.getByAssignmentGroupId(groupId);
+        if (hasRole(auth, "GERENTE")) {
+            String myStoreId = resolveCurrentUserStoreId(auth.getName());
+            boolean outOfScope = list.stream()
+                    .anyMatch(t -> !Objects.equals(t.getStoreId(), myStoreId));
+            if (outOfScope) {
+                throw new AccessDeniedException("No puedes ver capacitaciones fuera de tu sucursal.");
+            }
+        }
+        return ResponseEntity.ok(list);
     }
 
     // ── Detalle ──────────────────────────────────────────────────────────
@@ -171,8 +188,10 @@ public class TrainingController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<Page<TrainingResponse>> getByStorePaged(
             @PathVariable String storeId,
+            Authentication auth,
             @RequestParam(defaultValue = "0")   int page,
             @RequestParam(defaultValue = "20")  int size) {
+        enforceGerenteStoreScope(auth, storeId);
         return ResponseEntity.ok(trainingService.getByStorePaged(storeId, page, size));
     }
 
@@ -241,5 +260,26 @@ public class TrainingController {
         return userRepository.findByNumeroUsuario(numeroUsuario)
                 .map(u -> u.getId())
                 .orElse(numeroUsuario);
+    }
+
+    private String resolveCurrentUserStoreId(String principal) {
+        return userRepository.findByNumeroUsuario(principal)
+                .or(() -> userRepository.findById(principal))
+                .map(User::getStoreId)
+                .orElseThrow(() -> new AccessDeniedException("No se pudo resolver la sucursal del usuario autenticado."));
+    }
+
+    private void enforceGerenteStoreScope(Authentication auth, String requestedStoreId) {
+        if (!hasRole(auth, "GERENTE") || hasRole(auth, "ADMIN")) return;
+        String myStoreId = resolveCurrentUserStoreId(auth.getName());
+        if (!Objects.equals(myStoreId, requestedStoreId)) {
+            throw new AccessDeniedException("No puedes consultar capacitaciones de otra sucursal.");
+        }
+    }
+
+    private boolean hasRole(Authentication auth, String role) {
+        String authority = "ROLE_" + role;
+        return auth.getAuthorities().stream()
+                .anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 }

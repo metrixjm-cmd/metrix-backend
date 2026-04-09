@@ -36,6 +36,4 @@ public class UpdateUserRequest {
     /** Fecha de nacimiento (opcional). Formato ISO: yyyy-MM-dd */
     private LocalDate fechaNacimiento;
 
-    /** Nueva contraseña (opcional). Solo ADMIN. Si se envía, se re-hashea y se guarda. */
-    private String password;
 }

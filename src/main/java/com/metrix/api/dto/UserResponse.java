@@ -10,10 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 
-/**
- * DTO de respuesta para el perfil de un colaborador.
- * Campo {@code password} (password_plain) visible solo para ADMIN.
- */
+/** DTO de respuesta para el perfil de un colaborador. */
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,7 +27,6 @@ public class UserResponse {
     private boolean activo;
     private String email;
     private LocalDate fechaNacimiento;
-    private String password;  // password_plain para admin
     private Instant createdAt;
     private Instant updatedAt;
 }

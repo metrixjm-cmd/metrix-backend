@@ -1,8 +1,10 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.CreateUserRequest;
+import com.metrix.api.dto.ResetUserPasswordRequest;
 import com.metrix.api.dto.UpdateUserRequest;
 import com.metrix.api.dto.UserResponse;
+import com.metrix.api.dto.VerifyAdminPasswordRequest;
 
 import java.util.List;
 
@@ -21,7 +23,7 @@ public interface UserService {
     /**
      * Obtiene el perfil completo de un colaborador por su MongoDB id.
      */
-    UserResponse getUserById(String id);
+    UserResponse getUserById(String id, String requestorNumeroUsuario);
 
     /**
      * Crea un nuevo colaborador con password hasheado.
@@ -36,6 +38,15 @@ public interface UserService {
      */
     UserResponse updateUser(String id, UpdateUserRequest request, String requestorNumeroUsuario);
 
+    /**
+     * Regenera la contrasena de un colaborador.
+     * Solo ADMIN, previa confirmacion de la contrasena del administrador.
+     */
+    void resetUserPassword(String id, ResetUserPasswordRequest request, String requestorNumeroUsuario);
+
+    /** Confirma que la contrasena enviada pertenece al ADMIN autenticado. */
+    void verifyAdminPassword(VerifyAdminPasswordRequest request, String requestorNumeroUsuario);
+
     /** Lista todos los colaboradores activos del sistema. Solo ADMIN. */
     List<UserResponse> getAllUsers();
 
@@ -49,5 +60,5 @@ public interface UserService {
      * Hard-delete: elimina el registro permanentemente de la base de datos.
      * Solo ADMIN.
      */
-    void deleteUser(String id);
+    void deleteUser(String id, String requestorNumeroUsuario);
 }

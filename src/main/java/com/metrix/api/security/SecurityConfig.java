@@ -73,7 +73,7 @@ public class SecurityConfig {
 
                 // ── Módulo RH (Sprint 9) ────────────────────────────
                 .requestMatchers(HttpMethod.GET,    "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.POST,   "/api/v1/users").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST,   "/api/v1/users").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.PUT,    "/api/v1/users/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.PATCH,  "/api/v1/users/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**").hasRole("ADMIN")

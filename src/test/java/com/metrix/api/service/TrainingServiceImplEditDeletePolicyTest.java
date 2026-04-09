@@ -16,9 +16,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 
+import com.metrix.api.model.Role;
+import com.metrix.api.model.User;
+
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,6 +53,7 @@ class TrainingServiceImplEditDeletePolicyTest {
     private ApplicationEventPublisher eventPublisher;
 
     private TrainingServiceImpl service;
+    private static final String ADMIN_ID = "admin-test-id";
 
     @BeforeEach
     void setUp() {
@@ -62,6 +68,11 @@ class TrainingServiceImplEditDeletePolicyTest {
                 new TrainingStateMachine(),
                 new RolePolicy()
         );
+        // Mock ADMIN user for ownership checks
+        User adminUser = User.builder()
+                .id(ADMIN_ID).numeroUsuario("ADMIN001")
+                .roles(Set.of(Role.ADMIN)).activo(true).build();
+        lenient().when(userRepository.findById(ADMIN_ID)).thenReturn(Optional.of(adminUser));
     }
 
     @Test
@@ -73,7 +84,7 @@ class TrainingServiceImplEditDeletePolicyTest {
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
-                () -> service.update("t-completed", req)
+                () -> service.update("t-completed", req, ADMIN_ID)
         );
 
         assertTrue(ex.getMessage().contains("COMPLETADA"));
@@ -87,7 +98,7 @@ class TrainingServiceImplEditDeletePolicyTest {
 
         IllegalStateException ex = assertThrows(
                 IllegalStateException.class,
-                () -> service.deactivate("t-completed")
+                () -> service.deactivate("t-completed", ADMIN_ID)
         );
 
         assertTrue(ex.getMessage().contains("COMPLETADA"));
@@ -102,7 +113,7 @@ class TrainingServiceImplEditDeletePolicyTest {
 
         UpdateTrainingRequest req = buildUpdateRequest();
 
-        TrainingResponse updated = service.update("t-programada", req);
+        TrainingResponse updated = service.update("t-programada", req, ADMIN_ID);
 
         assertEquals("Nuevo título", updated.getTitle());
         verify(trainingRepository).save(any(Training.class));
@@ -114,7 +125,7 @@ class TrainingServiceImplEditDeletePolicyTest {
         when(trainingRepository.findById("t-programada")).thenReturn(Optional.of(programada));
         when(trainingRepository.save(any(Training.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.deactivate("t-programada");
+        service.deactivate("t-programada", ADMIN_ID);
 
         assertFalse(programada.isActivo());
         verify(trainingRepository).save(programada);
@@ -128,7 +139,7 @@ class TrainingServiceImplEditDeletePolicyTest {
 
         UpdateTrainingRequest req = buildUpdateRequest();
 
-        TrainingResponse updated = service.update("t-encurso", req);
+        TrainingResponse updated = service.update("t-encurso", req, ADMIN_ID);
 
         assertEquals("Nuevo título", updated.getTitle());
         verify(trainingRepository).save(any(Training.class));
@@ -140,7 +151,7 @@ class TrainingServiceImplEditDeletePolicyTest {
         when(trainingRepository.findById("t-nocompletada")).thenReturn(Optional.of(noCompletada));
         when(trainingRepository.save(any(Training.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.deactivate("t-nocompletada");
+        service.deactivate("t-nocompletada", ADMIN_ID);
 
         assertFalse(noCompletada.isActivo());
         verify(trainingRepository).save(noCompletada);

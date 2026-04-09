@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -110,13 +111,13 @@ class TrainingControllerWebMvcTest {
     void gerente_can_access_trainings_by_store() throws Exception {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(User.builder().id("ger-1").storeId("store-1").build()));
-        when(trainingService.getByStore("store-1")).thenReturn(List.of(sampleTraining("t-store")));
+        when(trainingService.getByStore(eq("store-1"), anyString())).thenReturn(List.of(sampleTraining("t-store")));
 
         mockMvc.perform(get("/api/v1/trainings/store/store-1")
                         .with(user("GER001").roles("GERENTE")))
                 .andExpect(status().isOk());
 
-        verify(trainingService).getByStore("store-1");
+        verify(trainingService).getByStore(eq("store-1"), anyString());
     }
 
     @Test

@@ -30,7 +30,7 @@ import java.util.Set;
 public class TrainingStateMachine {
 
     private static final Map<TrainingStatus, Set<TrainingStatus>> VALID_TRANSITIONS = Map.of(
-            TrainingStatus.PROGRAMADA,     Set.of(TrainingStatus.EN_CURSO),
+            TrainingStatus.PROGRAMADA,     Set.of(TrainingStatus.EN_CURSO, TrainingStatus.NO_COMPLETADA),
             TrainingStatus.EN_CURSO,       Set.of(TrainingStatus.EN_CURSO, TrainingStatus.COMPLETADA,
                                                    TrainingStatus.NO_COMPLETADA),
             TrainingStatus.COMPLETADA,     Set.of(),

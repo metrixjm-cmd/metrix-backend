@@ -23,14 +23,14 @@ public interface TrainingService {
     List<TrainingResponse> getMyTrainings(String userId);
 
     /** Retorna todas las capacitaciones activas de una sucursal (gerencial). */
-    List<TrainingResponse> getByStore(String storeId);
-    List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId);
+    List<TrainingResponse> getByStore(String storeId, String callerIdentifier);
+    List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId, String callerIdentifier);
 
     /** Retorna una capacitación por ID. */
-    TrainingResponse getById(String id);
+    TrainingResponse getById(String id, String callerIdentifier);
 
     /** Edita metadata de una capacitacion. */
-    TrainingResponse update(String id, UpdateTrainingRequest req);
+    TrainingResponse update(String id, UpdateTrainingRequest req, String callerIdentifier);
 
     /** Actualiza el progreso/estado de una capacitación. */
     TrainingResponse updateProgress(String id, UpdateTrainingProgressRequest req, String currentUser);
@@ -39,11 +39,11 @@ public interface TrainingService {
     List<TrainingResponse> getAll();
 
     /** Soft-delete: marca activo = false. */
-    void deactivate(String id);
+    void deactivate(String id, String callerIdentifier);
 
     // ── Variantes paginadas ───────────────────────────────────────────────
     Page<TrainingResponse> getMyTrainingsPaged(String userId, int page, int size);
-    Page<TrainingResponse> getByStorePaged(String storeId, int page, int size);
+    Page<TrainingResponse> getByStorePaged(String storeId, int page, int size, String callerIdentifier);
     Page<TrainingResponse> getAllPaged(int page, int size);
 
     /**

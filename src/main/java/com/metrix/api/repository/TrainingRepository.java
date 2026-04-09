@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -29,6 +30,9 @@ public interface TrainingRepository extends MongoRepository<Training, String> {
 
     List<Training> findByStoreIdAndActivoTrue(String storeId);
 
+    List<Training> findByStoreIdAndCreatedByInAndActivoTrue(
+            String storeId, Collection<String> createdBy);
+
     List<Training> findByStoreIdAndProgress_StatusAndActivoTrue(
             String storeId, TrainingStatus status);
 
@@ -44,6 +48,9 @@ public interface TrainingRepository extends MongoRepository<Training, String> {
     Page<Training> findByAssignedUserIdAndActivoTrue(String assignedUserId, Pageable pageable);
 
     Page<Training> findByStoreIdAndActivoTrue(String storeId, Pageable pageable);
+
+    Page<Training> findByStoreIdAndCreatedByInAndActivoTrue(
+            String storeId, Collection<String> createdBy, Pageable pageable);
 
     Page<Training> findByActivoTrue(Pageable pageable);
 

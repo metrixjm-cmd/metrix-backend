@@ -11,6 +11,7 @@ import com.metrix.api.repository.TrainingTemplateRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import org.springframework.data.domain.Page;
@@ -106,15 +107,23 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     @Override
-    public List<TrainingResponse> getByStore(String storeId) {
-        return trainingRepository.findByStoreIdAndActivoTrue(storeId)
-                .stream().map(this::toResponse).toList();
+    public List<TrainingResponse> getByStore(String storeId, String callerIdentifier) {
+        User caller = resolveUser(callerIdentifier);
+        List<Training> all = isScopedManager(caller)
+                ? trainingRepository.findByStoreIdAndCreatedByInAndActivoTrue(
+                        storeId, createdByKeys(caller))
+                : trainingRepository.findByStoreIdAndActivoTrue(storeId);
+
+        return all.stream().map(this::toResponse).toList();
     }
 
     @Override
-    public List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId) {
+    public List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId,
+                                                         String callerIdentifier) {
+        User caller = resolveUser(callerIdentifier);
         return trainingRepository.findByAssignmentGroupIdAndActivoTrue(assignmentGroupId)
                 .stream()
+                .filter(training -> canView(training, caller))
                 .sorted(Comparator.comparing(Training::getAssignedUserName,
                         Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(this::toResponse)
@@ -122,27 +131,30 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     @Override
-    public TrainingResponse getById(String id) {
+    public TrainingResponse getById(String id, String callerIdentifier) {
         Training training = trainingRepository.findById(id)
                 .filter(Training::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
+        ensureVisible(training, callerIdentifier);
         return toResponse(training);
     }
 
     // ── Actualizar Progreso (via StateMachine) ──────────────────────────
 
     @Override
-    public TrainingResponse update(String id, UpdateTrainingRequest req) {
+    public TrainingResponse update(String id, UpdateTrainingRequest req, String callerIdentifier) {
         Training target = trainingRepository.findById(id)
                 .filter(Training::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitacion no encontrada: " + id));
         ensureTrainingEditable(target);
+        ensureOwnership(target, callerIdentifier);
 
         String groupId = target.getAssignmentGroupId();
         if (groupId != null && !groupId.isBlank()) {
             List<Training> grouped = trainingRepository.findByAssignmentGroupIdAndActivoTrue(groupId);
             if (!grouped.isEmpty()) {
                 grouped.forEach(this::ensureTrainingEditable);
+                grouped.forEach(training -> ensureOwnership(training, callerIdentifier));
                 grouped.forEach(training -> applyEditableFields(training, req));
                 List<Training> saved = trainingRepository.saveAll(grouped);
                 return saved.stream()
@@ -182,15 +194,17 @@ public class TrainingServiceImpl implements TrainingService {
     // ── Soft-delete ──────────────────────────────────────────────────────
 
     @Override
-    public void deactivate(String id) {
+    public void deactivate(String id, String callerIdentifier) {
         Training training = trainingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
         ensureTrainingDeletable(training);
+        ensureOwnership(training, callerIdentifier);
         String groupId = training.getAssignmentGroupId();
         if (groupId != null && !groupId.isBlank()) {
             List<Training> grouped = trainingRepository.findByAssignmentGroupIdAndActivoTrue(groupId);
             if (!grouped.isEmpty()) {
                 grouped.forEach(this::ensureTrainingDeletable);
+                grouped.forEach(item -> ensureOwnership(item, callerIdentifier));
                 grouped.forEach(item -> item.setActivo(false));
                 trainingRepository.saveAll(grouped);
                 return;
@@ -212,11 +226,16 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     @Override
-    public Page<TrainingResponse> getByStorePaged(String storeId, int page, int size) {
+    public Page<TrainingResponse> getByStorePaged(String storeId, int page, int size,
+                                                  String callerIdentifier) {
         PageRequest pageable = PageRequest.of(page, Math.min(size, 200),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
-        return trainingRepository.findByStoreIdAndActivoTrue(storeId, pageable)
-                .map(this::toResponse);
+        User caller = resolveUser(callerIdentifier);
+        Page<Training> trainings = isScopedManager(caller)
+                ? trainingRepository.findByStoreIdAndCreatedByInAndActivoTrue(
+                        storeId, createdByKeys(caller), pageable)
+                : trainingRepository.findByStoreIdAndActivoTrue(storeId, pageable);
+        return trainings.map(this::toResponse);
     }
 
     @Override
@@ -346,6 +365,47 @@ public class TrainingServiceImpl implements TrainingService {
         training.setDueAt(req.getDueAt());
     }
 
+    private void ensureOwnership(Training training, String callerIdentifier) {
+        User caller = resolveUser(callerIdentifier);
+        if (hasRole(caller, Role.ADMIN)) return; // ADMIN can operate on any training
+        if (!isCreatedBy(training, caller)) {
+            throw new IllegalStateException(
+                    "Solo puedes modificar capacitaciones que tú creaste.");
+        }
+    }
+
+    private void ensureVisible(Training training, String callerIdentifier) {
+        User caller = resolveUser(callerIdentifier);
+        if (!canView(training, caller)) {
+            throw new AccessDeniedException("No puedes ver esta capacitaciÃ³n.");
+        }
+    }
+
+    private boolean canView(Training training, User caller) {
+        if (hasRole(caller, Role.ADMIN)) return true;
+        if (Objects.equals(caller.getId(), training.getAssignedUserId())) return true;
+        return isScopedManager(caller) && isCreatedBy(training, caller);
+    }
+
+    private boolean isScopedManager(User user) {
+        return hasRole(user, Role.GERENTE) && !hasRole(user, Role.ADMIN);
+    }
+
+    private boolean isCreatedBy(Training training, User caller) {
+        String createdBy = training.getCreatedBy();
+        return createdBy != null
+                && (Objects.equals(caller.getId(), createdBy)
+                || Objects.equals(caller.getNumeroUsuario(), createdBy));
+    }
+
+    private List<String> createdByKeys(User caller) {
+        return java.util.stream.Stream.of(caller.getId(), caller.getNumeroUsuario())
+                .filter(Objects::nonNull)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
+    }
+
     private void ensureTrainingEditable(Training training) {
         TrainingStatus status = currentStatus(training);
         if (status == TrainingStatus.COMPLETADA) {
@@ -368,6 +428,10 @@ public class TrainingServiceImpl implements TrainingService {
             return TrainingStatus.PROGRAMADA;
         }
         return progress.getStatus();
+    }
+
+    private boolean hasRole(User user, Role role) {
+        return user.getRoles() != null && user.getRoles().contains(role);
     }
 
     /** Resuelve materiales en lote (1 query) para evitar N+1. */

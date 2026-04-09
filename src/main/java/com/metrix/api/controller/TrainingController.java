@@ -87,7 +87,7 @@ public class TrainingController {
             @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
             Authentication auth) {
         enforceGerenteStoreScope(auth, storeId);
-        return ResponseEntity.ok(trainingService.getByStore(storeId));
+        return ResponseEntity.ok(trainingService.getByStore(storeId, auth.getName()));
     }
 
     @GetMapping("/group/{groupId}")
@@ -95,7 +95,7 @@ public class TrainingController {
     public ResponseEntity<List<TrainingResponse>> getByAssignmentGroupId(
             @PathVariable String groupId,
             Authentication auth) {
-        List<TrainingResponse> list = trainingService.getByAssignmentGroupId(groupId);
+        List<TrainingResponse> list = trainingService.getByAssignmentGroupId(groupId, auth.getName());
         if (hasRole(auth, "GERENTE")) {
             String myStoreId = resolveCurrentUserStoreId(auth.getName());
             boolean outOfScope = list.stream()
@@ -117,7 +117,10 @@ public class TrainingController {
     })
     @GetMapping("/{id}")
     public ResponseEntity<TrainingResponse> getById(@Parameter(description = "ID de la capacitación") @PathVariable String id) {
-        return ResponseEntity.ok(trainingService.getById(id));
+        Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+        return ResponseEntity.ok(trainingService.getById(id, auth.getName()));
     }
 
     // ── Crear ────────────────────────────────────────────────────────────
@@ -149,8 +152,9 @@ public class TrainingController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<TrainingResponse> update(
             @PathVariable String id,
-            @Valid @RequestBody UpdateTrainingRequest request) {
-        return ResponseEntity.ok(trainingService.update(id, request));
+            @Valid @RequestBody UpdateTrainingRequest request,
+            Authentication auth) {
+        return ResponseEntity.ok(trainingService.update(id, request, auth.getName()));
     }
 
     // ── Actualizar Progreso ──────────────────────────────────────────────
@@ -192,7 +196,7 @@ public class TrainingController {
             @RequestParam(defaultValue = "0")   int page,
             @RequestParam(defaultValue = "20")  int size) {
         enforceGerenteStoreScope(auth, storeId);
-        return ResponseEntity.ok(trainingService.getByStorePaged(storeId, page, size));
+        return ResponseEntity.ok(trainingService.getByStorePaged(storeId, page, size, auth.getName()));
     }
 
     @Operation(summary = "Todas las capacitaciones (paginado, solo ADMIN)")
@@ -249,8 +253,9 @@ public class TrainingController {
     })
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<Void> deactivate(@Parameter(description = "ID de la capacitación") @PathVariable String id) {
-        trainingService.deactivate(id);
+    public ResponseEntity<Void> deactivate(@Parameter(description = "ID de la capacitación") @PathVariable String id,
+                                           Authentication auth) {
+        trainingService.deactivate(id, auth.getName());
         return ResponseEntity.noContent().build();
     }
 

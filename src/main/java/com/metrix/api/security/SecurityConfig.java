@@ -124,6 +124,18 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT,    "/api/v1/training-templates/**").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/training-templates/**").hasRole("ADMIN")
 
+                // ── Plantillas de Tarea (Banco de Tareas) ─────────────
+                .requestMatchers(HttpMethod.GET,    "/api/v1/categorias", "/api/v1/categorias/**").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/categorias", "/api/v1/categorias/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/categorias/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/categorias/**").hasAnyRole("ADMIN", "GERENTE")
+
+                .requestMatchers(HttpMethod.GET,    "/api/v1/task-templates/**").authenticated()
+                .requestMatchers(HttpMethod.GET,    "/api/v1/task-templates").authenticated()
+                .requestMatchers(HttpMethod.POST,   "/api/v1/task-templates/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/task-templates/**").hasAnyRole("ADMIN", "GERENTE")
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/task-templates/**").hasAnyRole("ADMIN", "GERENTE")
+
                 // ── Módulo Trainer / Exámenes (Sprint 19) ─────────────
                 .requestMatchers(HttpMethod.POST,  "/api/v1/exams").hasAnyRole("ADMIN", "GERENTE")
                 .requestMatchers(HttpMethod.GET,   "/api/v1/exams/store/**").hasAnyRole("ADMIN", "GERENTE")

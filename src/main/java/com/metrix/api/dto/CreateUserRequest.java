@@ -1,6 +1,8 @@
 package com.metrix.api.dto;
 
 import com.metrix.api.model.Role;
+import com.metrix.api.validation.OlderThanYears;
+import com.metrix.api.validation.RealBirthDate;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -48,5 +50,7 @@ public class CreateUserRequest {
     private String email;
 
     /** Fecha de nacimiento (opcional). Formato ISO: yyyy-MM-dd */
+    @RealBirthDate(message = "La fecha de nacimiento debe ser real y no puede ser futura")
+    @OlderThanYears(value = 12, message = "Ingresa una fecha válida, debe tener más de 12 años cumplidos")
     private LocalDate fechaNacimiento;
 }

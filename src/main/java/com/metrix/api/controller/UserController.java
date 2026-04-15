@@ -130,7 +130,7 @@ public class UserController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<UserResponse> updateUser(
             @Parameter(description = "ID del colaborador") @PathVariable String id,
-            @RequestBody UpdateUserRequest request,
+            @Valid @RequestBody UpdateUserRequest request,
             Authentication auth) {
         return ResponseEntity.ok(
                 userService.updateUser(id, request, auth.getName()));

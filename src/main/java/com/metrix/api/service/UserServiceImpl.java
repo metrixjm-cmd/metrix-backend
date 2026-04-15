@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -82,6 +84,8 @@ public class UserServiceImpl implements UserService {
         User requestor = resolveRequestor(requestorNumeroUsuario);
         boolean isAdmin = hasRole(requestor, Role.ADMIN);
         boolean isGerente = hasRole(requestor, Role.GERENTE);
+        String normalizedNombre = normalizeRequiredText(request.getNombre());
+        String normalizedEmail = normalizeOptionalEmail(request.getEmail());
 
         if (!isAdmin && !isGerente) {
             throw new IllegalStateException("Sin permisos para crear colaboradores.");
@@ -101,6 +105,8 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("Debe asignar al menos un rol.");
         }
 
+        assertUniqueUserFieldsForCreate(normalizedNombre, normalizedEmail);
+
         // Auto-generar folio si no se envía numeroUsuario
         // Prefijo: rol ADMIN/GERENTE tienen prefijo fijo; EJECUTADOR usa el puesto
         String numeroUsuario = request.getNumeroUsuario();
@@ -117,14 +123,14 @@ public class UserServiceImpl implements UserService {
         }
 
         User user = User.builder()
-                .nombre(request.getNombre())
+                .nombre(normalizedNombre)
                 .puesto(request.getPuesto())
                 .storeId(effectiveStoreId)
                 .turno(request.getTurno())
                 .numeroUsuario(numeroUsuario)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .roles(effectiveRoles)
-                .email(request.getEmail())
+                .email(normalizedEmail)
                 .fechaNacimiento(request.getFechaNacimiento())
                 .managerOwnerId(isAdmin ? null : requestor.getId())
                 .managerOwnerNumeroUsuario(isAdmin ? null : requestor.getNumeroUsuario())
@@ -303,5 +309,26 @@ public class UserServiceImpl implements UserService {
 
     private boolean hasRole(User user, Role role) {
         return user.getRoles() != null && user.getRoles().contains(role);
+    }
+
+    private void assertUniqueUserFieldsForCreate(String nombre, String email) {
+        if (userRepository.existsByNombreIgnoreCase(nombre)) {
+            throw new IllegalArgumentException("Ya existe un usuario con ese nombre.");
+        }
+        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
+            throw new IllegalArgumentException("Ya existe un usuario con ese correo electrónico.");
+        }
+    }
+
+    private String normalizeRequiredText(String value) {
+        return Objects.requireNonNullElse(value, "").trim();
+    }
+
+    private String normalizeOptionalEmail(String email) {
+        if (email == null) {
+            return null;
+        }
+        String normalized = email.trim().toLowerCase(Locale.ROOT);
+        return normalized.isBlank() ? null : normalized;
     }
 }

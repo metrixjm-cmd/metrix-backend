@@ -16,7 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling     // Habilita @Scheduled para alertas preventivas (Sprint 16)
 public class MetrixApplication {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) {sube a 
         SpringApplication.run(MetrixApplication.class, args);
         System.out.println("-> METRIX API - Gestión Operativa y Analítica");
     }

@@ -35,6 +35,12 @@ public interface UserRepository extends MongoRepository<User, String> {
      */
     boolean existsByNumeroUsuario(String numeroUsuario);
 
+    /** Previene nombres duplicados al crear colaboradores. */
+    boolean existsByNombreIgnoreCase(String nombre);
+
+    /** Previene correos duplicados al crear colaboradores. */
+    boolean existsByEmailIgnoreCase(String email);
+
     /**
      * Usuarios activos de una sucursal.
      * Base para: delegación de tareas, reportes gerenciales.

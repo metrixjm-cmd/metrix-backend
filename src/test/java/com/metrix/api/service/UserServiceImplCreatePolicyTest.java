@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +46,7 @@ class UserServiceImplCreatePolicyTest {
     void gerente_can_create_only_ejecutador_in_own_store() {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ001");
         when(userRepository.existsByNumeroUsuario("CAJ001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -67,6 +70,7 @@ class UserServiceImplCreatePolicyTest {
     void gerente_forces_role_to_ejecutador_even_if_payload_sends_other_role() {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ001");
         when(userRepository.existsByNumeroUsuario("CAJ001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -87,6 +91,7 @@ class UserServiceImplCreatePolicyTest {
     void gerente_forces_store_to_his_own_store_even_if_payload_sends_other_store() {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ002");
         when(userRepository.existsByNumeroUsuario("CAJ002")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -107,6 +112,7 @@ class UserServiceImplCreatePolicyTest {
     void admin_can_create_gerente() {
         when(userRepository.findByNumeroUsuario("ADM001"))
                 .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
         when(sequenceService.generateUserFolio("GERENTE", "Cajero")).thenReturn("GER999");
         when(userRepository.existsByNumeroUsuario("GER999")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -121,6 +127,64 @@ class UserServiceImplCreatePolicyTest {
 
         assertEquals("u-admin-created", created.getId());
         assertTrue(created.getRoles().contains(Role.GERENTE));
+    }
+
+    @Test
+    void create_rejects_duplicate_name() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(true);
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.EJECUTADOR));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createUser(req, "ADM001"));
+
+        assertEquals("Ya existe un usuario con ese nombre.", ex.getMessage());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void create_rejects_duplicate_email() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("persona@demo.com")).thenReturn(true);
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.EJECUTADOR));
+        req.setEmail("PERSONA@DEMO.COM");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createUser(req, "ADM001"));
+
+        assertEquals("Ya existe un usuario con ese correo electrónico.", ex.getMessage());
+        verify(userRepository).existsByEmailIgnoreCase(eq("persona@demo.com"));
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void create_normalizes_email_before_save() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("persona@demo.com")).thenReturn(false);
+        when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ003");
+        when(userRepository.existsByNumeroUsuario("CAJ003")).thenReturn(false);
+        when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId("u-email-normalized");
+            return u;
+        });
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.EJECUTADOR));
+        req.setEmail("  PERSONA@DEMO.COM ");
+
+        service.createUser(req, "ADM001");
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertEquals("persona@demo.com", captor.getValue().getEmail());
     }
 
     private User user(String numeroUsuario, String storeId, Set<Role> roles) {

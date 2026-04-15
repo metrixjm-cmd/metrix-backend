@@ -1,6 +1,7 @@
 package com.metrix.api.dto;
 
 import com.metrix.api.model.Role;
+import com.metrix.api.validation.RealBirthDate;
 import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -34,6 +35,7 @@ public class UpdateUserRequest {
     private String email;
 
     /** Fecha de nacimiento (opcional). Formato ISO: yyyy-MM-dd */
+    @RealBirthDate(message = "La fecha de nacimiento debe ser real y no puede ser futura")
     private LocalDate fechaNacimiento;
 
 }

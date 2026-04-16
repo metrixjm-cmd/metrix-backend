@@ -2,8 +2,10 @@ package com.metrix.api.service;
 
 import com.metrix.api.dto.CreateUserRequest;
 import com.metrix.api.dto.UserResponse;
+import com.metrix.api.model.Catalog;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.repository.CatalogRepository;
 import com.metrix.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,12 +36,14 @@ class UserServiceImplCreatePolicyTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private SequenceService sequenceService;
+    @Mock
+    private CatalogRepository catalogRepository;
 
     private UserServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new UserServiceImpl(userRepository, passwordEncoder, sequenceService);
+        service = new UserServiceImpl(userRepository, catalogRepository, passwordEncoder, sequenceService);
     }
 
     @Test
@@ -47,6 +51,8 @@ class UserServiceImplCreatePolicyTest {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ001");
         when(userRepository.existsByNumeroUsuario("CAJ001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -71,6 +77,8 @@ class UserServiceImplCreatePolicyTest {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ001");
         when(userRepository.existsByNumeroUsuario("CAJ001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -92,6 +100,8 @@ class UserServiceImplCreatePolicyTest {
         when(userRepository.findByNumeroUsuario("GER001"))
                 .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ002");
         when(userRepository.existsByNumeroUsuario("CAJ002")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -113,7 +123,9 @@ class UserServiceImplCreatePolicyTest {
         when(userRepository.findByNumeroUsuario("ADM001"))
                 .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
-        when(sequenceService.generateUserFolio("GERENTE", "Cajero")).thenReturn("GER999");
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Gerente de sucursal", Role.GERENTE)));
+        when(sequenceService.generateUserFolio("GERENTE", "Gerente de sucursal")).thenReturn("GER999");
         when(userRepository.existsByNumeroUsuario("GER999")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
@@ -123,6 +135,7 @@ class UserServiceImplCreatePolicyTest {
         });
 
         CreateUserRequest req = createReq("store-2", Set.of(Role.GERENTE));
+        req.setPuesto("Gerente de sucursal");
         UserResponse created = service.createUser(req, "ADM001");
 
         assertEquals("u-admin-created", created.getId());
@@ -168,6 +181,8 @@ class UserServiceImplCreatePolicyTest {
                 .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
         when(userRepository.existsByEmailIgnoreCase("persona@demo.com")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ003");
         when(userRepository.existsByNumeroUsuario("CAJ003")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
@@ -185,6 +200,47 @@ class UserServiceImplCreatePolicyTest {
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         assertEquals("persona@demo.com", captor.getValue().getEmail());
+    }
+
+    @Test
+    void admin_role_forces_fixed_administrador_puesto() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(sequenceService.generateUserFolio("ADMIN", "Administrador")).thenReturn("ADM001");
+        when(userRepository.existsByNumeroUsuario("ADM001")).thenReturn(false);
+        when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId("u-admin-fixed-role");
+            return u;
+        });
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.ADMIN));
+        req.setPuesto("Cajero");
+
+        service.createUser(req, "ADM001");
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertEquals("Administrador", captor.getValue().getPuesto());
+    }
+
+    @Test
+    void create_rejects_puesto_when_it_does_not_match_role_catalog() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.GERENTE));
+        req.setPuesto("Cajero");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createUser(req, "ADM001"));
+
+        assertEquals("El puesto seleccionado no corresponde al perfil GERENTE.", ex.getMessage());
     }
 
     private User user(String numeroUsuario, String storeId, Set<Role> roles) {
@@ -205,5 +261,15 @@ class UserServiceImplCreatePolicyTest {
         req.setPassword("Operador123");
         req.setRoles(roles);
         return req;
+    }
+
+    private Catalog puesto(String value, Role role) {
+        return Catalog.builder()
+                .type("PUESTO")
+                .value(value)
+                .label(value)
+                .role(role)
+                .activo(true)
+                .build();
     }
 }

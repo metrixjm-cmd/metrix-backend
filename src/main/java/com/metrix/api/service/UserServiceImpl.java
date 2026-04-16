@@ -8,6 +8,7 @@ import com.metrix.api.dto.VerifyAdminPasswordRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.repository.CatalogRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +35,7 @@ import java.util.Set;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository  userRepository;
+    private final CatalogRepository catalogRepository;
     private final PasswordEncoder passwordEncoder;
     private final SequenceService sequenceService;
 
@@ -107,14 +109,19 @@ public class UserServiceImpl implements UserService {
 
         assertUniqueUserFieldsForCreate(normalizedNombre, normalizedEmail);
 
+        Role principalRole = !effectiveRoles.isEmpty()
+                ? effectiveRoles.iterator().next()
+                : null;
+        String effectivePuesto = validateAndResolvePuesto(request.getPuesto(), principalRole);
+
         // Auto-generar folio si no se envía numeroUsuario
         // Prefijo: rol ADMIN/GERENTE tienen prefijo fijo; EJECUTADOR usa el puesto
         String numeroUsuario = request.getNumeroUsuario();
         if (numeroUsuario == null || numeroUsuario.isBlank()) {
-            String rolPrincipal = !effectiveRoles.isEmpty()
-                    ? effectiveRoles.iterator().next().name()
-                    : null;
-            numeroUsuario = sequenceService.generateUserFolio(rolPrincipal, request.getPuesto());
+            numeroUsuario = sequenceService.generateUserFolio(
+                    principalRole != null ? principalRole.name() : null,
+                    effectivePuesto
+            );
         }
 
         if (userRepository.existsByNumeroUsuario(numeroUsuario)) {
@@ -124,7 +131,7 @@ public class UserServiceImpl implements UserService {
 
         User user = User.builder()
                 .nombre(normalizedNombre)
-                .puesto(request.getPuesto())
+                .puesto(effectivePuesto)
                 .storeId(effectiveStoreId)
                 .turno(request.getTurno())
                 .numeroUsuario(numeroUsuario)
@@ -309,6 +316,28 @@ public class UserServiceImpl implements UserService {
 
     private boolean hasRole(User user, Role role) {
         return user.getRoles() != null && user.getRoles().contains(role);
+    }
+
+    private String validateAndResolvePuesto(String puesto, Role role) {
+        String normalizedPuesto = normalizeRequiredText(puesto);
+        if (normalizedPuesto.isBlank()) {
+            throw new IllegalArgumentException("El puesto es obligatorio.");
+        }
+        if (role == Role.ADMIN) {
+            return PuestoCatalogPolicy.ADMIN_PUESTO;
+        }
+
+        Role expectedRole = role != null ? role : PuestoCatalogPolicy.inferRole(normalizedPuesto);
+        boolean exists = catalogRepository.findByTypeAndActivoTrue("PUESTO").stream()
+                .anyMatch(catalog ->
+                        normalizedPuesto.equalsIgnoreCase(catalog.getValue())
+                                && PuestoCatalogPolicy.resolveRole(catalog) == expectedRole);
+
+        if (!exists) {
+            throw new IllegalArgumentException(
+                    "El puesto seleccionado no corresponde al perfil " + expectedRole.name() + ".");
+        }
+        return normalizedPuesto;
     }
 
     private void assertUniqueUserFieldsForCreate(String nombre, String email) {

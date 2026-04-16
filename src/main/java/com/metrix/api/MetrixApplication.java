@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * METRIX - Sistema de Gestión de Ejecución Operativa y Analítica
  *
- * Clase principal de arranque de la aplicación.tenge
+ * Clase principal de arranque de la aplicación.
  * Ruta: backend-api/src/main/java/com/metrix/MetrixApplication.java
  */
 @SpringBootApplication
@@ -16,7 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling     // Habilita @Scheduled para alertas preventivas (Sprint 16)
 public class MetrixApplication {
 
-    public static void main(String[] args) {sube a 
+    public static void main(String[] args) {
         SpringApplication.run(MetrixApplication.class, args);
         System.out.println("-> METRIX API - Gestión Operativa y Analítica");
     }

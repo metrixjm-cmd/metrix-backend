@@ -3,7 +3,9 @@ package com.metrix.api.controller;
 import com.metrix.api.dto.CatalogEntryRequest;
 import com.metrix.api.dto.CatalogEntryResponse;
 import com.metrix.api.model.Catalog;
+import com.metrix.api.model.Role;
 import com.metrix.api.repository.CatalogRepository;
+import com.metrix.api.service.PuestoCatalogPolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -15,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -39,10 +42,17 @@ public class CatalogController {
     @ApiResponse(responseCode = "200", description = "Lista de valores del catálogo")
     public ResponseEntity<List<CatalogEntryResponse>> getByType(
             @Parameter(description = "Tipo de catálogo: PUESTO, TURNO, CATEGORIA_TAREA, CATEGORIA_INCIDENCIA")
-            @PathVariable String type) {
+            @PathVariable String type,
+            @Parameter(description = "Perfil para filtrar puestos: ADMIN, GERENTE, EJECUTADOR")
+            @RequestParam(required = false) Role role) {
+
+        String normalizedType = type.toUpperCase();
+        if ("PUESTO".equals(normalizedType)) {
+            return ResponseEntity.ok(getPuestos(role));
+        }
 
         List<CatalogEntryResponse> entries = catalogRepository
-                .findByTypeAndActivoTrue(type.toUpperCase())
+                .findByTypeAndActivoTrue(normalizedType)
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -62,6 +72,7 @@ public class CatalogController {
 
         String normalizedType = type.toUpperCase();
         String normalizedValue = request.getValue().trim();
+        Role catalogRole = resolveCatalogRole(normalizedType, request);
 
         if (catalogRepository.existsByTypeAndValue(normalizedType, normalizedValue)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
@@ -71,6 +82,7 @@ public class CatalogController {
                 .type(normalizedType)
                 .value(normalizedValue)
                 .label(request.getLabel() != null ? request.getLabel().trim() : normalizedValue)
+                .role(catalogRole)
                 .build();
 
         Catalog saved = catalogRepository.save(catalog);
@@ -89,10 +101,16 @@ public class CatalogController {
 
         return catalogRepository.findById(id)
                 .map(catalog -> {
-                    catalog.setValue(request.getValue().trim());
+                    String normalizedType = type.toUpperCase();
+                    String normalizedValue = request.getValue().trim();
+                    Role catalogRole = resolveCatalogRole(normalizedType, request);
+                    catalog.setValue(normalizedValue);
                     catalog.setLabel(request.getLabel() != null
                             ? request.getLabel().trim()
-                            : request.getValue().trim());
+                            : normalizedValue);
+                    if ("PUESTO".equals(normalizedType)) {
+                        catalog.setRole(catalogRole);
+                    }
                     return ResponseEntity.ok(toResponse(catalogRepository.save(catalog)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -114,12 +132,47 @@ public class CatalogController {
         return ResponseEntity.noContent().build();
     }
 
+    private List<CatalogEntryResponse> getPuestos(Role role) {
+        List<CatalogEntryResponse> entries = new ArrayList<>();
+        if (role == null || role == Role.ADMIN) {
+            entries.add(CatalogEntryResponse.builder()
+                    .id("admin-fixed")
+                    .type("PUESTO")
+                    .value(PuestoCatalogPolicy.ADMIN_PUESTO)
+                    .label(PuestoCatalogPolicy.ADMIN_PUESTO)
+                    .role(Role.ADMIN)
+                    .build());
+        }
+
+        catalogRepository.findByTypeAndActivoTrue("PUESTO").stream()
+                .filter(catalog -> PuestoCatalogPolicy.resolveRole(catalog) != Role.ADMIN)
+                .filter(catalog -> role == null || PuestoCatalogPolicy.resolveRole(catalog) == role)
+                .map(this::toResponse)
+                .forEach(entries::add);
+
+        return entries;
+    }
+
+    private Role resolveCatalogRole(String normalizedType, CatalogEntryRequest request) {
+        if (!"PUESTO".equals(normalizedType)) {
+            return null;
+        }
+        Role requestedRole = request.getRole() != null
+                ? request.getRole()
+                : PuestoCatalogPolicy.inferRole(request.getValue());
+        if (requestedRole == Role.ADMIN) {
+            throw new IllegalArgumentException("El puesto de administrador es fijo y no se puede editar desde catalogos.");
+        }
+        return requestedRole;
+    }
+
     private CatalogEntryResponse toResponse(Catalog c) {
         return CatalogEntryResponse.builder()
                 .id(c.getId())
                 .type(c.getType())
                 .value(c.getValue())
                 .label(c.getLabel() != null ? c.getLabel() : c.getValue())
+                .role("PUESTO".equals(c.getType()) ? PuestoCatalogPolicy.resolveRole(c) : c.getRole())
                 .build();
     }
 }

@@ -44,6 +44,10 @@ public class Catalog {
     @Field("label")
     private String label;
 
+    /** Perfil de aplicacion al que pertenece el puesto (solo para type = PUESTO). */
+    @Field("role")
+    private Role role;
+
     @Builder.Default
     @Field("activo")
     private boolean activo = true;

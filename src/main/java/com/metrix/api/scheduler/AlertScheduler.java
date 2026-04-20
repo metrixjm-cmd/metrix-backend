@@ -4,6 +4,7 @@ import com.metrix.api.dto.NotificationEvent;
 import com.metrix.api.model.TaskStatus;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
+import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.KpiService;
 import com.metrix.api.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
@@ -19,21 +20,22 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Alertas preventivas programadas (Sprint 16).
  * <p>
- * Deduplicación via ConcurrentHashMap local (sin Redis).
+ * Deduplicacion via ConcurrentHashMap local (sin Redis).
  * Con Cloud Run max-instances=1, no hay riesgo de alertas duplicadas.
- * Los sets se limpian cada hora automáticamente.
+ * Los sets se limpian cada hora automaticamente.
  */
 @Slf4j
 @Component
 public class AlertScheduler {
 
-    private final TaskRepository       taskRepository;
-    private final StoreRepository      storeRepository;
-    private final KpiService           kpiService;
-    private final NotificationService  notificationService;
+    private final TaskRepository taskRepository;
+    private final StoreRepository storeRepository;
+    private final UserRepository userRepository;
+    private final KpiService kpiService;
+    private final NotificationService notificationService;
 
     private final Set<String> warnedDeadlineIds = ConcurrentHashMap.newKeySet();
-    private final Set<String> warnedOverdueIds  = ConcurrentHashMap.newKeySet();
+    private final Set<String> warnedOverdueIds = ConcurrentHashMap.newKeySet();
 
     private static final List<TaskStatus> OPEN_STATUSES =
             List.of(TaskStatus.PENDING, TaskStatus.IN_PROGRESS);
@@ -41,19 +43,19 @@ public class AlertScheduler {
     public AlertScheduler(
             TaskRepository taskRepository,
             StoreRepository storeRepository,
+            UserRepository userRepository,
             KpiService kpiService,
             NotificationService notificationService) {
         this.taskRepository = taskRepository;
         this.storeRepository = storeRepository;
+        this.userRepository = userRepository;
         this.kpiService = kpiService;
         this.notificationService = notificationService;
     }
 
-    // ── Alertas de vencimiento próximo (cada 5 min) ─────────────────────────
-
     @Scheduled(cron = "0 */5 * * * *")
     public void checkUpcomingDeadlines() {
-        Instant now  = Instant.now();
+        Instant now = Instant.now();
         Instant in30 = now.plusSeconds(30 * 60);
 
         List<com.metrix.api.model.Task> upcoming =
@@ -61,14 +63,17 @@ public class AlertScheduler {
                         OPEN_STATUSES, now, in30);
 
         for (com.metrix.api.model.Task task : upcoming) {
-            if (!warnedDeadlineIds.add(task.getId())) continue;
+            if (!warnedDeadlineIds.add(task.getId())) {
+                continue;
+            }
 
+            String assigneeName = resolveAssignedUserName(task.getAssignedUserId());
             NotificationEvent event = NotificationEvent.builder()
                     .id(UUID.randomUUID().toString())
                     .type("TASK_DEADLINE_WARNING")
                     .severity("warning")
-                    .title("Tarea próxima a vencer")
-                    .body(String.format("«%s» vence en menos de 30 minutos.", task.getTitle()))
+                    .title("Tarea proxima a vencer")
+                    .body(String.format("%s · \"%s\" vence en menos de 30 minutos.", assigneeName, task.getTitle()))
                     .taskId(task.getId())
                     .incidentId(null)
                     .storeId(task.getStoreId())
@@ -79,15 +84,13 @@ public class AlertScheduler {
                 notificationService.sendToUser(task.getAssignedUserId(), event);
             }
             notificationService.sendToStoreManagers(task.getStoreId(), event);
-            log.debug("TASK_DEADLINE_WARNING — taskId: {}", task.getId());
+            log.debug("TASK_DEADLINE_WARNING - taskId: {}", task.getId());
         }
 
         if (!upcoming.isEmpty()) {
-            log.info("[AlertScheduler] checkUpcomingDeadlines — {} tareas próximas", upcoming.size());
+            log.info("[AlertScheduler] checkUpcomingDeadlines - {} tareas proximas", upcoming.size());
         }
     }
-
-    // ── Alertas de tareas vencidas (cada 10 min) ────────────────────────────
 
     @Scheduled(cron = "0 */10 * * * *")
     public void checkOverdueTasks() {
@@ -98,17 +101,20 @@ public class AlertScheduler {
                         OPEN_STATUSES, now);
 
         for (com.metrix.api.model.Task task : overdue) {
-            if (!warnedOverdueIds.add(task.getId())) continue;
+            if (!warnedOverdueIds.add(task.getId())) {
+                continue;
+            }
 
+            String assigneeName = resolveAssignedUserName(task.getAssignedUserId());
             String severity = task.isCritical() ? "critical" : "warning";
-            String title    = task.isCritical() ? "Tarea crítica vencida" : "Tarea vencida";
+            String title = task.isCritical() ? "Tarea critica vencida" : "Tarea vencida";
 
             NotificationEvent event = NotificationEvent.builder()
                     .id(UUID.randomUUID().toString())
                     .type("TASK_OVERDUE")
                     .severity(severity)
                     .title(title)
-                    .body(String.format("«%s» superó su tiempo límite.", task.getTitle()))
+                    .body(String.format("%s · \"%s\" supero su tiempo limite.", assigneeName, task.getTitle()))
                     .taskId(task.getId())
                     .incidentId(null)
                     .storeId(task.getStoreId())
@@ -119,15 +125,13 @@ public class AlertScheduler {
                 notificationService.sendToUser(task.getAssignedUserId(), event);
             }
             notificationService.sendToStoreManagers(task.getStoreId(), event);
-            log.debug("TASK_OVERDUE — taskId: {} | critical: {}", task.getId(), task.isCritical());
+            log.debug("TASK_OVERDUE - taskId: {} | critical: {}", task.getId(), task.isCritical());
         }
 
         if (!overdue.isEmpty()) {
-            log.info("[AlertScheduler] checkOverdueTasks — {} tareas vencidas", overdue.size());
+            log.info("[AlertScheduler] checkOverdueTasks - {} tareas vencidas", overdue.size());
         }
     }
-
-    // ── Resumen diario de IGEO (8:00 AM) ────────────────────────────────────
 
     @Scheduled(cron = "0 0 8 * * *")
     public void sendDailyIgeoAlert() {
@@ -141,8 +145,8 @@ public class AlertScheduler {
                             .id(UUID.randomUUID().toString())
                             .type("DAILY_IGEO_ALERT")
                             .severity("critical")
-                            .title("Alerta de desempeño operativo")
-                            .body(String.format("Sucursal «%s» inicia con IGEO %.1f%% (mínimo: 70%%).",
+                            .title("Alerta de desempeno operativo")
+                            .body(String.format("Sucursal \"%s\" inicia con IGEO %.1f%% (minimo: 70%%).",
                                     store.getNombre(), igeo))
                             .taskId(null)
                             .incidentId(null)
@@ -151,7 +155,7 @@ public class AlertScheduler {
                             .build();
 
                     notificationService.sendToAllAdmins(event);
-                    log.info("[AlertScheduler] DAILY_IGEO_ALERT — {} | IGEO: {}%",
+                    log.info("[AlertScheduler] DAILY_IGEO_ALERT - {} | IGEO: {}%",
                             store.getNombre(), igeo);
                 }
             } catch (Exception e) {
@@ -160,8 +164,6 @@ public class AlertScheduler {
         });
     }
 
-    // ── Limpieza de sets de deduplicación (cada hora) ───────────────────────
-
     @Scheduled(cron = "0 0 * * * *")
     public void clearWarningSets() {
         int d = warnedDeadlineIds.size();
@@ -169,7 +171,16 @@ public class AlertScheduler {
         warnedDeadlineIds.clear();
         warnedOverdueIds.clear();
         if (d + o > 0) {
-            log.info("[AlertScheduler] Sets limpiados — deadline: {} | overdue: {}", d, o);
+            log.info("[AlertScheduler] Sets limpiados - deadline: {} | overdue: {}", d, o);
         }
+    }
+
+    private String resolveAssignedUserName(String assignedUserId) {
+        if (assignedUserId == null || assignedUserId.isBlank()) {
+            return "Colaborador";
+        }
+        return userRepository.findById(assignedUserId)
+                .map(user -> user.getNombre() != null && !user.getNombre().isBlank() ? user.getNombre() : "Colaborador")
+                .orElse("Colaborador");
     }
 }

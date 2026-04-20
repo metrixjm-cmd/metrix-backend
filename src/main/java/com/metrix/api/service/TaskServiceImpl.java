@@ -159,18 +159,22 @@ public class TaskServiceImpl implements TaskService {
         Task task = taskRepository.findById(taskId)
                 .filter(Task::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+        User actor = userRepository.findByNumeroUsuario(currentUser)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado: " + currentUser));
 
         Execution execution = task.getExecution();
         TaskStatus current  = execution.getStatus();
         TaskStatus next     = request.getNewStatus();
 
         validateTransition(current, next);
+        validateActorCanChangeStatus(task, actor, current, next);
 
         Instant now = Instant.now();
 
         switch (next) {
             case IN_PROGRESS -> applyInProgress(execution, now);
-            case COMPLETED   -> applyCompleted(execution, task.getDueAt(), now);
+            case COMPLETED   -> applyCompleted(task, execution, task.getDueAt(), now);
             case FAILED      -> {
                 applyFailed(execution, now, request.getComments());
                 task.setReworkCount(task.getReworkCount() + 1);  // KPI #3: Tasa de Re-trabajo
@@ -197,8 +201,8 @@ public class TaskServiceImpl implements TaskService {
         // Emit domain event — TaskEventListener handles SSE notification
         eventPublisher.publishEvent(new TaskStatusChangedEvent(
                 saved.getId(), current, next, saved.getStoreId(),
-                saved.getAssignedUserId(), saved.getTitle(),
-                saved.getPosition(), saved.getComments()));
+                saved.getAssignedUserId(), resolveUserName(saved.getAssignedUserId()),
+                saved.getTitle(), saved.getPosition(), saved.getComments()));
 
         return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
     }
@@ -248,12 +252,13 @@ public class TaskServiceImpl implements TaskService {
      *
      * @throws IllegalStateException si el plazo ya venció
      */
-    private void applyCompleted(Execution execution, Instant dueAt, Instant now) {
+    private void applyCompleted(Task task, Execution execution, Instant dueAt, Instant now) {
         if (now.isAfter(dueAt)) {
             throw new IllegalStateException(
                     "El plazo de la tarea venció el " + dueAt + ". " +
                     "Para registrar ejecución tardía utilice el estatus FAILED con los comentarios de causa.");
         }
+        validateCompletionRequirements(task, execution);
         execution.setStatus(TaskStatus.COMPLETED);
         execution.setFinishedAt(now);
         execution.setOnTime(true);  // Garantizado: la validación anterior descarta now > dueAt
@@ -286,6 +291,40 @@ public class TaskServiceImpl implements TaskService {
         execution.setStartedAt(null);
         execution.setFinishedAt(null);
         execution.setOnTime(null);
+    }
+
+    private void validateActorCanChangeStatus(Task task, User actor, TaskStatus current, TaskStatus next) {
+        boolean isAssignee = task.getAssignedUserId() != null && task.getAssignedUserId().equals(actor.getId());
+        boolean isManager = actor.getRoles() != null
+                && (actor.getRoles().contains(Role.ADMIN) || actor.getRoles().contains(Role.GERENTE));
+
+        boolean allowed = switch (current) {
+            case PENDING, IN_PROGRESS -> isAssignee;
+            case FAILED -> next == TaskStatus.PENDING && isManager;
+            case COMPLETED -> false;
+        };
+
+        if (!allowed) {
+            throw new IllegalStateException(
+                    "No tienes permisos para cambiar el estado de esta tarea. " +
+                    "Solo el ejecutador asignado puede iniciarla o cerrarla, y solo GERENTE/ADMIN puede reabrirla.");
+        }
+    }
+
+    private void validateCompletionRequirements(Task task, Execution execution) {
+        Evidence evidence = execution.getEvidence() != null ? execution.getEvidence() : new Evidence();
+        boolean hasEvidence = !evidence.getImages().isEmpty() || !evidence.getVideos().isEmpty();
+        if (!hasEvidence) {
+            throw new IllegalStateException(
+                    "No puedes marcar la tarea como COMPLETED sin subir al menos una evidencia fotogrÃ¡fica o de video.");
+        }
+
+        boolean hasProcesses = task.getProcesses() != null && !task.getProcesses().isEmpty();
+        boolean hasPendingProcesses = hasProcesses && task.getProcesses().stream().anyMatch(step -> !step.isCompleted());
+        if (hasPendingProcesses) {
+            throw new IllegalStateException(
+                    "No puedes marcar la tarea como COMPLETED mientras existan procesos pendientes por completar.");
+        }
     }
 
     // ── Calificación de Calidad (Sprint 18) ─────────────────────────────

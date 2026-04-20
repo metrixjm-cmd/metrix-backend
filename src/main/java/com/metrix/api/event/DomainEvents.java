@@ -32,6 +32,7 @@ public final class DomainEvents {
             TaskStatus toStatus,
             String storeId,
             String assignedUserId,
+            String assignedUserName,
             String title,
             String position,
             String comments

@@ -16,7 +16,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 public @interface OlderThanYears {
 
-    String message() default "La fecha de nacimiento debe corresponder a una persona mayor de 12 años";
+    String message() default "La fecha de nacimiento debe corresponder a una persona mayor de 17 años";
 
     int value();
 

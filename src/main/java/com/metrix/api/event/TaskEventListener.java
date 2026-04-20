@@ -3,7 +3,6 @@ package com.metrix.api.event;
 import com.metrix.api.dto.NotificationEvent;
 import com.metrix.api.event.DomainEvents.TaskCreatedEvent;
 import com.metrix.api.event.DomainEvents.TaskStatusChangedEvent;
-import com.metrix.api.model.TaskStatus;
 import com.metrix.api.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +15,7 @@ import java.util.UUID;
 /**
  * Listens for task domain events and dispatches SSE notifications.
  * <p>
- * This decouples TaskServiceImpl from NotificationService — the task module
+ * This decouples TaskServiceImpl from NotificationService - the task module
  * only emits events, and this listener translates them into SSE notifications.
  */
 @Slf4j
@@ -44,27 +43,30 @@ public class TaskEventListener {
     public void onTaskStatusChanged(TaskStatusChangedEvent event) {
         String type = switch (event.toStatus()) {
             case IN_PROGRESS -> "TASK_STARTED";
-            case COMPLETED   -> "TASK_COMPLETED";
-            case FAILED      -> "TASK_FAILED";
-            case PENDING     -> "TASK_REOPENED";
+            case COMPLETED -> "TASK_COMPLETED";
+            case FAILED -> "TASK_FAILED";
+            case PENDING -> "TASK_REOPENED";
         };
         String severity = switch (event.toStatus()) {
             case IN_PROGRESS, COMPLETED -> "info";
-            case FAILED                 -> "critical";
-            case PENDING                -> "warning";
+            case FAILED -> "critical";
+            case PENDING -> "warning";
         };
         String title = switch (event.toStatus()) {
             case IN_PROGRESS -> "Tarea Iniciada";
-            case COMPLETED   -> "Tarea Completada";
-            case FAILED      -> "Tarea Fallida";
-            case PENDING     -> "Tarea Reabierta";
+            case COMPLETED -> "Tarea Completada";
+            case FAILED -> "Tarea Fallida";
+            case PENDING -> "Tarea Reabierta";
         };
 
+        String actorName = event.assignedUserName() != null && !event.assignedUserName().isBlank()
+                ? event.assignedUserName()
+                : event.position();
         String comments = event.comments();
-        String body = event.title() + " · " + event.position()
+        String body = actorName + " · " + event.title()
                 + (comments != null && !comments.isBlank()
-                        ? " — " + comments.substring(0, Math.min(60, comments.length()))
-                        : "");
+                ? " - " + comments.substring(0, Math.min(60, comments.length()))
+                : "");
 
         notificationService.sendToStoreManagers(event.storeId(), NotificationEvent.builder()
                 .id(UUID.randomUUID().toString())

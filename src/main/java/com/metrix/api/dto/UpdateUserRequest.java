@@ -1,6 +1,7 @@
 package com.metrix.api.dto;
 
 import com.metrix.api.model.Role;
+import com.metrix.api.validation.OlderThanYears;
 import com.metrix.api.validation.RealBirthDate;
 import jakarta.validation.constraints.Email;
 import lombok.AllArgsConstructor;
@@ -27,15 +28,15 @@ public class UpdateUserRequest {
     /** Solo ADMIN puede cambiar storeId (reasignar sucursal). */
     private String storeId;
 
-    /** Solo ADMIN puede cambiar roles. Si GERENTE envía este campo, se ignora. */
+    /** Solo ADMIN puede cambiar roles. Si GERENTE envia este campo, se ignora. */
     private Set<Role> roles;
 
-    /** Correo electrónico (opcional). */
-    @Email(message = "El email no tiene un formato válido")
+    /** Correo electronico (opcional). */
+    @Email(message = "El email no tiene un formato valido")
     private String email;
 
     /** Fecha de nacimiento (opcional). Formato ISO: yyyy-MM-dd */
     @RealBirthDate(message = "La fecha de nacimiento debe ser real y no puede ser futura")
+    @OlderThanYears(value = 17, message = "Ingresa una fecha valida, debe tener mas de 17 años cumplidos")
     private LocalDate fechaNacimiento;
-
 }

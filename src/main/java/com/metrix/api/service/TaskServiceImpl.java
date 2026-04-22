@@ -452,7 +452,7 @@ public class TaskServiceImpl implements TaskService {
         return EvidenceUploadResponse.builder()
                 .taskId(taskId)
                 .type(mediaType.toUpperCase())
-                .url(url)
+                .url(gcsService.toClientReadableUrl(url))
                 .build();
     }
 
@@ -636,8 +636,8 @@ public class TaskServiceImpl implements TaskService {
                 .startedAt(exec.getStartedAt())
                 .finishedAt(exec.getFinishedAt())
                 .onTime(exec.getOnTime())
-                .evidenceImages(evidence.getImages())
-                .evidenceVideos(evidence.getVideos())
+                .evidenceImages(gcsService.toClientReadableUrls(evidence.getImages()))
+                .evidenceVideos(gcsService.toClientReadableUrls(evidence.getVideos()))
                 .reworkCount(task.getReworkCount())
                 .qualityRating(task.getQualityRating())
                 .comments(task.getComments())

@@ -16,10 +16,14 @@ import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Servicio de acceso a Google Cloud Storage para METRIX (Sprint 5).
@@ -47,6 +51,12 @@ public class GcsService {
 
     @Value("${metrix.google-cloud.local-fallback-enabled:true}")
     private boolean localFallbackEnabled;
+
+    @Value("${metrix.google-cloud.signed-urls-enabled:true}")
+    private boolean signedUrlsEnabled;
+
+    @Value("${metrix.google-cloud.signed-url-duration-minutes:60}")
+    private long signedUrlDurationMinutes;
 
     @Value("${server.port:8080}")
     private int serverPort;
@@ -117,6 +127,51 @@ public class GcsService {
         }
 
         return uploadToLocal(relativePath, bytes);
+    }
+
+    /**
+     * Convierte una URL almacenada en una URL apta para cliente.
+     * Si el bucket es privado y signed URLs está habilitado, devuelve URL firmada temporal.
+     */
+    public String toClientReadableUrl(String storedUrl) {
+        if (!StringUtils.hasText(storedUrl)) {
+            return storedUrl;
+        }
+
+        if (!signedUrlsEnabled || storage == null) {
+            return storedUrl;
+        }
+
+        BlobId blobId = parseBlobIdFromUrl(storedUrl);
+        if (blobId == null) {
+            return storedUrl;
+        }
+
+        try {
+            BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
+            URL signed = storage.signUrl(
+                    blobInfo,
+                    signedUrlDurationMinutes,
+                    TimeUnit.MINUTES,
+                    Storage.SignUrlOption.withV4Signature()
+            );
+            return signed.toString();
+        } catch (Exception e) {
+            log.warn("No se pudo generar signed URL para {}. Se devuelve URL original. Causa: {}",
+                    storedUrl, e.getMessage());
+            return storedUrl;
+        }
+    }
+
+    public List<String> toClientReadableUrls(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return urls != null ? urls : List.of();
+        }
+        List<String> transformed = new ArrayList<>(urls.size());
+        for (String url : urls) {
+            transformed.add(toClientReadableUrl(url));
+        }
+        return transformed;
     }
 
     private String uploadToGcs(String blobName, byte[] bytes, String contentType) {
@@ -198,6 +253,45 @@ public class GcsService {
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo crear directorio de almacenamiento local fallback.", ex);
         }
+    }
+
+    private BlobId parseBlobIdFromUrl(String url) {
+        if (url.startsWith("gs://")) {
+            String withoutScheme = url.substring("gs://".length());
+            int slash = withoutScheme.indexOf('/');
+            if (slash <= 0 || slash >= withoutScheme.length() - 1) {
+                return null;
+            }
+            String bucket = withoutScheme.substring(0, slash);
+            String objectName = withoutScheme.substring(slash + 1);
+            return BlobId.of(bucket, objectName);
+        }
+
+        String gcsPrefix = "https://storage.googleapis.com/";
+        if (url.startsWith(gcsPrefix)) {
+            String path = url.substring(gcsPrefix.length());
+            int slash = path.indexOf('/');
+            if (slash <= 0 || slash >= path.length() - 1) {
+                return null;
+            }
+            String bucket = path.substring(0, slash);
+            String objectName = path.substring(slash + 1);
+            return BlobId.of(bucket, objectName);
+        }
+
+        String cloudConsolePrefix = "https://storage.cloud.google.com/";
+        if (url.startsWith(cloudConsolePrefix)) {
+            String path = url.substring(cloudConsolePrefix.length());
+            int slash = path.indexOf('/');
+            if (slash <= 0 || slash >= path.length() - 1) {
+                return null;
+            }
+            String bucket = path.substring(0, slash);
+            String objectName = path.substring(slash + 1);
+            return BlobId.of(bucket, objectName);
+        }
+
+        return null;
     }
 }
 

@@ -10,6 +10,8 @@ metrix:
     credentials-path: ${GCS_CREDENTIALS_PATH:}
     local-fallback-enabled: false
     local-evidence-endpoint-enabled: false
+    signed-urls-enabled: true
+    signed-url-duration-minutes: ${GCS_SIGNED_URL_DURATION_MINUTES:60}
 
   security:
     jwt:

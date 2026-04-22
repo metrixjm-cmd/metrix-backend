@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -17,6 +18,11 @@ import java.nio.file.Paths;
  */
 @RestController
 @RequestMapping("/api/v1/evidence/local")
+@ConditionalOnProperty(
+        name = "metrix.google-cloud.local-evidence-endpoint-enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class LocalEvidenceController {
 
     private static final Path BASE_PATH = Paths.get("uploads", "evidences");

@@ -30,8 +30,10 @@ spring:
 metrix:
   google-cloud:
     bucket-name: ${GCS_BUCKET_NAME:metrix-evidences}
-    project-id: ${GCS_PROJECT_ID:metrix-project-id}
-    credentials-path: ${GCS_CREDENTIALS_PATH:classpath:gcp-service-account.json}
+    project-id: ${GCS_PROJECT_ID:}
+    credentials-path: ${GCS_CREDENTIALS_PATH:}
+    local-fallback-enabled: ${GCS_LOCAL_FALLBACK_ENABLED:true}
+    local-evidence-endpoint-enabled: ${GCS_LOCAL_EVIDENCE_ENDPOINT_ENABLED:true}
 
   security:
     jwt:
@@ -52,3 +54,4 @@ logging:
     org.springframework.data.mongodb: ${LOG_LEVEL_MONGO:WARN}
     com.metrix.api: ${LOG_LEVEL_APP:INFO}
     com.metrix.api.security: ${LOG_LEVEL_SECURITY:WARN}
+

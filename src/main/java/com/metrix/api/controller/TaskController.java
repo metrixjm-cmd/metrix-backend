@@ -5,6 +5,8 @@ import com.metrix.api.dto.QualityRatingRequest;
 import com.metrix.api.dto.TaskResponse;
 import com.metrix.api.dto.UpdateStatusRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.Role;
+import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.TaskService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -144,7 +146,20 @@ public class TaskController {
             @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
             @Parameter(description = "Filtro de turno opcional") @RequestParam(required = false) String shift,
             @Parameter(description = "Numero de pagina (base 0)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Tamano de pagina (maximo 500)") @RequestParam(defaultValue = "500") int size) {
+            @Parameter(description = "Tamano de pagina (maximo 500)") @RequestParam(defaultValue = "500") int size,
+            Authentication auth) {
+
+        // GERENTE solo puede consultar su propia sucursal
+        User currentUserObj = userRepository.findByNumeroUsuario(auth.getName())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado: " + auth.getName()));
+        if (currentUserObj.getRoles() != null && currentUserObj.getRoles().contains(Role.GERENTE)
+                && !currentUserObj.getRoles().contains(Role.ADMIN)) {
+            if (!storeId.equals(currentUserObj.getStoreId())) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "El GERENTE solo puede ver tareas de su propia sucursal.");
+            }
+        }
 
         int safeSize = Math.min(size, 500);
 

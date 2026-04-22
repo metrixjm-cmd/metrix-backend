@@ -138,15 +138,15 @@ public class UserController {
 
     // Regenerar contrasena
 
-    @Operation(summary = "Verificar contrasena de administrador",
-               description = "Solo ADMIN. Confirma la contrasena actual antes de mostrar el cambio de contrasena.")
+    @Operation(summary = "Verificar contrasena de usuario con permisos",
+               description = "ADMIN o GERENTE. Confirma la contrasena actual antes de mostrar el cambio de contrasena.")
     @ApiResponses({
-            @ApiResponse(responseCode = "204", description = "Contrasena de administrador correcta"),
+            @ApiResponse(responseCode = "204", description = "Contrasena verificada correctamente"),
             @ApiResponse(responseCode = "400", description = "Datos de entrada invalidos"),
             @ApiResponse(responseCode = "403", description = "Sin permisos suficientes")
     })
     @PostMapping("/password/verify-admin")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<Void> verifyAdminPassword(
             @Valid @RequestBody VerifyAdminPasswordRequest request,
             Authentication auth) {
@@ -155,7 +155,7 @@ public class UserController {
     }
 
     @Operation(summary = "Regenerar contrasena de colaborador",
-               description = "Solo ADMIN. Requiere confirmar la contrasena actual del administrador.")
+               description = "ADMIN o GERENTE. Requiere confirmar la contrasena actual de quien ejecuta la accion.")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Contrasena regenerada exitosamente"),
             @ApiResponse(responseCode = "400", description = "Datos de entrada invalidos"),
@@ -163,7 +163,7 @@ public class UserController {
             @ApiResponse(responseCode = "404", description = "Colaborador no encontrado")
     })
     @PatchMapping("/{id:[a-f0-9]{24}}/password")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<Void> resetUserPassword(
             @Parameter(description = "ID del colaborador") @PathVariable String id,
             @Valid @RequestBody ResetUserPasswordRequest request,

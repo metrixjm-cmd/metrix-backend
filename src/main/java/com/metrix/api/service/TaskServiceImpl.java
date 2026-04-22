@@ -71,6 +71,25 @@ public class TaskServiceImpl implements TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario asignado no encontrado o inactivo: " + request.getAssignedUserId()));
 
+        // Resolver el creador para validar restricción de asignación por rol
+        User creatorUser = userRepository.findById(createdBy)
+                .or(() -> userRepository.findByNumeroUsuario(createdBy))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario creador no encontrado: " + createdBy));
+
+        // Validar restricción de asignación por rol del creador
+        Role creatorRole = creatorUser.getRoles() == null || creatorUser.getRoles().isEmpty()
+                ? null : creatorUser.getRoles().iterator().next();
+        Role assigneeRole = assignedUser.getRoles() == null || assignedUser.getRoles().isEmpty()
+                ? null : assignedUser.getRoles().iterator().next();
+
+        if (Role.ADMIN.equals(creatorRole) && !Role.GERENTE.equals(assigneeRole)) {
+            throw new IllegalArgumentException("El ADMIN solo puede asignar tareas a un GERENTE.");
+        }
+        if (Role.GERENTE.equals(creatorRole) && !Role.EJECUTADOR.equals(assigneeRole)) {
+            throw new IllegalArgumentException("El GERENTE solo puede asignar tareas a un EJECUTADOR.");
+        }
+
         Task task = Task.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -160,6 +179,15 @@ public class TaskServiceImpl implements TaskService {
                 .filter(Task::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
 
+        // Solo el EJECUTADOR asignado puede cambiar el estado
+        User currentUserObj = userRepository.findByNumeroUsuario(currentUser)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado: " + currentUser));
+        if (!task.getAssignedUserId().equals(currentUserObj.getId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Solo el colaborador asignado puede cambiar el estado de esta tarea.");
+        }
+
         Execution execution = task.getExecution();
         TaskStatus current  = execution.getStatus();
         TaskStatus next     = request.getNewStatus();
@@ -170,7 +198,7 @@ public class TaskServiceImpl implements TaskService {
 
         switch (next) {
             case IN_PROGRESS -> applyInProgress(execution, now);
-            case COMPLETED   -> applyCompleted(execution, task.getDueAt(), now);
+            case COMPLETED   -> applyCompleted(task, execution, task.getDueAt(), now);
             case FAILED      -> {
                 applyFailed(execution, now, request.getComments());
                 task.setReworkCount(task.getReworkCount() + 1);  // KPI #3: Tasa de Re-trabajo
@@ -248,7 +276,11 @@ public class TaskServiceImpl implements TaskService {
      *
      * @throws IllegalStateException si el plazo ya venció
      */
-    private void applyCompleted(Execution execution, Instant dueAt, Instant now) {
+    private void applyCompleted(Task task, Execution execution, Instant dueAt, Instant now) {
+        if (task.getProcesses() != null && task.getProcesses().stream().anyMatch(step -> !step.isCompleted())) {
+            throw new IllegalStateException(
+                    "No se puede marcar la tarea como COMPLETED porque aún tiene procesos pendientes.");
+        }
         if (now.isAfter(dueAt)) {
             throw new IllegalStateException(
                     "El plazo de la tarea venció el " + dueAt + ". " +

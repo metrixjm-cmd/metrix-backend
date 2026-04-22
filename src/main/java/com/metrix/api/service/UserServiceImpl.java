@@ -194,8 +194,12 @@ public class UserServiceImpl implements UserService {
     public void resetUserPassword(String id, ResetUserPasswordRequest request, String requestorNumeroUsuario) {
         User target = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Colaborador no encontrado: " + id));
+        User requestor = resolveRequestor(requestorNumeroUsuario);
 
-        assertValidAdminPassword(requestorNumeroUsuario, request.getAdminPassword());
+        assertValidPrivilegedPassword(requestor, request.getAdminPassword());
+        if (!hasRole(requestor, Role.ADMIN)) {
+            validateProfileScope(target, requestor);
+        }
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("La nueva contrasena y la confirmacion no coinciden.");
         }
@@ -206,7 +210,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void verifyAdminPassword(VerifyAdminPasswordRequest request, String requestorNumeroUsuario) {
-        assertValidAdminPassword(requestorNumeroUsuario, request.getAdminPassword());
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+        assertValidPrivilegedPassword(requestor, request.getAdminPassword());
     }
 
     // ── Desactivar colaborador (soft-delete) ─────────────────────────────
@@ -264,13 +269,12 @@ public class UserServiceImpl implements UserService {
                         "Usuario solicitante no encontrado: " + requestorNumeroUsuario));
     }
 
-    private void assertValidAdminPassword(String requestorNumeroUsuario, String adminPassword) {
-        User requestor = resolveRequestor(requestorNumeroUsuario);
-        if (!hasRole(requestor, Role.ADMIN)) {
-            throw new IllegalStateException("Solo ADMIN puede regenerar contrasenas.");
+    private void assertValidPrivilegedPassword(User requestor, String adminPassword) {
+        if (!hasRole(requestor, Role.ADMIN) && !hasRole(requestor, Role.GERENTE)) {
+            throw new IllegalStateException("Solo ADMIN o GERENTE puede regenerar contrasenas.");
         }
         if (!passwordEncoder.matches(adminPassword, requestor.getPassword())) {
-            throw new IllegalStateException("La contrasena del administrador no es correcta.");
+            throw new IllegalStateException("La contrasena actual no es correcta.");
         }
     }
 

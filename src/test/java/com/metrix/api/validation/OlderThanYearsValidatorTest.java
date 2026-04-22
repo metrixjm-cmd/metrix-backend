@@ -25,9 +25,9 @@ class OlderThanYearsValidatorTest {
     }
 
     @Test
-    void create_request_rejects_exactly_twelve_years_old_today() {
+    void create_request_rejects_exactly_seventeen_years_old_today() {
         CreateUserRequest request = new CreateUserRequest();
-        request.setFechaNacimiento(LocalDate.now().minusYears(12));
+        request.setFechaNacimiento(LocalDate.now().minusYears(17));
 
         Set<ConstraintViolation<CreateUserRequest>> violations = validator.validateProperty(request, "fechaNacimiento");
 
@@ -35,9 +35,9 @@ class OlderThanYearsValidatorTest {
     }
 
     @Test
-    void create_request_rejects_younger_than_twelve_years() {
+    void create_request_rejects_younger_than_seventeen_years() {
         CreateUserRequest request = new CreateUserRequest();
-        request.setFechaNacimiento(LocalDate.now().minusYears(11));
+        request.setFechaNacimiento(LocalDate.now().minusYears(16));
 
         Set<ConstraintViolation<CreateUserRequest>> violations = validator.validateProperty(request, "fechaNacimiento");
 
@@ -45,9 +45,9 @@ class OlderThanYearsValidatorTest {
     }
 
     @Test
-    void create_request_accepts_dates_older_than_twelve_years() {
+    void create_request_accepts_dates_older_than_seventeen_years() {
         CreateUserRequest request = new CreateUserRequest();
-        request.setFechaNacimiento(LocalDate.now().minusYears(12).minusDays(1));
+        request.setFechaNacimiento(LocalDate.now().minusYears(17).minusDays(1));
 
         assertTrue(validator.validateProperty(request, "fechaNacimiento").isEmpty());
     }

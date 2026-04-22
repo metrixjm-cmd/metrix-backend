@@ -15,7 +15,7 @@ import java.time.LocalDate;
 import java.util.Set;
 
 /**
- * Request para crear un nuevo colaborador desde el módulo RH.
+ * Request para crear un nuevo colaborador desde el modulo RH.
  * Solo accesible por ADMIN.
  */
 @Data
@@ -38,19 +38,19 @@ public class CreateUserRequest {
     /** Opcional: si se omite, se auto-genera como [PUESTO_PREFIX]+[FOLIO] (ej. CAJ001) */
     private String numeroUsuario;
 
-    @NotBlank(message = "La contraseña es obligatoria")
-    @Size(min = 8, message = "La contraseña debe tener al menos 8 caracteres")
+    @NotBlank(message = "La contrasena es obligatoria")
+    @Size(min = 8, message = "La contrasena debe tener al menos 8 caracteres")
     private String password;
 
     @NotEmpty(message = "Debe asignar al menos un rol")
     private Set<Role> roles;
 
-    /** Correo electrónico (opcional). */
-    @Email(message = "El email no tiene un formato válido")
+    /** Correo electronico (opcional). */
+    @Email(message = "El email no tiene un formato valido")
     private String email;
 
     /** Fecha de nacimiento (opcional). Formato ISO: yyyy-MM-dd */
     @RealBirthDate(message = "La fecha de nacimiento debe ser real y no puede ser futura")
-    @OlderThanYears(value = 12, message = "Ingresa una fecha válida, debe tener más de 12 años cumplidos")
+    @OlderThanYears(value = 17, message = "Ingresa una fecha valida, debe tener mas de 17 años cumplidos")
     private LocalDate fechaNacimiento;
 }

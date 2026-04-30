@@ -74,6 +74,13 @@ public class Task {
     @Field("description")
     private String description;
 
+    /**
+     * URL opcional con material de referencia para ejecutar la tarea.
+     * Se muestra como enlace en el frontend.
+     */
+    @Field("reference_url")
+    private String referenceUrl;
+
     /** Categoría para dashboards especializados (Obj. #22). Ahora dinámica vía catálogo. */
     @Field("category")
     private String category;

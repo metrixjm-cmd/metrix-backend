@@ -29,6 +29,7 @@ public class TaskResponse {
     // task_definition
     private String title;
     private String description;
+    private String referenceUrl;
     private String category;
     @JsonProperty("isCritical")
     private boolean critical;

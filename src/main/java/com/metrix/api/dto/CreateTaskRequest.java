@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,6 +38,14 @@ public class CreateTaskRequest {
 
     @NotBlank(message = "La descripción es obligatoria")
     private String description;
+
+    /**
+     * Material de referencia opcional. Debe ser una URL http/https.
+     * Se muestra como enlace para que el ejecutador consulte recursos externos.
+     */
+    @Size(max = 800, message = "La URL de referencia no debe exceder 800 caracteres")
+    @Pattern(regexp = "^(https?://).+|^$", message = "La URL de referencia debe iniciar con http:// o https://")
+    private String referenceUrl;
 
     @NotBlank(message = "La categoría es obligatoria")
     private String category;

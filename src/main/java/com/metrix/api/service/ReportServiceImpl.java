@@ -470,6 +470,7 @@ public class ReportServiceImpl implements ReportService {
         return TaskResponse.builder()
                 .id(task.getId())
                 .title(task.getTitle())
+                .referenceUrl(task.getReferenceUrl())
                 .category(task.getCategory())
                 .status(exec.getStatus())
                 .shift(task.getShift())

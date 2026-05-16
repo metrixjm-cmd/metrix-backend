@@ -36,7 +36,7 @@ public class CreateTrainingRequest {
     @NotBlank
     private String shift;
 
-    @NotNull @Future
+    @NotNull @FutureOrPresent
     private Instant dueAt;
 
     private String assignmentGroupId;

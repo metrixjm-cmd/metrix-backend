@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 
@@ -59,4 +60,12 @@ public interface TrainingRepository extends MongoRepository<Training, String> {
     long countByStoreIdAndActivoTrue(String storeId);
 
     long countByStoreIdAndProgress_StatusAndActivoTrue(String storeId, TrainingStatus status);
+
+    // ── Alertas de vencimiento ───────────────────────────────────────────
+
+    List<Training> findByProgress_StatusInAndDueAtBetweenAndActivoTrue(
+            Collection<TrainingStatus> statuses, Instant from, Instant to);
+
+    List<Training> findByProgress_StatusInAndDueAtBeforeAndActivoTrue(
+            Collection<TrainingStatus> statuses, Instant before);
 }

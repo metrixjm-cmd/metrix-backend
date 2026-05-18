@@ -2,8 +2,11 @@ package com.metrix.api.scheduler;
 
 import com.metrix.api.dto.NotificationEvent;
 import com.metrix.api.model.TaskStatus;
+import com.metrix.api.model.Training;
+import com.metrix.api.model.TrainingStatus;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
+import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.KpiService;
 import com.metrix.api.service.NotificationService;
@@ -29,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AlertScheduler {
 
     private final TaskRepository taskRepository;
+    private final TrainingRepository trainingRepository;
     private final StoreRepository storeRepository;
     private final UserRepository userRepository;
     private final KpiService kpiService;
@@ -36,17 +40,24 @@ public class AlertScheduler {
 
     private final Set<String> warnedDeadlineIds = ConcurrentHashMap.newKeySet();
     private final Set<String> warnedOverdueIds = ConcurrentHashMap.newKeySet();
+    private final Set<String> warnedTrainingDeadlineIds = ConcurrentHashMap.newKeySet();
+    private final Set<String> warnedTrainingOverdueIds = ConcurrentHashMap.newKeySet();
 
     private static final List<TaskStatus> OPEN_STATUSES =
             List.of(TaskStatus.PENDING, TaskStatus.IN_PROGRESS);
 
+    private static final List<TrainingStatus> OPEN_TRAINING_STATUSES =
+            List.of(TrainingStatus.PROGRAMADA, TrainingStatus.EN_CURSO);
+
     public AlertScheduler(
             TaskRepository taskRepository,
+            TrainingRepository trainingRepository,
             StoreRepository storeRepository,
             UserRepository userRepository,
             KpiService kpiService,
             NotificationService notificationService) {
         this.taskRepository = taskRepository;
+        this.trainingRepository = trainingRepository;
         this.storeRepository = storeRepository;
         this.userRepository = userRepository;
         this.kpiService = kpiService;
@@ -164,14 +175,100 @@ public class AlertScheduler {
         });
     }
 
+    @Scheduled(cron = "0 */5 * * * *")
+    public void checkUpcomingTrainingDeadlines() {
+        Instant now = Instant.now();
+        Instant in60 = now.plusSeconds(60 * 60);
+
+        List<Training> upcoming = trainingRepository
+                .findByProgress_StatusInAndDueAtBetweenAndActivoTrue(OPEN_TRAINING_STATUSES, now, in60);
+
+        for (Training training : upcoming) {
+            if (!warnedTrainingDeadlineIds.add(training.getId())) continue;
+
+            String assigneeName = training.getAssignedUserName() != null
+                    ? training.getAssignedUserName()
+                    : resolveAssignedUserName(training.getAssignedUserId());
+
+            NotificationEvent event = NotificationEvent.builder()
+                    .id(UUID.randomUUID().toString())
+                    .type("TRAINING_DEADLINE_WARNING")
+                    .severity("warning")
+                    .title("Capacitacion proxima a vencer")
+                    .body(String.format("%s · \"%s\" vence en menos de 1 hora.",
+                            assigneeName, training.getTitle()))
+                    .taskId(null)
+                    .incidentId(null)
+                    .storeId(training.getStoreId())
+                    .timestamp(now)
+                    .build();
+
+            if (training.getAssignedUserId() != null) {
+                notificationService.sendToUser(training.getAssignedUserId(), event);
+            }
+            notificationService.sendToStoreManagers(training.getStoreId(), event);
+            log.debug("TRAINING_DEADLINE_WARNING - trainingId: {}", training.getId());
+        }
+
+        if (!upcoming.isEmpty()) {
+            log.info("[AlertScheduler] checkUpcomingTrainingDeadlines - {} capacitaciones proximas",
+                    upcoming.size());
+        }
+    }
+
+    @Scheduled(cron = "0 */10 * * * *")
+    public void checkOverdueTrainings() {
+        Instant now = Instant.now();
+
+        List<Training> overdue = trainingRepository
+                .findByProgress_StatusInAndDueAtBeforeAndActivoTrue(OPEN_TRAINING_STATUSES, now);
+
+        for (Training training : overdue) {
+            if (!warnedTrainingOverdueIds.add(training.getId())) continue;
+
+            String assigneeName = training.getAssignedUserName() != null
+                    ? training.getAssignedUserName()
+                    : resolveAssignedUserName(training.getAssignedUserId());
+
+            NotificationEvent event = NotificationEvent.builder()
+                    .id(UUID.randomUUID().toString())
+                    .type("TRAINING_OVERDUE")
+                    .severity("critical")
+                    .title("Capacitacion vencida")
+                    .body(String.format("%s · \"%s\" supero su fecha limite.",
+                            assigneeName, training.getTitle()))
+                    .taskId(null)
+                    .incidentId(null)
+                    .storeId(training.getStoreId())
+                    .timestamp(now)
+                    .build();
+
+            if (training.getAssignedUserId() != null) {
+                notificationService.sendToUser(training.getAssignedUserId(), event);
+            }
+            notificationService.sendToStoreManagers(training.getStoreId(), event);
+            log.debug("TRAINING_OVERDUE - trainingId: {}", training.getId());
+        }
+
+        if (!overdue.isEmpty()) {
+            log.info("[AlertScheduler] checkOverdueTrainings - {} capacitaciones vencidas",
+                    overdue.size());
+        }
+    }
+
     @Scheduled(cron = "0 0 * * * *")
     public void clearWarningSets() {
         int d = warnedDeadlineIds.size();
         int o = warnedOverdueIds.size();
+        int td = warnedTrainingDeadlineIds.size();
+        int to = warnedTrainingOverdueIds.size();
         warnedDeadlineIds.clear();
         warnedOverdueIds.clear();
-        if (d + o > 0) {
-            log.info("[AlertScheduler] Sets limpiados - deadline: {} | overdue: {}", d, o);
+        warnedTrainingDeadlineIds.clear();
+        warnedTrainingOverdueIds.clear();
+        if (d + o + td + to > 0) {
+            log.info("[AlertScheduler] Sets limpiados - taskDeadline: {} | taskOverdue: {} | trainingDeadline: {} | trainingOverdue: {}",
+                    d, o, td, to);
         }
     }
 

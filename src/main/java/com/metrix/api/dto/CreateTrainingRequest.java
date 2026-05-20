@@ -1,6 +1,5 @@
 package com.metrix.api.dto;
 
-import com.metrix.api.model.TrainingLevel;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,9 +22,6 @@ public class CreateTrainingRequest {
 
     @NotBlank
     private String description;
-
-    @NotNull
-    private TrainingLevel level;
 
     @NotBlank
     private String assignedUserId;

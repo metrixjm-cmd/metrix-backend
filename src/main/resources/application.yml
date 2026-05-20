@@ -29,7 +29,7 @@ spring:
 # Configuración personalizada de METRIX
 metrix:
   google-cloud:
-    bucket-name: ${GCS_BUCKET_NAME:metrix-evidences}
+    bucket-name: ${GCS_BUCKET_NAME:metrix-app-storage-prod}
     project-id: ${GCS_PROJECT_ID:}
     credentials-path: ${GCS_CREDENTIALS_PATH:}
     local-fallback-enabled: ${GCS_LOCAL_FALLBACK_ENABLED:true}

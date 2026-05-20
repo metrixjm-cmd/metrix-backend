@@ -163,7 +163,6 @@ class TrainingServiceImplEditDeletePolicyTest {
                 .activo(true)
                 .title("Título original")
                 .description("Descripción original")
-                .level(com.metrix.api.model.TrainingLevel.BASICO)
                 .storeId("store-1")
                 .shift("TODOS")
                 .dueAt(Instant.now().plusSeconds(86400))
@@ -176,7 +175,6 @@ class TrainingServiceImplEditDeletePolicyTest {
         UpdateTrainingRequest req = new UpdateTrainingRequest();
         req.setTitle("Nuevo título");
         req.setDescription("Nueva descripción");
-        req.setLevel(com.metrix.api.model.TrainingLevel.INTERMEDIO);
         req.setStoreId("store-1");
         req.setShift("MATUTINO");
         req.setDueAt(Instant.now().plusSeconds(172800));

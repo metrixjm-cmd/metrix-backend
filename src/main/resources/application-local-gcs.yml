@@ -1,0 +1,7 @@
+metrix:
+  google-cloud:
+    bucket-name: metrix-app-storage-prod
+    project-id: project-c0ecce2b-41ee-48b7-8b3
+    local-fallback-enabled: false
+    local-evidence-endpoint-enabled: false
+    signed-urls-enabled: false

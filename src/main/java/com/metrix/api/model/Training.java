@@ -58,10 +58,6 @@ public class Training {
     @Field("description")
     private String description;
 
-    /** Nivel de profundidad: BASICO | INTERMEDIO | AVANZADO. */
-    @Field("level")
-    private TrainingLevel level;
-
     /** Duración estimada en horas (1–40). */
     @Field("duration_hours")
     private int durationHours;

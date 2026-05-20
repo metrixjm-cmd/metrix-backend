@@ -48,6 +48,7 @@ public class TrainingServiceImpl implements TrainingService {
     private final ApplicationEventPublisher  eventPublisher;
     private final TrainingStateMachine       stateMachine;
     private final RolePolicy                 rolePolicy;
+    private final GcsService                 gcsService;
 
     // ── Crear ────────────────────────────────────────────────────────────
 
@@ -465,7 +466,7 @@ public class TrainingServiceImpl implements TrainingService {
                                 b.title(m.getTitle())
                                  .description(m.getDescription())
                                  .type(m.getType())
-                                 .url(m.getUrl())
+                                 .url(gcsService.toClientReadableUrl(m.getUrl()))
                                  .originalFileName(m.getOriginalFileName())
                                  .fileSizeBytes(m.getFileSizeBytes())
                                  .mimeType(m.getMimeType())

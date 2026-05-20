@@ -229,7 +229,7 @@ public class TrainingMaterialServiceImpl implements TrainingMaterialService {
                 .title(m.getTitle())
                 .description(m.getDescription())
                 .type(m.getType())
-                .url(m.getUrl())
+                .url(gcsService.toClientReadableUrl(m.getUrl()))
                 .originalFileName(m.getOriginalFileName())
                 .fileSizeBytes(m.getFileSizeBytes())
                 .mimeType(m.getMimeType())

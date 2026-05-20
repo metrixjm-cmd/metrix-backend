@@ -1,6 +1,5 @@
 package com.metrix.api.dto;
 
-import com.metrix.api.model.TrainingLevel;
 import com.metrix.api.model.TrainingStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,7 +21,6 @@ public class TrainingResponse {
     // Definición
     private String title;
     private String description;
-    private TrainingLevel level;
     private int durationHours;
     private double minPassGrade;
 

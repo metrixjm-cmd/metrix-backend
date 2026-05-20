@@ -51,6 +51,8 @@ class TrainingServiceImplEditDeletePolicyTest {
     private UserRepository userRepository;
     @Mock
     private ApplicationEventPublisher eventPublisher;
+    @Mock
+    private GcsService gcsService;
 
     private TrainingServiceImpl service;
     private static final String ADMIN_ID = "admin-test-id";
@@ -66,7 +68,8 @@ class TrainingServiceImplEditDeletePolicyTest {
                 userRepository,
                 eventPublisher,
                 new TrainingStateMachine(),
-                new RolePolicy()
+                new RolePolicy(),
+                gcsService
         );
         // Mock ADMIN user for ownership checks
         User adminUser = User.builder()

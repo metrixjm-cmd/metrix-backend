@@ -1,6 +1,5 @@
 package com.metrix.api.dto;
 
-import com.metrix.api.model.TrainingLevel;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -23,9 +22,6 @@ public class UpdateTrainingRequest {
 
     @NotBlank
     private String description;
-
-    @NotNull
-    private TrainingLevel level;
 
     @NotBlank
     private String storeId;

@@ -223,7 +223,17 @@ public class AlertScheduler {
         List<Training> overdue = trainingRepository
                 .findByProgress_StatusInAndDueAtBeforeAndActivoTrue(OPEN_TRAINING_STATUSES, now);
 
+        int expired = 0;
         for (Training training : overdue) {
+            // Marcar como NO_COMPLETADA — siempre, independiente de notificación
+            training.getProgress().setStatus(TrainingStatus.NO_COMPLETADA);
+            training.getProgress().setCompletedAt(now);
+            training.getProgress().setOnTime(false);
+            trainingRepository.save(training);
+            expired++;
+            log.debug("TRAINING_EXPIRED - trainingId: {} marcada NO_COMPLETADA", training.getId());
+
+            // Notificación solo una vez por ciclo (deduplicada hasta el siguiente clear)
             if (!warnedTrainingOverdueIds.add(training.getId())) continue;
 
             String assigneeName = training.getAssignedUserName() != null
@@ -247,12 +257,10 @@ public class AlertScheduler {
                 notificationService.sendToUser(training.getAssignedUserId(), event);
             }
             notificationService.sendToStoreManagers(training.getStoreId(), event);
-            log.debug("TRAINING_OVERDUE - trainingId: {}", training.getId());
         }
 
-        if (!overdue.isEmpty()) {
-            log.info("[AlertScheduler] checkOverdueTrainings - {} capacitaciones vencidas",
-                    overdue.size());
+        if (expired > 0) {
+            log.info("[AlertScheduler] checkOverdueTrainings - {} capacitaciones marcadas NO_COMPLETADA", expired);
         }
     }
 

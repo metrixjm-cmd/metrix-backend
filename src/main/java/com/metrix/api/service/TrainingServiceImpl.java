@@ -62,7 +62,6 @@ public class TrainingServiceImpl implements TrainingService {
         Training training = Training.builder()
                 .title(req.getTitle())
                 .description(req.getDescription())
-                .level(req.getLevel())
                 .durationHours(DEFAULT_DURATION_HOURS)
                 .minPassGrade(DEFAULT_MIN_PASS_GRADE)
                 .assignedUserId(assignedUser.getId())
@@ -275,7 +274,6 @@ public class TrainingServiceImpl implements TrainingService {
         Training training = Training.builder()
                 .title(template.getTitle())
                 .description(template.getDescription())
-                .level(template.getLevel())
                 .durationHours(template.getDurationHours())
                 .minPassGrade(template.getMinPassGrade())
                 .assignedUserId(assignedUser.getId())
@@ -359,7 +357,6 @@ public class TrainingServiceImpl implements TrainingService {
     private void applyEditableFields(Training training, UpdateTrainingRequest req) {
         training.setTitle(req.getTitle());
         training.setDescription(req.getDescription());
-        training.setLevel(req.getLevel());
         training.setStoreId(req.getStoreId());
         training.setShift(req.getShift());
         training.setDueAt(req.getDueAt());
@@ -483,7 +480,6 @@ public class TrainingServiceImpl implements TrainingService {
                 .id(t.getId())
                 .title(t.getTitle())
                 .description(t.getDescription())
-                .level(t.getLevel())
                 .durationHours(t.getDurationHours())
                 .minPassGrade(t.getMinPassGrade())
                 .assignedUserId(t.getAssignedUserId())

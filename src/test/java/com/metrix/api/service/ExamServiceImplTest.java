@@ -323,12 +323,14 @@ class ExamServiceImplTest {
     @Test
     void getSubmissions_returns_all_submissions_of_exam() {
         String examId = "exam-1";
+        Exam exam = buildSavedExam(examId, "Exam 1", "store-1", 120);
         List<ExamSubmission> subs = List.of(
                 buildSubmission("sub-1", examId, "user-1"),
                 buildSubmission("sub-2", examId, "user-2"),
                 buildSubmission("sub-3", examId, "user-3")
         );
 
+        when(examRepo.findById(examId)).thenReturn(Optional.of(exam));
         when(submissionRepo.findByExamIdOrderBySubmittedAtDesc(examId)).thenReturn(subs);
 
         List<ExamSubmissionResponse> result = examService.getSubmissions(examId);
@@ -343,8 +345,8 @@ class ExamServiceImplTest {
     @Test
     void getStats_returns_non_null_response() {
         String examId = "exam-stats";
-        when(submissionRepo.countByExamId(examId)).thenReturn(10L);
-        when(submissionRepo.countByExamIdAndPassedTrue(examId)).thenReturn(7L);
+        Exam exam = buildSavedExam(examId, "Stats Exam", "store-1", 120);
+        when(examRepo.findById(examId)).thenReturn(Optional.of(exam));
         when(submissionRepo.findByExamIdOrderBySubmittedAtDesc(examId))
                 .thenReturn(buildSubmissions(examId, 10, new int[]{100, 80, 90, 70, 60, 80, 75, 50, 40, 30}));
 
@@ -358,19 +360,16 @@ class ExamServiceImplTest {
     @Test
     void getStats_calculates_passrate_correctly() {
         String examId = "exam-pr";
-        // 7 passed, 3 failed
+        Exam exam = buildSavedExam(examId, "PassRate Exam", "store-1", 120);
         List<ExamSubmission> subs = buildSubmissions(examId, 10,
                 new int[]{80, 75, 70, 90, 85, 80, 72, 40, 30, 50});
-        // los primeros 7 tienen score >=70 (passingScore default)
 
-        when(submissionRepo.countByExamId(examId)).thenReturn(10L);
-        when(submissionRepo.countByExamIdAndPassedTrue(examId)).thenReturn(7L);
+        when(examRepo.findById(examId)).thenReturn(Optional.of(exam));
         when(submissionRepo.findByExamIdOrderBySubmittedAtDesc(examId)).thenReturn(subs);
 
         ExamStatsResponse result = examService.getStats(examId);
 
         assertNotNull(result);
-        // passRate se calcula como (passedCount / totalSubmissions) * 100
         assertTrue(result.getPassRate() >= 60 && result.getPassRate() <= 80,
                 "PassRate debería ser ~70%, obtenido: " + result.getPassRate());
     }
@@ -379,11 +378,11 @@ class ExamServiceImplTest {
     @Test
     void getStats_calculates_average_score() {
         String examId = "exam-avg";
+        Exam exam = buildSavedExam(examId, "AvgScore Exam", "store-1", 120);
         List<ExamSubmission> subs = buildSubmissions(examId, 5,
                 new int[]{100, 80, 60, 70, 90});
 
-        when(submissionRepo.countByExamId(examId)).thenReturn(5L);
-        when(submissionRepo.countByExamIdAndPassedTrue(examId)).thenReturn(3L);
+        when(examRepo.findById(examId)).thenReturn(Optional.of(exam));
         when(submissionRepo.findByExamIdOrderBySubmittedAtDesc(examId)).thenReturn(subs);
 
         ExamStatsResponse result = examService.getStats(examId);

@@ -32,6 +32,9 @@ public class CreateTrainingRequest {
     @NotBlank
     private String shift;
 
+    /** Fecha de inicio (capacitación multi-día). Opcional — si null se usa dueAt como día único. */
+    private Instant startDate;
+
     @NotNull @FutureOrPresent
     private Instant dueAt;
 

@@ -86,6 +86,9 @@ public class Training {
     @Field("shift")
     private String shift;
 
+    @Field("start_date")
+    private Instant startDate;
+
     @Field("due_at")
     private Instant dueAt;
 

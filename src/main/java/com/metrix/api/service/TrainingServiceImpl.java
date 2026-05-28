@@ -70,6 +70,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .position(assignedUser.getPuesto())
                 .storeId(req.getStoreId())
                 .shift(req.getShift())
+                .startDate(req.getStartDate())
                 .dueAt(req.getDueAt())
                 .templateId(req.getTemplateId())
                 .assignmentGroupId(req.getAssignmentGroupId())

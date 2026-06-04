@@ -21,7 +21,7 @@ import java.util.List;
  * <p>
  * Endpoints:
  * <ul>
- *   <li>POST   /api/v1/exams            — crear examen (ADMIN/GERENTE)</li>
+ *   <li>POST   /api/v1/exams            — crear examen (solo ADMIN)</li>
  *   <li>GET    /api/v1/exams/store/{id} — listar exámenes de una sucursal</li>
  *   <li>GET    /api/v1/exams/{id}       — detalle de examen (con respuestas correctas)</li>
  *   <li>GET    /api/v1/exams/{id}/take  — examen para responder (sin respuestas correctas)</li>
@@ -38,11 +38,11 @@ public class ExamController {
 
     private final ExamService examService;
 
-    /** Crear examen — solo ADMIN o GERENTE. */
-    @Operation(summary = "Crear examen", description = "Crea un nuevo examen con preguntas y respuestas. Solo ADMIN/GERENTE.")
+    /** Crear examen — solo ADMIN. */
+    @Operation(summary = "Crear examen", description = "Crea un nuevo examen con preguntas y respuestas. Solo ADMIN.")
     @ApiResponse(responseCode = "201", description = "Examen creado exitosamente")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExamResponse> create(
             @Valid @RequestBody CreateExamRequest request,
             Authentication auth) {
@@ -138,11 +138,11 @@ public class ExamController {
         return ResponseEntity.ok(examService.getAttemptInfo(examId, auth.getName()));
     }
 
-    /** Crear examen desde plantilla — preguntas copiadas como snapshot. */
+    /** Crear examen desde plantilla — preguntas copiadas como snapshot. Solo ADMIN. */
     @Operation(summary = "Crear examen desde plantilla",
-               description = "Crea un Exam usando una ExamTemplate como base. Las preguntas se copian como snapshot inmutable. ADMIN/GERENTE.")
+               description = "Crea un Exam usando una ExamTemplate como base. Las preguntas se copian como snapshot inmutable. Solo ADMIN.")
     @PostMapping("/from-template/{templateId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExamResponse> createFromTemplate(
             @PathVariable String templateId,
             @Valid @RequestBody CreateExamFromTemplateRequest request,

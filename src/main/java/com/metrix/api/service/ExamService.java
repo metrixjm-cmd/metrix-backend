@@ -20,18 +20,10 @@ public interface ExamService {
 
     List<ExamSubmissionResponse> getMySubmissions(String userNumeroUsuario);
 
-    /** Crea un Exam usando una ExamTemplate como base (snapshot de preguntas). */
     ExamResponse createFromTemplate(String templateId, CreateExamFromTemplateRequest request,
                                     String creatorNumeroUsuario);
 
-    /** Información de intentos del usuario actual sobre un examen. */
     AttemptInfoResponse getAttemptInfo(String examId, String userNumeroUsuario);
 
-    /** Revisión manual de respuestas OPEN_TEXT pendientes (ADMIN/GERENTE). */
-    ExamSubmissionResponse reviewOpenText(String examId, String submissionId,
-                                          ReviewOpenTextRequest request,
-                                          String reviewerNumeroUsuario);
-
-    /** Estadísticas agregadas de un examen. */
     ExamStatsResponse getStats(String examId);
 }

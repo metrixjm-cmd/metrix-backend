@@ -1,12 +1,8 @@
 package com.metrix.api.model;
 
 public enum QuestionType {
-    /** Opción única — radio buttons (1 correcta). Antes llamado MULTIPLE_CHOICE. */
-    MULTIPLE_CHOICE,
-    /** Opción única — Verdadero / Falso. */
+    /** Verdadero / Falso — radio button, 1 correcta. */
     TRUE_FALSE,
-    /** Selección múltiple — checkboxes (N correctas, scoring parcial proporcional). */
-    MULTI_SELECT,
-    /** Respuesta libre — keyword matching + bandera para revisión manual. */
-    OPEN_TEXT
+    /** Selección múltiple — checkboxes, N correctas, scoring parcial proporcional. */
+    MULTI_SELECT
 }

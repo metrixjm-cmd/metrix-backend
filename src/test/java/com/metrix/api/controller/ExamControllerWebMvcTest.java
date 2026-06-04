@@ -126,7 +126,7 @@ class ExamControllerWebMvcTest {
 
     // ==================== CREATE EXAM (Tests 5-10) ====================
 
-    /** Test 5: ADMIN puede crear examen → 201 Created */
+    /** Test 5: ADMIN puede crear examen con 5+ preguntas → 201 Created */
     @Test
     void admin_can_create_exam() throws Exception {
         CreateExamRequest request = new CreateExamRequest();
@@ -134,7 +134,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(120);
         request.setPassingScore(70);
         request.setStoreId("store-1");
-        request.setQuestions(List.of(sampleQuestionDto()));
+        request.setQuestions(sampleQuestionDtos());
 
         when(examService.create(any(CreateExamRequest.class), anyString()))
                 .thenReturn(sampleExam("exam-created"));
@@ -149,24 +149,23 @@ class ExamControllerWebMvcTest {
         verify(examService).create(any(CreateExamRequest.class), eq("ADMIN001"));
     }
 
-    /** Test 6: GERENTE puede crear examen → 201 Created */
+    /** Test 6: GERENTE NO puede crear examen → 403 Forbidden (solo ADMIN)
+     * Usa 5 preguntas para que la validación pase y llegue al check de autorización.
+     * @Valid corre antes que @PreAuthorize en Spring MVC. */
     @Test
-    void gerente_can_create_exam() throws Exception {
+    void gerente_cannot_create_exam() throws Exception {
         CreateExamRequest request = new CreateExamRequest();
         request.setTitle("Store Operations");
         request.setTimeLimitMinutes(60);
         request.setPassingScore(70);
         request.setStoreId("store-2");
-        request.setQuestions(List.of(sampleQuestionDto()));
-
-        when(examService.create(any(CreateExamRequest.class), anyString()))
-                .thenReturn(sampleExam("exam-gerente"));
+        request.setQuestions(sampleQuestionDtos());
 
         mockMvc.perform(post("/api/v1/exams")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
                         .with(user("GER001").roles("GERENTE")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
     }
 
     /** Test 7: EJECUTADOR no puede crear examen → 403 */
@@ -175,7 +174,7 @@ class ExamControllerWebMvcTest {
         CreateExamRequest request = new CreateExamRequest();
         request.setTitle("Unauthorized");
         request.setStoreId("store-1");
-        request.setQuestions(List.of(sampleQuestionDto()));
+        request.setQuestions(sampleQuestionDtos());
 
         mockMvc.perform(post("/api/v1/exams")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -192,7 +191,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(60);
         request.setPassingScore(70);
         request.setStoreId("store-1");
-        request.setQuestions(List.of(sampleQuestionDto()));
+        request.setQuestions(sampleQuestionDtos());
 
         ExamResponse response = sampleExam("exam-1h");
         response.setTimeLimitMinutes(60);
@@ -215,7 +214,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(1440);
         request.setPassingScore(70);
         request.setStoreId("store-1");
-        request.setQuestions(List.of(sampleQuestionDto()));
+        request.setQuestions(sampleQuestionDtos());
 
         ExamResponse response = sampleExam("exam-24h");
         response.setTimeLimitMinutes(1440);
@@ -238,7 +237,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(300);
         request.setPassingScore(70);
         request.setStoreId("store-1");
-        request.setQuestions(List.of(sampleQuestionDto()));
+        request.setQuestions(sampleQuestionDtos());
 
         ExamResponse response = sampleExam("exam-5h");
         response.setTimeLimitMinutes(300);
@@ -359,21 +358,20 @@ class ExamControllerWebMvcTest {
                 .andExpect(jsonPath("$.score").value(66.0));
     }
 
-    /** Test 15: OPEN_TEXT → hasPendingReview = true */
+    /** Test 15: MULTI_SELECT sin selección → score 0, passed false */
     @Test
-    void open_text_answer_marked_pending_review() throws Exception {
-        String examId = "exam-open";
+    void multi_select_no_answer_scores_zero() throws Exception {
+        String examId = "exam-ms-empty";
         SubmitExamRequest request = new SubmitExamRequest();
         request.setAnswers(List.of(
-                ExamAnswer.builder().textAnswer("Some detailed answer").build()
+                ExamAnswer.builder().selectedIndexes(List.of()).build()
         ));
 
         ExamSubmissionResponse response = ExamSubmissionResponse.builder()
-                .id("sub-ot")
+                .id("sub-ms-empty")
                 .examId(examId)
                 .score(0.0)
                 .passed(false)
-                .hasPendingReview(true)
                 .submittedAt(Instant.now())
                 .build();
 
@@ -385,7 +383,8 @@ class ExamControllerWebMvcTest {
                         .content(objectMapper.writeValueAsString(request))
                         .with(user("EJE001").roles("EJECUTADOR")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.hasPendingReview").value(true));
+                .andExpect(jsonPath("$.score").value(0.0))
+                .andExpect(jsonPath("$.passed").value(false));
     }
 
     /** Test 16: GET /{examId}/take → examen sin respuestas correctas */
@@ -511,6 +510,40 @@ class ExamControllerWebMvcTest {
         verify(examService).createFromTemplate(eq(templateId), any(CreateExamFromTemplateRequest.class), eq("ADMIN001"));
     }
 
+    /** Test 22 (Regression): ADMIN no puede crear examen con menos de 5 preguntas → 400
+     * Regression: mínimo 5 preguntas — regla de negocio 2026-06-04
+     */
+    @Test
+    void admin_cannot_create_exam_with_fewer_than_5_questions() throws Exception {
+        CreateExamRequest request = new CreateExamRequest();
+        request.setTitle("Short Exam");
+        request.setTimeLimitMinutes(60);
+        request.setPassingScore(70);
+        request.setStoreId("store-1");
+        request.setQuestions(List.of(sampleQuestionDto(), sampleQuestionDto(), sampleQuestionDto())); // solo 3
+
+        mockMvc.perform(post("/api/v1/exams")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(user("ADMIN001").roles("ADMIN")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Test 21 (Regression): GERENTE NO puede crear examen desde plantilla → 403 Forbidden
+     * Regression: solo ADMIN crea exámenes — regla de negocio 2026-06-04
+     */
+    @Test
+    void gerente_cannot_create_exam_from_template() throws Exception {
+        CreateExamFromTemplateRequest request = new CreateExamFromTemplateRequest();
+        request.setStoreId("store-1");
+
+        mockMvc.perform(post("/api/v1/exams/from-template/{templateId}", "template-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(user("GER001").roles("GERENTE")))
+                .andExpect(status().isForbidden());
+    }
+
     // ==================== HELPERS ====================
 
     private ExamResponse sampleExam(String id) {
@@ -527,12 +560,23 @@ class ExamControllerWebMvcTest {
 
     private ExamQuestionDto sampleQuestionDto() {
         ExamQuestionDto dto = new ExamQuestionDto();
-        dto.setType(QuestionType.MULTIPLE_CHOICE);
+        dto.setType(QuestionType.MULTI_SELECT);
         dto.setQuestionText("What is the capital of France?");
         dto.setOptions(List.of("Paris", "London", "Berlin", "Madrid"));
         dto.setCorrectOptionIndex(0);
         dto.setPoints(10);
         return dto;
+    }
+
+    /** Devuelve 5 preguntas válidas para cumplir el mínimo requerido. */
+    private List<ExamQuestionDto> sampleQuestionDtos() {
+        return List.of(
+            sampleQuestionDto(),
+            sampleQuestionDto(),
+            sampleQuestionDto(),
+            sampleQuestionDto(),
+            sampleQuestionDto()
+        );
     }
 
     private ExamSubmissionResponse sampleSubmission(String examId) {

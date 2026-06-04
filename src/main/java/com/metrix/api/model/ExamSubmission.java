@@ -80,11 +80,6 @@ public class ExamSubmission {
     @Field("question_results")
     private List<SubmissionQuestionResult> questionResults = new ArrayList<>();
 
-    /** true una vez que ADMIN/GERENTE revisa las respuestas OPEN_TEXT pendientes. */
-    @Builder.Default
-    @Field("reviewed")
-    private boolean reviewed = false;
-
     /** Flags de actividad sospechosa detectados en submit(). */
     @Builder.Default
     @Field("fraud_flags")

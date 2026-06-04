@@ -23,7 +23,6 @@ public class ExamTemplateQuestionResponse {
     private List<String>     options;
     private int              correctOptionIndex;
     private List<Integer>    correctOptionIndexes;
-    private List<String>     acceptedKeywords;
     private String           explanation;
     private int              points;           // efectivos (override o banco)
     private String           category;

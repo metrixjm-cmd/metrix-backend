@@ -1,12 +1,18 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.BadgeDTO;
+import com.metrix.api.dto.ExamLeaderboardResponse;
 import com.metrix.api.dto.GamificationSummaryDTO;
 import com.metrix.api.dto.LeaderboardEntryDTO;
 import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.ExamSubmission;
+import com.metrix.api.model.Role;
+import com.metrix.api.model.Store;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
 import com.metrix.api.model.User;
+import com.metrix.api.repository.ExamSubmissionRepository;
+import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,8 +45,10 @@ public class GamificationServiceImpl implements GamificationService {
 
     private static final int TOTAL_BADGES = 5;
 
-    private final TaskRepository taskRepository;
-    private final UserRepository userRepository;
+    private final TaskRepository           taskRepository;
+    private final UserRepository           userRepository;
+    private final ExamSubmissionRepository submissionRepository;
+    private final StoreRepository          storeRepository;
 
     // ── Leaderboard ───────────────────────────────────────────────────────
 
@@ -334,5 +342,117 @@ public class GamificationServiceImpl implements GamificationService {
 
     private double round2(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    // ── Ranking de exámenes ───────────────────────────────────────────────
+
+    @Override
+    public ExamLeaderboardResponse getExamLeaderboard(String requesterNumeroUsuario) {
+        User requester = userRepository.findByNumeroUsuario(requesterNumeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + requesterNumeroUsuario));
+
+        boolean isAdmin   = requester.getRoles().contains(Role.ADMIN);
+        boolean isGerente = requester.getRoles().contains(Role.GERENTE);
+
+        // Mapa de stores para resolver nombres sin N+1
+        Map<String, String> storeNames = storeRepository.findAll().stream()
+                .collect(Collectors.toMap(Store::getId, Store::getNombre, (a, b) -> a));
+
+        List<User> targetUsers;
+        List<ExamSubmission> submissions;
+
+        if (isAdmin) {
+            // ADMIN → ve ranking de todos los GERENTEs
+            targetUsers = userRepository.findByRolesContaining(Role.GERENTE);
+            List<String> ids = targetUsers.stream().map(User::getId).toList();
+            submissions = ids.isEmpty() ? List.of() : submissionRepository.findByUserIdIn(ids);
+
+        } else if (isGerente) {
+            // GERENTE → ve ranking de EJECUTADOREs de su sucursal
+            targetUsers = userRepository.findByStoreIdAndActivoTrue(requester.getStoreId())
+                    .stream()
+                    .filter(u -> u.getRoles().contains(Role.EJECUTADOR))
+                    .toList();
+            List<String> ids = targetUsers.stream().map(User::getId).toList();
+            submissions = ids.isEmpty() ? List.of() : submissionRepository.findByUserIdIn(ids);
+
+        } else {
+            // EJECUTADOR → ve ranking de todos los participantes de su sucursal
+            submissions = submissionRepository.findByStoreId(requester.getStoreId());
+            Set<String> participantIds = submissions.stream()
+                    .map(ExamSubmission::getUserId).collect(Collectors.toSet());
+            targetUsers = userRepository.findByStoreIdAndActivoTrue(requester.getStoreId())
+                    .stream()
+                    .filter(u -> participantIds.contains(u.getId()))
+                    .toList();
+        }
+
+        // Agrupar submissions por userId
+        Map<String, List<ExamSubmission>> byUser = submissions.stream()
+                .collect(Collectors.groupingBy(ExamSubmission::getUserId));
+
+        // Mapa de users para lookup rápido
+        Map<String, User> userMap = targetUsers.stream()
+                .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+
+        // Construir entradas — incluir solo usuarios con al menos 1 submission
+        List<ExamLeaderboardResponse.ExamRankEntry> entries = byUser.entrySet().stream()
+                .filter(e -> userMap.containsKey(e.getKey()))
+                .map(e -> {
+                    User u = userMap.get(e.getKey());
+                    List<ExamSubmission> subs = e.getValue();
+                    int  taken  = subs.size();
+                    int  passed = (int) subs.stream().filter(ExamSubmission::isPassed).count();
+                    double avg  = subs.stream().mapToDouble(ExamSubmission::getScore).average().orElse(0);
+                    int  rate   = taken > 0 ? (int) Math.round((passed * 100.0) / taken) : 0;
+                    String role = u.getRoles().stream().findFirst().map(Enum::name).orElse("—");
+                    return ExamLeaderboardResponse.ExamRankEntry.builder()
+                            .userId(u.getId())
+                            .userName(u.getNombre())
+                            .userNumero(u.getNumeroUsuario())
+                            .role(role)
+                            .storeId(u.getStoreId())
+                            .storeName(storeNames.getOrDefault(u.getStoreId(), "—"))
+                            .avgScore(Math.round(avg * 10.0) / 10.0)
+                            .examsTaken(taken)
+                            .examsPassed(passed)
+                            .passRate(rate)
+                            .build();
+                })
+                .sorted(Comparator.comparingDouble(ExamLeaderboardResponse.ExamRankEntry::getAvgScore).reversed())
+                .toList();
+
+        // Asignar rank (1-based, empate comparte rank)
+        List<ExamLeaderboardResponse.ExamRankEntry> ranked = new ArrayList<>();
+        int rank = 1;
+        for (int i = 0; i < entries.size(); i++) {
+            ExamLeaderboardResponse.ExamRankEntry entry = entries.get(i);
+            if (i > 0 && entry.getAvgScore() < entries.get(i - 1).getAvgScore()) rank = i + 1;
+            ranked.add(ExamLeaderboardResponse.ExamRankEntry.builder()
+                    .rank(rank)
+                    .userId(entry.getUserId())
+                    .userName(entry.getUserName())
+                    .userNumero(entry.getUserNumero())
+                    .role(entry.getRole())
+                    .storeId(entry.getStoreId())
+                    .storeName(entry.getStoreName())
+                    .avgScore(entry.getAvgScore())
+                    .examsTaken(entry.getExamsTaken())
+                    .examsPassed(entry.getExamsPassed())
+                    .passRate(entry.getPassRate())
+                    .build());
+        }
+
+        // Entrada del usuario actual (relevante para GERENTE y EJECUTADOR)
+        ExamLeaderboardResponse.ExamRankEntry myEntry = ranked.stream()
+                .filter(e -> e.getUserId().equals(requester.getId()))
+                .findFirst().orElse(null);
+
+        return ExamLeaderboardResponse.builder()
+                .ranking(ranked)
+                .myEntry(myEntry)
+                .totalParticipants(ranked.size())
+                .build();
     }
 }

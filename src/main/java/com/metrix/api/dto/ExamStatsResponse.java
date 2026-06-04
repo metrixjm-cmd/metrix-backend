@@ -32,9 +32,6 @@ public class ExamStatsResponse {
     private int    minTimeSecs;
     private int    maxTimeSecs;
 
-    /** Cuántas submissions tienen OPEN_TEXT pendiente de revisión. */
-    private long pendingReviewCount;
-
     /** Preguntas ordenadas por tasa de fallo descendente. */
     private List<QuestionFailRate> questionFailRates;
 

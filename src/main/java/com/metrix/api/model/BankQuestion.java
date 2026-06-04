@@ -21,10 +21,7 @@ import java.util.List;
 /**
  * Pregunta reutilizable en el banco de preguntas de METRIX (E3).
  * <p>
- * Las preguntas del banco son inmutables una vez usadas en un examen (usageCount > 0).
- * Editar una pregunta en uso crea inconsistencias históricas — preferir crear nueva versión.
- * <p>
- * Soporta los 4 tipos de QuestionType: MULTIPLE_CHOICE, MULTI_SELECT, TRUE_FALSE, OPEN_TEXT.
+ * Soporta dos tipos: TRUE_FALSE y MULTI_SELECT.
  */
 @Data
 @Builder
@@ -44,8 +41,6 @@ public class BankQuestion {
     @Version
     private Long version;
 
-    // ── Contenido ──────────────────────────────────────────────────────────
-
     @Field("question_text")
     private String questionText;
 
@@ -53,14 +48,11 @@ public class BankQuestion {
     @Field("type")
     private QuestionType type;
 
-    /** Opciones de respuesta. Null / vacío para OPEN_TEXT. */
     @Builder.Default
     @Field("options")
     private List<String> options = new ArrayList<>();
 
-    // ── Respuestas correctas ───────────────────────────────────────────────
-
-    /** Para MULTIPLE_CHOICE y TRUE_FALSE: índice de la opción correcta. */
+    /** Para TRUE_FALSE: índice de la opción correcta (0 = Verdadero, 1 = Falso). */
     @Field("correct_option_index")
     private int correctOptionIndex;
 
@@ -68,13 +60,6 @@ public class BankQuestion {
     @Builder.Default
     @Field("correct_option_indexes")
     private List<Integer> correctOptionIndexes = new ArrayList<>();
-
-    /** Para OPEN_TEXT: palabras clave aceptadas (matching case-insensitive). */
-    @Builder.Default
-    @Field("accepted_keywords")
-    private List<String> acceptedKeywords = new ArrayList<>();
-
-    // ── Metadata ──────────────────────────────────────────────────────────
 
     @Field("explanation")
     private String explanation;
@@ -94,29 +79,19 @@ public class BankQuestion {
     @Field("tags")
     private List<String> tags = new ArrayList<>();
 
-    // ── Autoría ───────────────────────────────────────────────────────────
-
     @Field("created_by")
     private String createdBy;
 
     @Field("creator_name")
     private String creatorName;
 
-    /**
-     * Sucursal propietaria. Null = pregunta global visible para todos.
-     */
     @Indexed
     @Field("store_id")
     private String storeId;
 
-    // ── Métricas ──────────────────────────────────────────────────────────
-
-    /** Cuántos exámenes han incluido esta pregunta (como snapshot). */
     @Builder.Default
     @Field("usage_count")
     private int usageCount = 0;
-
-    // ── Meta ──────────────────────────────────────────────────────────────
 
     @Builder.Default
     @Field("activo")

@@ -19,10 +19,8 @@ public class BankQuestionResponse {
     private QuestionType     type;
     private List<String>     options;
 
-    // Solo visible para ADMIN/GERENTE (no se expone al ejecutador en /take)
     private int              correctOptionIndex;
     private List<Integer>    correctOptionIndexes;
-    private List<String>     acceptedKeywords;
 
     private String           explanation;
     private int              points;

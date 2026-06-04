@@ -1,5 +1,6 @@
 package com.metrix.api.service;
 
+import com.metrix.api.dto.ExamLeaderboardResponse;
 import com.metrix.api.dto.GamificationSummaryDTO;
 import com.metrix.api.dto.LeaderboardEntryDTO;
 
@@ -29,4 +30,12 @@ public interface GamificationService {
      * @param storeId  sucursal del usuario
      */
     GamificationSummaryDTO getMyGamification(String userId, String storeId);
+
+    /**
+     * Ranking de exámenes filtrado por rol del solicitante.
+     * ADMIN → ranking de GERENTEs.
+     * GERENTE → ranking de EJECUTADOREs de su sucursal.
+     * EJECUTADOR → ranking de todos los participantes de su sucursal.
+     */
+    ExamLeaderboardResponse getExamLeaderboard(String requesterNumeroUsuario);
 }

@@ -205,7 +205,6 @@ public class ExamTemplateServiceImpl implements ExamTemplateService {
                                  .options(bq.getOptions())
                                  .correctOptionIndex(bq.getCorrectOptionIndex())
                                  .correctOptionIndexes(bq.getCorrectOptionIndexes())
-                                 .acceptedKeywords(bq.getAcceptedKeywords())
                                  .explanation(bq.getExplanation())
                                  .category(bq.getCategory())
                                  .difficulty(bq.getDifficulty())

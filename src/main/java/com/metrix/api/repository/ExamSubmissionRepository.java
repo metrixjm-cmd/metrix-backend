@@ -16,4 +16,8 @@ public interface ExamSubmissionRepository extends MongoRepository<ExamSubmission
     long countByExamIdAndPassedTrue(String examId);
 
     long countByExamIdAndUserId(String examId, String userId);
+
+    List<ExamSubmission> findByUserIdIn(List<String> userIds);
+
+    List<ExamSubmission> findByStoreId(String storeId);
 }

@@ -1,5 +1,6 @@
 package com.metrix.api.controller;
 
+import com.metrix.api.dto.ExamLeaderboardResponse;
 import com.metrix.api.dto.GamificationSummaryDTO;
 import com.metrix.api.dto.LeaderboardEntryDTO;
 import com.metrix.api.exception.ResourceNotFoundException;
@@ -61,6 +62,18 @@ public class GamificationController {
      */
     @Operation(summary = "Mi resumen de gamificación", description = "Resumen personal del usuario autenticado: posición en sucursal, IGEO acumulado e insignias ganadas.")
     @ApiResponse(responseCode = "200", description = "Resumen de gamificación del usuario")
+    /**
+     * GET /api/v1/gamification/exams
+     * Ranking de exámenes filtrado por rol:
+     * ADMIN → GERENTEs | GERENTE → EJECUTADOREs de su sucursal | EJECUTADOR → todos en su sucursal.
+     */
+    @Operation(summary = "Ranking de exámenes por rol",
+               description = "ADMIN ve ranking de GERENTEs. GERENTE ve EJECUTADOREs de su sucursal. EJECUTADOR ve todos los participantes de su sucursal.")
+    @GetMapping("/exams")
+    public ResponseEntity<ExamLeaderboardResponse> getExamLeaderboard(Authentication auth) {
+        return ResponseEntity.ok(gamificationService.getExamLeaderboard(auth.getName()));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<GamificationSummaryDTO> getMyGamification(Authentication auth) {
         String numeroUsuario = auth.getName();

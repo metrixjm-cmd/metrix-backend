@@ -31,7 +31,7 @@ public class ExamTemplateController {
 
     @Operation(summary = "Crear plantilla de examen")
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ExamTemplateResponse> create(
             @Valid @RequestBody CreateExamTemplateRequest request,
             Authentication auth) {
@@ -64,7 +64,7 @@ public class ExamTemplateController {
 
     @Operation(summary = "Actualizar plantilla")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ExamTemplateResponse update(
             @PathVariable String id,
             @Valid @RequestBody CreateExamTemplateRequest request) {

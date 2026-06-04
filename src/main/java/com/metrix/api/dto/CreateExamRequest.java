@@ -22,7 +22,7 @@ public class CreateExamRequest {
     private String storeId;
 
     @NotNull
-    @Size(min = 1)
+    @Size(min = 5, message = "El examen debe tener al menos 5 preguntas")
     @Valid
     private List<ExamQuestionDto> questions;
 

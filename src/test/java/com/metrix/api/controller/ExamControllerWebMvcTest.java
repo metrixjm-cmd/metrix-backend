@@ -149,9 +149,9 @@ class ExamControllerWebMvcTest {
         verify(examService).create(any(CreateExamRequest.class), eq("ADMIN001"));
     }
 
-    /** Test 6: GERENTE puede crear examen → 201 Created */
+    /** Test 6: GERENTE NO puede crear examen → 403 Forbidden (solo ADMIN) */
     @Test
-    void gerente_can_create_exam() throws Exception {
+    void gerente_cannot_create_exam() throws Exception {
         CreateExamRequest request = new CreateExamRequest();
         request.setTitle("Store Operations");
         request.setTimeLimitMinutes(60);
@@ -159,14 +159,11 @@ class ExamControllerWebMvcTest {
         request.setStoreId("store-2");
         request.setQuestions(List.of(sampleQuestionDto()));
 
-        when(examService.create(any(CreateExamRequest.class), anyString()))
-                .thenReturn(sampleExam("exam-gerente"));
-
         mockMvc.perform(post("/api/v1/exams")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
                         .with(user("GER001").roles("GERENTE")))
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
     }
 
     /** Test 7: EJECUTADOR no puede crear examen → 403 */
@@ -509,6 +506,21 @@ class ExamControllerWebMvcTest {
                 .andExpect(jsonPath("$.id").value("exam-from-template"));
 
         verify(examService).createFromTemplate(eq(templateId), any(CreateExamFromTemplateRequest.class), eq("ADMIN001"));
+    }
+
+    /** Test 21 (Regression): GERENTE NO puede crear examen desde plantilla → 403 Forbidden
+     * Regression: solo ADMIN crea exámenes — regla de negocio 2026-06-04
+     */
+    @Test
+    void gerente_cannot_create_exam_from_template() throws Exception {
+        CreateExamFromTemplateRequest request = new CreateExamFromTemplateRequest();
+        request.setStoreId("store-1");
+
+        mockMvc.perform(post("/api/v1/exams/from-template/{templateId}", "template-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request))
+                        .with(user("GER001").roles("GERENTE")))
+                .andExpect(status().isForbidden());
     }
 
     // ==================== HELPERS ====================

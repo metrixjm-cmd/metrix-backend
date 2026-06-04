@@ -33,8 +33,4 @@ public class CreateExamRequest {
     /** Límite de tiempo en minutos. Null = sin límite. */
     @Min(1)
     private Integer timeLimitMinutes;
-
-    /** Número máximo de intentos. 0 = ilimitado. */
-    @Min(0)
-    private int maxAttempts = 0;
 }

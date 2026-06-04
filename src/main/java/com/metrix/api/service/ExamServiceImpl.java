@@ -69,7 +69,7 @@ public class ExamServiceImpl implements ExamService {
                 .questions(questions)
                 .passingScore(request.getPassingScore() > 0 ? request.getPassingScore() : 70)
                 .timeLimitMinutes(request.getTimeLimitMinutes())
-                .maxAttempts(request.getMaxAttempts())
+                .maxAttempts(1)  // regla de negocio: 1 solo intento
                 .createdByUserId(creator.getId())
                 .createdByName(creator.getNombre())
                 .build();
@@ -304,7 +304,7 @@ public class ExamServiceImpl implements ExamService {
                 .questions(new ArrayList<>(examQuestions))
                 .passingScore(passingScore)
                 .timeLimitMinutes(timeLimit)
-                .maxAttempts(template.getMaxAttempts())
+                .maxAttempts(1)  // regla de negocio: 1 solo intento
                 .createdByUserId(creator.getId())
                 .createdByName(creator.getNombre())
                 .build();

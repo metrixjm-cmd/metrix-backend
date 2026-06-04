@@ -8,13 +8,10 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * Respuesta unificada por pregunta — soporta los 4 tipos de QuestionType.
- * <p>
- * Solo uno de los tres campos debe estar presente por pregunta:
+ * Respuesta por pregunta al enviar un examen.
  * <ul>
- *   <li>{@code selectedIndex} → MULTIPLE_CHOICE, TRUE_FALSE</li>
+ *   <li>{@code selectedIndex} → TRUE_FALSE (0 = Verdadero, 1 = Falso)</li>
  *   <li>{@code selectedIndexes} → MULTI_SELECT</li>
- *   <li>{@code textAnswer} → OPEN_TEXT</li>
  * </ul>
  */
 @Data
@@ -23,12 +20,9 @@ import java.util.List;
 @AllArgsConstructor
 public class ExamAnswer {
 
-    /** Índice 0-based de la opción elegida. -1 = sin respuesta. */
+    /** Índice 0-based de la opción elegida. Para TRUE_FALSE. */
     private Integer selectedIndex;
 
-    /** Índices de opciones elegidas (MULTI_SELECT). Vacío = sin respuesta. */
+    /** Índices de opciones elegidas. Para MULTI_SELECT. */
     private List<Integer> selectedIndexes;
-
-    /** Texto libre del usuario (OPEN_TEXT). */
-    private String textAnswer;
 }

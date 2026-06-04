@@ -358,21 +358,20 @@ class ExamControllerWebMvcTest {
                 .andExpect(jsonPath("$.score").value(66.0));
     }
 
-    /** Test 15: OPEN_TEXT → hasPendingReview = true */
+    /** Test 15: MULTI_SELECT sin selección → score 0, passed false */
     @Test
-    void open_text_answer_marked_pending_review() throws Exception {
-        String examId = "exam-open";
+    void multi_select_no_answer_scores_zero() throws Exception {
+        String examId = "exam-ms-empty";
         SubmitExamRequest request = new SubmitExamRequest();
         request.setAnswers(List.of(
-                ExamAnswer.builder().textAnswer("Some detailed answer").build()
+                ExamAnswer.builder().selectedIndexes(List.of()).build()
         ));
 
         ExamSubmissionResponse response = ExamSubmissionResponse.builder()
-                .id("sub-ot")
+                .id("sub-ms-empty")
                 .examId(examId)
                 .score(0.0)
                 .passed(false)
-                .hasPendingReview(true)
                 .submittedAt(Instant.now())
                 .build();
 
@@ -384,7 +383,8 @@ class ExamControllerWebMvcTest {
                         .content(objectMapper.writeValueAsString(request))
                         .with(user("EJE001").roles("EJECUTADOR")))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.hasPendingReview").value(true));
+                .andExpect(jsonPath("$.score").value(0.0))
+                .andExpect(jsonPath("$.passed").value(false));
     }
 
     /** Test 16: GET /{examId}/take → examen sin respuestas correctas */
@@ -560,7 +560,7 @@ class ExamControllerWebMvcTest {
 
     private ExamQuestionDto sampleQuestionDto() {
         ExamQuestionDto dto = new ExamQuestionDto();
-        dto.setType(QuestionType.MULTIPLE_CHOICE);
+        dto.setType(QuestionType.MULTI_SELECT);
         dto.setQuestionText("What is the capital of France?");
         dto.setOptions(List.of("Paris", "London", "Berlin", "Madrid"));
         dto.setCorrectOptionIndex(0);

@@ -119,9 +119,9 @@ class ExamFullFlowIntegrationTest {
         req.setPassingScore(70);
         req.setStoreId(gerenteUser.getStoreId());
         req.setQuestions(List.of(
-                buildQuestionDto(QuestionType.MULTIPLE_CHOICE,
+                buildQuestionDto(QuestionType.TRUE_FALSE,
                         "¿Qué significa SKU?",
-                        List.of("Stock Keeping Unit", "Sell Key Unit", "Store Know Update"),
+                        List.of("Verdadero", "Falso"),
                         0, null, 10),
                 buildQuestionDto(QuestionType.TRUE_FALSE,
                         "El inventario es siempre exacto",
@@ -207,26 +207,23 @@ class ExamFullFlowIntegrationTest {
         req.setQuestions(List.of(
                 buildQuestionDto(QuestionType.TRUE_FALSE,
                         "Q1 - True/False", List.of("V", "F"), 0, null, 10),
-                buildQuestionDto(QuestionType.MULTIPLE_CHOICE,
-                        "Q2 - Multiple Choice", List.of("A", "B", "C"), 1, null, 10),
+                buildQuestionDto(QuestionType.TRUE_FALSE,
+                        "Q2 - True/False 2", List.of("V", "F"), 1, null, 10),
                 buildQuestionDto(QuestionType.MULTI_SELECT,
-                        "Q3 - Multi Select", List.of("1", "2", "3"), -1, List.of(0, 2), 10),
-                buildQuestionDto(QuestionType.OPEN_TEXT,
-                        "Q4 - Open Text", null, -1, null, 10)
+                        "Q3 - Multi Select", List.of("1", "2", "3"), -1, List.of(0, 2), 10)
         ));
 
         ExamResponse exam = examService.create(req, adminUser.getNumeroUsuario());
 
         assertNotNull(exam.getQuestions());
-        assertEquals(4, exam.getQuestions().size());
+        assertEquals(3, exam.getQuestions().size());
 
         // Verify tipos en BD
         Exam saved = examRepository.findById(exam.getId()).orElseThrow();
         List<ExamQuestion> questions = saved.getQuestions();
-        assertEquals(QuestionType.TRUE_FALSE,     questions.get(0).getType());
-        assertEquals(QuestionType.MULTIPLE_CHOICE, questions.get(1).getType());
-        assertEquals(QuestionType.MULTI_SELECT,   questions.get(2).getType());
-        assertEquals(QuestionType.OPEN_TEXT,      questions.get(3).getType());
+        assertEquals(QuestionType.TRUE_FALSE,   questions.get(0).getType());
+        assertEquals(QuestionType.TRUE_FALSE,   questions.get(1).getType());
+        assertEquals(QuestionType.MULTI_SELECT, questions.get(2).getType());
     }
 
     // ==================== SCENARIO 5 ====================
@@ -246,9 +243,9 @@ class ExamFullFlowIntegrationTest {
         req.setTrainingId(trainingId);
         req.setQuestions(List.of(
                 buildSimpleQuestion(),
-                buildQuestionDto(QuestionType.MULTIPLE_CHOICE,
-                        "¿Cómo saludar a un cliente?",
-                        List.of("Buenos días", "Hola", "Qué quieres"),
+                buildQuestionDto(QuestionType.TRUE_FALSE,
+                        "¿Hay que saludar al cliente?",
+                        List.of("Verdadero", "Falso"),
                         0, null, 10)
         ));
 

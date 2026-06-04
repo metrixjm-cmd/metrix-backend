@@ -21,13 +21,14 @@ import java.util.List;
  * <p>
  * Endpoints:
  * <ul>
- *   <li>POST   /api/v1/exams            — crear examen (solo ADMIN)</li>
- *   <li>GET    /api/v1/exams/store/{id} — listar exámenes de una sucursal</li>
- *   <li>GET    /api/v1/exams/{id}       — detalle de examen (con respuestas correctas)</li>
- *   <li>GET    /api/v1/exams/{id}/take  — examen para responder (sin respuestas correctas)</li>
- *   <li>POST   /api/v1/exams/{id}/submit — enviar respuestas</li>
- *   <li>GET    /api/v1/exams/{id}/submissions — historial de submissions (ADMIN/GERENTE)</li>
- *   <li>GET    /api/v1/exams/my-submissions — mis submissions</li>
+ *   <li>POST /api/v1/exams                          — crear examen (solo ADMIN)</li>
+ *   <li>GET  /api/v1/exams/store/{id}               — listar exámenes de sucursal</li>
+ *   <li>GET  /api/v1/exams/{id}                     — detalle con respuestas correctas (ADMIN/GERENTE)</li>
+ *   <li>GET  /api/v1/exams/{id}/take                — examen para responder (sin respuestas)</li>
+ *   <li>POST /api/v1/exams/{id}/submit              — enviar respuestas</li>
+ *   <li>GET  /api/v1/exams/{id}/submissions         — historial (ADMIN/GERENTE)</li>
+ *   <li>GET  /api/v1/exams/my-submissions           — mis submissions</li>
+ *   <li>POST /api/v1/exams/from-template/{id}       — crear desde plantilla (solo ADMIN)</li>
  * </ul>
  */
 @RestController
@@ -112,20 +113,6 @@ public class ExamController {
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
     public ResponseEntity<ExamStatsResponse> getStats(@PathVariable String examId) {
         return ResponseEntity.ok(examService.getStats(examId));
-    }
-
-    /** Revisión manual de respuestas OPEN_TEXT pendientes — ADMIN/GERENTE. */
-    @Operation(summary = "Revisar respuestas OPEN_TEXT",
-               description = "Aprueba o rechaza manualmente cada respuesta OPEN_TEXT pendiente de una submission. Recalcula score y passed.")
-    @PatchMapping("/{examId}/submissions/{submissionId}/review")
-    @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<ExamSubmissionResponse> reviewOpenText(
-            @PathVariable String examId,
-            @PathVariable String submissionId,
-            @Valid @RequestBody ReviewOpenTextRequest request,
-            Authentication auth) {
-        return ResponseEntity.ok(
-                examService.reviewOpenText(examId, submissionId, request, auth.getName()));
     }
 
     /** Información de intentos del usuario actual sobre un examen. */

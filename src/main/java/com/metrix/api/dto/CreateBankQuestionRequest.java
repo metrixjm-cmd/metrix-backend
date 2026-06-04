@@ -18,17 +18,14 @@ public class CreateBankQuestionRequest {
     @NotNull
     private QuestionType type;
 
-    /** Opciones de respuesta. Requerido para MULTIPLE_CHOICE, MULTI_SELECT, TRUE_FALSE. */
+    /** Opciones de respuesta. TRUE_FALSE: 2 fijas. MULTI_SELECT: 3. */
     private List<String> options = new ArrayList<>();
 
-    /** Índice correcto. Para MULTIPLE_CHOICE y TRUE_FALSE. */
+    /** Índice correcto. Para TRUE_FALSE. */
     private int correctOptionIndex;
 
     /** Índices correctos. Para MULTI_SELECT. */
     private List<Integer> correctOptionIndexes = new ArrayList<>();
-
-    /** Palabras clave aceptadas. Para OPEN_TEXT. */
-    private List<String> acceptedKeywords = new ArrayList<>();
 
     /** Retroalimentación post-respuesta. */
     private String explanation;
@@ -43,6 +40,5 @@ public class CreateBankQuestionRequest {
     @Size(max = 10)
     private List<String> tags = new ArrayList<>();
 
-    /** Null = pregunta global. Si se provee, solo visible para esa sucursal. */
     private String storeId;
 }

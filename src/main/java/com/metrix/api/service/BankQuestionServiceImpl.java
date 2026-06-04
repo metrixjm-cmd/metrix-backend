@@ -24,8 +24,6 @@ public class BankQuestionServiceImpl implements BankQuestionService {
     private final BankQuestionRepository questionRepo;
     private final UserRepository         userRepo;
 
-    // ── Crear ──────────────────────────────────────────────────────────────
-
     @Override
     @CacheEvict(value = "questionBankTags", allEntries = true)
     public BankQuestionResponse create(CreateBankQuestionRequest req, String creatorNumeroUsuario) {
@@ -42,8 +40,6 @@ public class BankQuestionServiceImpl implements BankQuestionService {
                 .correctOptionIndex(req.getCorrectOptionIndex())
                 .correctOptionIndexes(req.getCorrectOptionIndexes() != null
                         ? req.getCorrectOptionIndexes() : List.of())
-                .acceptedKeywords(req.getAcceptedKeywords() != null
-                        ? req.getAcceptedKeywords() : List.of())
                 .explanation(req.getExplanation())
                 .points(req.getPoints() > 0 ? req.getPoints() : 1)
                 .category(req.getCategory())
@@ -56,8 +52,6 @@ public class BankQuestionServiceImpl implements BankQuestionService {
 
         return toResponse(questionRepo.save(question));
     }
-
-    // ── Consultas ──────────────────────────────────────────────────────────
 
     @Override
     public Page<BankQuestionResponse> list(QuestionType type, String category,
@@ -93,8 +87,7 @@ public class BankQuestionServiceImpl implements BankQuestionService {
         return questionRepo.findById(id)
                 .filter(BankQuestion::isActivo)
                 .map(this::toResponse)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Pregunta no encontrada: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Pregunta no encontrada: " + id));
     }
 
     @Override
@@ -102,20 +95,16 @@ public class BankQuestionServiceImpl implements BankQuestionService {
     public List<String> getAllTags() {
         return questionRepo.findAllForTags().stream()
                 .flatMap(q -> q.getTags().stream())
-                .distinct()
-                .sorted()
+                .distinct().sorted()
                 .collect(Collectors.toList());
     }
-
-    // ── Actualizar ─────────────────────────────────────────────────────────
 
     @Override
     @CacheEvict(value = "questionBankTags", allEntries = true)
     public BankQuestionResponse update(String id, CreateBankQuestionRequest req) {
         BankQuestion question = questionRepo.findById(id)
                 .filter(BankQuestion::isActivo)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Pregunta no encontrada: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Pregunta no encontrada: " + id));
 
         if (question.getUsageCount() > 0) {
             throw new IllegalStateException(
@@ -131,8 +120,6 @@ public class BankQuestionServiceImpl implements BankQuestionService {
         question.setCorrectOptionIndex(req.getCorrectOptionIndex());
         question.setCorrectOptionIndexes(req.getCorrectOptionIndexes() != null
                 ? req.getCorrectOptionIndexes() : List.of());
-        question.setAcceptedKeywords(req.getAcceptedKeywords() != null
-                ? req.getAcceptedKeywords() : List.of());
         question.setExplanation(req.getExplanation());
         question.setPoints(req.getPoints() > 0 ? req.getPoints() : 1);
         question.setCategory(req.getCategory());
@@ -142,8 +129,6 @@ public class BankQuestionServiceImpl implements BankQuestionService {
         return toResponse(questionRepo.save(question));
     }
 
-    // ── usageCount ─────────────────────────────────────────────────────────
-
     @Override
     public void incrementUsage(String questionId) {
         questionRepo.findById(questionId).ifPresent(q -> {
@@ -152,14 +137,11 @@ public class BankQuestionServiceImpl implements BankQuestionService {
         });
     }
 
-    // ── Soft-delete ────────────────────────────────────────────────────────
-
     @Override
     public void delete(String id) {
         BankQuestion question = questionRepo.findById(id)
                 .filter(BankQuestion::isActivo)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Pregunta no encontrada: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Pregunta no encontrada: " + id));
 
         if (question.getUsageCount() > 0) {
             throw new IllegalStateException(
@@ -171,58 +153,37 @@ public class BankQuestionServiceImpl implements BankQuestionService {
         questionRepo.save(question);
     }
 
-    // ── Validaciones ───────────────────────────────────────────────────────
-
     private void validateRequest(CreateBankQuestionRequest req) {
         switch (req.getType()) {
-            case MULTIPLE_CHOICE, TRUE_FALSE -> {
+            case TRUE_FALSE -> {
                 if (req.getOptions() == null || req.getOptions().size() < 2) {
-                    throw new IllegalArgumentException(
-                            "MULTIPLE_CHOICE y TRUE_FALSE requieren al menos 2 opciones.");
+                    throw new IllegalArgumentException("TRUE_FALSE requiere 2 opciones.");
                 }
             }
             case MULTI_SELECT -> {
                 if (req.getOptions() == null || req.getOptions().size() < 2) {
-                    throw new IllegalArgumentException(
-                            "MULTI_SELECT requiere al menos 2 opciones.");
+                    throw new IllegalArgumentException("MULTI_SELECT requiere al menos 2 opciones.");
                 }
                 if (req.getCorrectOptionIndexes() == null || req.getCorrectOptionIndexes().isEmpty()) {
                     throw new IllegalArgumentException(
                             "MULTI_SELECT requiere al menos una opción correcta en correctOptionIndexes.");
                 }
             }
-            case OPEN_TEXT -> {
-                if (req.getAcceptedKeywords() == null || req.getAcceptedKeywords().isEmpty()) {
-                    throw new IllegalArgumentException(
-                            "OPEN_TEXT requiere al menos una palabra clave en acceptedKeywords.");
-                }
-            }
         }
     }
 
-    // ── Mapper ─────────────────────────────────────────────────────────────
-
     private BankQuestionResponse toResponse(BankQuestion q) {
         return BankQuestionResponse.builder()
-                .id(q.getId())
-                .version(q.getVersion())
-                .questionText(q.getQuestionText())
-                .type(q.getType())
+                .id(q.getId()).version(q.getVersion())
+                .questionText(q.getQuestionText()).type(q.getType())
                 .options(q.getOptions())
                 .correctOptionIndex(q.getCorrectOptionIndex())
                 .correctOptionIndexes(q.getCorrectOptionIndexes())
-                .acceptedKeywords(q.getAcceptedKeywords())
-                .explanation(q.getExplanation())
-                .points(q.getPoints())
-                .category(q.getCategory())
-                .difficulty(q.getDifficulty())
-                .tags(q.getTags())
-                .createdBy(q.getCreatedBy())
-                .creatorName(q.getCreatorName())
-                .storeId(q.getStoreId())
-                .usageCount(q.getUsageCount())
-                .createdAt(q.getCreatedAt())
-                .updatedAt(q.getUpdatedAt())
+                .explanation(q.getExplanation()).points(q.getPoints())
+                .category(q.getCategory()).difficulty(q.getDifficulty()).tags(q.getTags())
+                .createdBy(q.getCreatedBy()).creatorName(q.getCreatorName())
+                .storeId(q.getStoreId()).usageCount(q.getUsageCount())
+                .createdAt(q.getCreatedAt()).updatedAt(q.getUpdatedAt())
                 .build();
     }
 }

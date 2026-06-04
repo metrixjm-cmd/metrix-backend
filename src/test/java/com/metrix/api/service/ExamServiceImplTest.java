@@ -113,7 +113,7 @@ class ExamServiceImplTest {
         request.setTitle("No-Limit Exam");
         request.setStoreId("store-1");
         // timeLimitMinutes = null (sin límite) — válido en el sistema
-        request.setQuestions(List.of(buildQuestionDto("MULTIPLE_CHOICE", 0)));
+        request.setQuestions(List.of(buildQuestionDto("MULTI_SELECT", 0)));
 
         Exam exam = buildSavedExam("exam-no-limit", request.getTitle(), request.getStoreId(), null);
         when(userRepo.findByNumeroUsuario("ADMIN001")).thenReturn(Optional.of(testAdmin));
@@ -141,11 +141,11 @@ class ExamServiceImplTest {
 
     // ==================== SCORING LOGIC (Tests 4-9) ====================
 
-    /** Test 4: MULTIPLE_CHOICE respuesta correcta → score = 100, passed = true */
+    /** Test 4: TRUE_FALSE respuesta correcta → score = 100, passed = true */
     @Test
-    void submitExam_MULTIPLE_CHOICE_correct_answer_scores_100() {
+    void submitExam_TRUE_FALSE_correct_answer_scores_100() {
         String examId = "exam-mc";
-        Exam exam = buildExamWithQuestion(examId, QuestionType.MULTIPLE_CHOICE, 0, null);
+        Exam exam = buildExamWithQuestion(examId, QuestionType.TRUE_FALSE, 0, null);
 
         SubmitExamRequest request = new SubmitExamRequest();
         request.setAnswers(List.of(ExamAnswer.builder().selectedIndex(0).build()));
@@ -162,11 +162,11 @@ class ExamServiceImplTest {
         assertTrue(result.isPassed());
     }
 
-    /** Test 5: MULTIPLE_CHOICE respuesta incorrecta → score = 0, passed = false */
+    /** Test 5: TRUE_FALSE respuesta incorrecta → score = 0, passed = false */
     @Test
-    void submitExam_MULTIPLE_CHOICE_wrong_answer_scores_0() {
+    void submitExam_TRUE_FALSE_wrong_answer_scores_0() {
         String examId = "exam-mc-wrong";
-        Exam exam = buildExamWithQuestion(examId, QuestionType.MULTIPLE_CHOICE, 0, null);
+        Exam exam = buildExamWithQuestion(examId, QuestionType.TRUE_FALSE, 0, null);
 
         SubmitExamRequest request = new SubmitExamRequest();
         request.setAnswers(List.of(ExamAnswer.builder().selectedIndex(2).build())); // incorrecto
@@ -223,15 +223,15 @@ class ExamServiceImplTest {
                 "Score should be ~66% for 2/3 correct: got " + result.getScore());
     }
 
-    /** Test 8: OPEN_TEXT → hasPendingReview = true */
+    /** Test 8: MULTI_SELECT respuesta vacía → score = 0 */
     @Test
-    void submitExam_OPEN_TEXT_marked_pending_review() {
-        String examId = "exam-ot";
-        Exam exam = buildExamWithQuestion(examId, QuestionType.OPEN_TEXT, -1, null);
+    void submitExam_MULTI_SELECT_empty_answer_scores_0() {
+        String examId = "exam-ms-empty";
+        Exam exam = buildExamWithQuestion(examId, QuestionType.MULTI_SELECT, -1, List.of(0, 1));
 
         SubmitExamRequest request = new SubmitExamRequest();
         request.setAnswers(List.of(
-                ExamAnswer.builder().textAnswer("Mi respuesta detallada").build()
+                ExamAnswer.builder().selectedIndexes(List.of()).build()
         ));
 
         when(examRepo.findById(examId)).thenReturn(Optional.of(exam));
@@ -240,15 +240,16 @@ class ExamServiceImplTest {
 
         ExamSubmissionResponse result = examService.submit(examId, request, "EJE001");
 
-        assertTrue(result.isHasPendingReview());
+        assertEquals(0.0, result.getScore());
+        assertFalse(result.isPassed());
     }
 
-    /** Test 9: Preguntas mixtas → score calculado sobre las que tienen respuesta automática */
+    /** Test 9: Preguntas mixtas → score calculado sobre TRUE_FALSE y MULTI_SELECT */
     @Test
     void submitExam_mixed_questions_calculates_total_score() {
         String examId = "exam-mixed";
         List<ExamQuestion> questions = List.of(
-                buildQuestion(QuestionType.MULTIPLE_CHOICE, 0, null, 10),
+                buildQuestion(QuestionType.TRUE_FALSE, 0, null, 10),
                 buildQuestion(QuestionType.TRUE_FALSE, 0, null, 10),
                 buildQuestion(QuestionType.MULTI_SELECT, -1, List.of(0, 1), 10)
         );
@@ -399,7 +400,7 @@ class ExamServiceImplTest {
         req.setTimeLimitMinutes(timeLimitMinutes);
         req.setPassingScore(70);
         req.setStoreId(storeId);
-        req.setQuestions(List.of(buildQuestionDto("MULTIPLE_CHOICE", 0)));
+        req.setQuestions(List.of(buildQuestionDto("MULTI_SELECT", 0)));
         return req;
     }
 
@@ -428,7 +429,7 @@ class ExamServiceImplTest {
                                        int correctIndex, List<Integer> correctIndexes) {
         List<String> opts = type == QuestionType.TRUE_FALSE
                 ? List.of("Verdadero", "Falso")
-                : (type == QuestionType.OPEN_TEXT ? List.of() : List.of("A", "B", "C"));
+                : List.of("A", "B", "C");
 
         ExamQuestion q = buildQuestion(type, correctIndex, correctIndexes, 10);
         q.setOptions(opts);

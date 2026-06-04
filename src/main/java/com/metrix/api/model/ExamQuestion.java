@@ -11,8 +11,8 @@ import java.util.List;
 
 /**
  * Pregunta embebida dentro de un Exam.
- * Para MULTIPLE_CHOICE: 4 opciones en {@code options}, índice correcto en {@code correctOptionIndex}.
  * Para TRUE_FALSE: options = ["Verdadero", "Falso"], correctOptionIndex = 0 ó 1.
+ * Para MULTI_SELECT: options = 3 opciones, correctOptionIndexes = índices correctos.
  */
 @Data
 @Builder
@@ -32,19 +32,14 @@ public class ExamQuestion {
     @Field("options")
     private List<String> options;
 
-    /** Índice (0-based) de la opción correcta. Para MULTIPLE_CHOICE y TRUE_FALSE. */
+    /** Índice (0-based) de la opción correcta. Para TRUE_FALSE. */
     @Field("correct_option_index")
     private int correctOptionIndex;
 
-    /** Índices correctos. Para MULTI_SELECT (puede haber N correctas). */
+    /** Índices correctos. Para MULTI_SELECT. */
     @Builder.Default
     @Field("correct_option_indexes")
     private List<Integer> correctOptionIndexes = new ArrayList<>();
-
-    /** Palabras clave aceptadas. Para OPEN_TEXT (matching insensible a mayúsculas). */
-    @Builder.Default
-    @Field("accepted_keywords")
-    private List<String> acceptedKeywords = new ArrayList<>();
 
     /** Retroalimentación mostrada al usuario después de responder. */
     @Field("explanation")

@@ -10,7 +10,6 @@ import java.util.List;
 
 /**
  * Desglose de resultado por pregunta, persistido en {@link ExamSubmission}.
- * Permite consultar el historial sin necesidad de recalcular.
  */
 @Data
 @Builder
@@ -22,12 +21,12 @@ public class SubmissionQuestionResult {
     private String questionText;
 
     @Field("type")
-    private com.metrix.api.model.QuestionType type;
+    private QuestionType type;
 
     @Field("options")
     private List<String> options;
 
-    // ── MULTIPLE_CHOICE / TRUE_FALSE ──────────────────────────────────────
+    // ── TRUE_FALSE ────────────────────────────────────────────────────────
     @Field("selected_index")
     private int selectedIndex;
 
@@ -41,17 +40,6 @@ public class SubmissionQuestionResult {
     @Field("correct_indexes")
     private List<Integer> correctIndexes;
 
-    // ── OPEN_TEXT ─────────────────────────────────────────────────────────
-    @Field("text_answer")
-    private String textAnswer;
-
-    @Field("accepted_keywords")
-    private List<String> acceptedKeywords;
-
-    /** true si OPEN_TEXT requiere revisión manual. */
-    @Field("pending_review")
-    private boolean pendingReview;
-
     // ── Comunes ───────────────────────────────────────────────────────────
     @Field("correct")
     private boolean correct;
@@ -62,14 +50,6 @@ public class SubmissionQuestionResult {
     @Field("points_max")
     private int pointsMax;
 
-    /** Retroalimentación mostrada al usuario. */
     @Field("explanation")
     private String explanation;
-
-    /**
-     * Override manual de revisión para OPEN_TEXT.
-     * null = no revisado aún (auto-scored), true = aprobado, false = rechazado.
-     */
-    @Field("review_override")
-    private Boolean reviewOverride;
 }

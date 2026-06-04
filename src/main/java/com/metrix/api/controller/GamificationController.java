@@ -55,14 +55,6 @@ public class GamificationController {
     }
 
     /**
-     * GET /api/v1/gamification/me
-     * <p>
-     * Resumen personal de gamificación del usuario autenticado:
-     * posición en la sucursal, IGEO acumulado e insignias ganadas.
-     */
-    @Operation(summary = "Mi resumen de gamificación", description = "Resumen personal del usuario autenticado: posición en sucursal, IGEO acumulado e insignias ganadas.")
-    @ApiResponse(responseCode = "200", description = "Resumen de gamificación del usuario")
-    /**
      * GET /api/v1/gamification/exams
      * Ranking de exámenes filtrado por rol:
      * ADMIN → GERENTEs | GERENTE → EJECUTADOREs de su sucursal | EJECUTADOR → todos en su sucursal.
@@ -74,6 +66,14 @@ public class GamificationController {
         return ResponseEntity.ok(gamificationService.getExamLeaderboard(auth.getName()));
     }
 
+    /**
+     * GET /api/v1/gamification/me
+     * <p>
+     * Resumen personal de gamificación del usuario autenticado:
+     * posición en la sucursal, IGEO acumulado e insignias ganadas.
+     */
+    @Operation(summary = "Mi resumen de gamificación", description = "Resumen personal del usuario autenticado: posición en sucursal, IGEO acumulado e insignias ganadas.")
+    @ApiResponse(responseCode = "200", description = "Resumen de gamificación del usuario")
     @GetMapping("/me")
     public ResponseEntity<GamificationSummaryDTO> getMyGamification(Authentication auth) {
         String numeroUsuario = auth.getName();

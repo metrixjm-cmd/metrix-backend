@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  * <p>
  * Reglas canónicas:
  * <ul>
- *   <li>ADMIN  → asigna a GERENTE (cualquier sucursal)</li>
+ *   <li>ADMIN  → asigna a GERENTE o EJECUTADOR (cualquier sucursal)</li>
  *   <li>GERENTE → asigna a EJECUTADOR (solo su sucursal)</li>
  *   <li>EJECUTADOR → no asigna</li>
  * </ul>
@@ -32,9 +32,9 @@ public class RolePolicy {
         }
 
         if (hasRole(creator, Role.ADMIN)) {
-            if (!hasRole(assignee, Role.GERENTE)) {
+            if (!hasRole(assignee, Role.GERENTE) && !hasRole(assignee, Role.EJECUTADOR)) {
                 throw new IllegalStateException(
-                        "ADMIN solo puede asignar capacitaciones a gerentes.");
+                        "ADMIN solo puede asignar capacitaciones a gerentes o ejecutadores.");
             }
             return;
         }

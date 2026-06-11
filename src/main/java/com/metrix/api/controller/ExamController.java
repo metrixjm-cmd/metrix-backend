@@ -125,6 +125,27 @@ public class ExamController {
         return ResponseEntity.ok(examService.getAttemptInfo(examId, auth.getName()));
     }
 
+    /** Actualizar examen — solo ADMIN/GERENTE. */
+    @Operation(summary = "Actualizar examen", description = "Actualiza título, descripción, preguntas y configuración de un examen. Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Examen actualizado")
+    @PutMapping("/{examId}")
+    @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
+    public ResponseEntity<ExamResponse> update(
+            @PathVariable String examId,
+            @Valid @RequestBody CreateExamRequest request) {
+        return ResponseEntity.ok(examService.update(examId, request));
+    }
+
+    /** Eliminar examen (soft delete) — solo ADMIN/GERENTE. */
+    @Operation(summary = "Eliminar examen", description = "Desactiva un examen (soft delete). Solo ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "204", description = "Examen eliminado")
+    @DeleteMapping("/{examId}")
+    @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
+    public ResponseEntity<Void> delete(@PathVariable String examId) {
+        examService.delete(examId);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Crear examen desde plantilla — preguntas copiadas como snapshot. Solo ADMIN. */
     @Operation(summary = "Crear examen desde plantilla",
                description = "Crea un Exam usando una ExamTemplate como base. Las preguntas se copian como snapshot inmutable. Solo ADMIN.")

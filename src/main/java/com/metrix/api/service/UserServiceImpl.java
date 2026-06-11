@@ -68,6 +68,44 @@ public class UserServiceImpl implements UserService {
                 .stream().map(this::toResponse).toList();
     }
 
+    @Override
+    public List<UserResponse> getManagersByStore(String storeId, String requestorNumeroUsuario) {
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+        boolean isAdmin = hasRole(requestor, Role.ADMIN);
+        if (!isAdmin && !storeId.equals(requestor.getStoreId())) {
+            throw new IllegalStateException(
+                    "Acceso denegado: solo puede consultar colaboradores de su propia sucursal.");
+        }
+
+        return userRepository.findByStoreIdAndActivoTrueAndRolesContaining(storeId, Role.GERENTE)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<UserResponse> getExecutorsByManagerIds(String storeId, List<String> managerIds,
+                                                       String requestorNumeroUsuario) {
+        User requestor = resolveRequestor(requestorNumeroUsuario);
+        boolean isAdmin = hasRole(requestor, Role.ADMIN);
+        if (!isAdmin && !storeId.equals(requestor.getStoreId())) {
+            throw new IllegalStateException(
+                    "Acceso denegado: solo puede consultar colaboradores de su propia sucursal.");
+        }
+        if (managerIds == null || managerIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<User> executors = userRepository.findByStoreIdAndManagerOwnerIdInAndActivoTrue(storeId, managerIds)
+                .stream()
+                .filter(u -> hasRole(u, Role.EJECUTADOR))
+                .toList();
+
+        return executors.stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     // ── Perfil individual ────────────────────────────────────────────────
 
     @Override
@@ -255,6 +293,8 @@ public class UserServiceImpl implements UserService {
                 .numeroUsuario(user.getNumeroUsuario())
                 .roles(user.getRoles())
                 .activo(user.isActivo())
+                .managerOwnerId(user.getManagerOwnerId())
+                .managerOwnerNumeroUsuario(user.getManagerOwnerNumeroUsuario())
                 .email(user.getEmail())
                 .fechaNacimiento(user.getFechaNacimiento())
                 .createdAt(user.getCreatedAt())

@@ -83,6 +83,28 @@ public class UserController {
                 userService.getUsersByStore(storeId, auth.getName()));
     }
 
+    @Operation(summary = "Listar gerentes de una sucursal",
+               description = "Devuelve los gerentes activos de una sucursal. ADMIN o GERENTE.")
+    @GetMapping("/managers")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<List<UserResponse>> getManagersByStore(
+            @RequestParam String storeId,
+            Authentication auth) {
+        return ResponseEntity.ok(userService.getManagersByStore(storeId, auth.getName()));
+    }
+
+    @Operation(summary = "Listar ejecutadores por gerentes",
+               description = "Devuelve los ejecutadores activos asociados a una o varias plantillas de gerentes.")
+    @GetMapping("/executors")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<List<UserResponse>> getExecutorsByManagers(
+            @RequestParam String storeId,
+            @RequestParam List<String> managerIds,
+            Authentication auth) {
+        return ResponseEntity.ok(
+                userService.getExecutorsByManagerIds(storeId, managerIds, auth.getName()));
+    }
+
     // ── Perfil individual ────────────────────────────────────────────────
 
     @Operation(summary = "Perfil de colaborador",

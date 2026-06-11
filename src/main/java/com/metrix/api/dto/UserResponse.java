@@ -25,6 +25,8 @@ public class UserResponse {
     private String numeroUsuario;
     private Set<Role> roles;
     private boolean activo;
+    private String managerOwnerId;
+    private String managerOwnerNumeroUsuario;
     private String email;
     private LocalDate fechaNacimiento;
     private Instant createdAt;

@@ -50,6 +50,12 @@ public interface UserService {
     /** Lista todos los colaboradores activos del sistema. Solo ADMIN. */
     List<UserResponse> getAllUsers();
 
+    /** Lista gerentes activos de una sucursal. ADMIN/GERENTE. */
+    List<UserResponse> getManagersByStore(String storeId, String requestorNumeroUsuario);
+
+    /** Lista ejecutadores activos pertenecientes a una o varias plantillas de gerentes. */
+    List<UserResponse> getExecutorsByManagerIds(String storeId, List<String> managerIds, String requestorNumeroUsuario);
+
     /**
      * Soft-delete: marca {@code activo=false}.
      * Solo ADMIN. Los datos históricos se conservan para KPIs.

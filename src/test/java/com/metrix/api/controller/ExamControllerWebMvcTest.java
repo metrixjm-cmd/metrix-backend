@@ -2,6 +2,7 @@ package com.metrix.api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metrix.api.dto.*;
+import com.metrix.api.model.ExamAudience;
 import com.metrix.api.model.QuestionType;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.security.JwtService;
@@ -134,6 +135,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(120);
         request.setPassingScore(70);
         request.setStoreId("store-1");
+        request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(sampleQuestionDtos());
 
         when(examService.create(any(CreateExamRequest.class), anyString()))
@@ -159,6 +161,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(60);
         request.setPassingScore(70);
         request.setStoreId("store-2");
+        request.setTargetAudience(ExamAudience.GERENTE);
         request.setQuestions(sampleQuestionDtos());
 
         mockMvc.perform(post("/api/v1/exams")
@@ -174,6 +177,7 @@ class ExamControllerWebMvcTest {
         CreateExamRequest request = new CreateExamRequest();
         request.setTitle("Unauthorized");
         request.setStoreId("store-1");
+        request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(sampleQuestionDtos());
 
         mockMvc.perform(post("/api/v1/exams")
@@ -191,6 +195,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(60);
         request.setPassingScore(70);
         request.setStoreId("store-1");
+        request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(sampleQuestionDtos());
 
         ExamResponse response = sampleExam("exam-1h");
@@ -214,6 +219,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(1440);
         request.setPassingScore(70);
         request.setStoreId("store-1");
+        request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(sampleQuestionDtos());
 
         ExamResponse response = sampleExam("exam-24h");
@@ -237,6 +243,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(300);
         request.setPassingScore(70);
         request.setStoreId("store-1");
+        request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(sampleQuestionDtos());
 
         ExamResponse response = sampleExam("exam-5h");
@@ -461,6 +468,7 @@ class ExamControllerWebMvcTest {
                 .id(examId)
                 .title("Exam Detail")
                 .storeId("store-1")
+                .targetAudience(ExamAudience.GERENTE)
                 .timeLimitMinutes(120)
                 .questions(List.of(
                         ExamResponse.QuestionDto.builder()
@@ -520,6 +528,7 @@ class ExamControllerWebMvcTest {
         request.setTimeLimitMinutes(60);
         request.setPassingScore(70);
         request.setStoreId("store-1");
+        request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(List.of(sampleQuestionDto(), sampleQuestionDto(), sampleQuestionDto())); // solo 3
 
         mockMvc.perform(post("/api/v1/exams")
@@ -551,6 +560,7 @@ class ExamControllerWebMvcTest {
                 .id(id)
                 .title("Sample Exam " + id)
                 .storeId("store-1")
+                .targetAudience(ExamAudience.EJECUTADOR)
                 .timeLimitMinutes(120)
                 .passingScore(70)
                 .createdByName("Admin User")

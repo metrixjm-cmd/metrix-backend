@@ -58,6 +58,12 @@ public class TrainingServiceImpl implements TrainingService {
         User assignedUser = resolveUser(req.getAssignedUserId());
         rolePolicy.validateAssignment(creator, assignedUser, req.getStoreId());
 
+        if (req.getExamId() != null && !req.getExamId().isBlank()
+                && trainingRepository.existsByExamIdAndAssignedUserIdAndActivoTrue(
+                        req.getExamId(), assignedUser.getId())) {
+            throw new IllegalStateException("Este examen ya fue asignado a este usuario.");
+        }
+
         List<TrainingMaterialRef> materialRefs = buildMaterialRefs(req.getMaterialIds());
 
         Training training = Training.builder()
@@ -72,6 +78,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .shift(req.getShift())
                 .startDate(req.getStartDate())
                 .dueAt(req.getDueAt())
+                .examId(req.getExamId())
                 .templateId(req.getTemplateId())
                 .assignmentGroupId(req.getAssignmentGroupId())
                 .materials(materialRefs)
@@ -284,6 +291,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .storeId(storeId)
                 .shift(shift)
                 .dueAt(dueAt)
+                .examId(null)
                 .templateId(templateId)
                 .assignmentGroupId(assignmentGroupId)
                 .materials(materialRefs)
@@ -491,6 +499,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .shift(t.getShift())
                 .dueAt(t.getDueAt())
                 .assignmentGroupId(t.getAssignmentGroupId())
+                .examId(t.getExamId())
                 .templateId(t.getTemplateId())
                 .materials(resolvedMaterials)
                 .category(t.getCategory())

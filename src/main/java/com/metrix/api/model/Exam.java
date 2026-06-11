@@ -54,6 +54,10 @@ public class Exam {
     private String storeId;
 
     @Builder.Default
+    @Field("target_audience")
+    private ExamAudience targetAudience = ExamAudience.EJECUTADOR;
+
+    @Builder.Default
     @Field("questions")
     private List<ExamQuestion> questions = new ArrayList<>();
 

@@ -32,6 +32,7 @@ public class TrainingResponse {
     private String shift;
     private Instant dueAt;
     private String assignmentGroupId;
+    private String examId;
 
     // Progreso (aplanado de TrainingProgress)
     private TrainingStatus status;

@@ -26,4 +26,8 @@ public interface ExamService {
     AttemptInfoResponse getAttemptInfo(String examId, String userNumeroUsuario);
 
     ExamStatsResponse getStats(String examId);
+
+    ExamResponse update(String examId, CreateExamRequest request);
+
+    void delete(String examId);
 }

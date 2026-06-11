@@ -40,8 +40,9 @@ public class ExamScoringEngine {
             totalPoints += q.getPoints();
 
             SubmissionQuestionResult result = switch (q.getType()) {
-                case TRUE_FALSE   -> scoreTrueFalse(q, a);
-                case MULTI_SELECT -> scoreMultiSelect(q, a);
+                case SINGLE_SELECT -> scoreTrueFalse(q, a);
+                case TRUE_FALSE    -> scoreTrueFalse(q, a);
+                case MULTI_SELECT  -> scoreMultiSelect(q, a);
             };
 
             earnedPoints += result.getPointsEarned();

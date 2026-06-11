@@ -98,6 +98,9 @@ public class Training {
     @Field("template_id")
     private String templateId;
 
+    @Field("exam_id")
+    private String examId;
+
     @Indexed
     @Field("assignment_group_id")
     private String assignmentGroupId;

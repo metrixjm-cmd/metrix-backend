@@ -40,6 +40,8 @@ public class CreateTrainingRequest {
 
     private String assignmentGroupId;
 
+    private String examId;
+
     // ── Opcionales: reutilización de contenido ────────────────────────────
 
     /** ID de la plantilla de la que viene (opcional). */

@@ -66,6 +66,7 @@ public class ExamServiceImpl implements ExamService {
                 .description(request.getDescription())
                 .trainingId(request.getTrainingId())
                 .storeId(request.getStoreId())
+                .targetAudience(request.getTargetAudience())
                 .questions(questions)
                 .passingScore(request.getPassingScore() > 0 ? request.getPassingScore() : 70)
                 .timeLimitMinutes(request.getTimeLimitMinutes())
@@ -409,6 +410,45 @@ public class ExamServiceImpl implements ExamService {
                 .build();
     }
 
+    // ── Actualizar examen ──────────────────────────────────────────────────
+
+    @Override
+    public ExamResponse update(String examId, CreateExamRequest request) {
+        Exam exam = findExamOrThrow(examId);
+
+        exam.setTitle(request.getTitle());
+        exam.setDescription(request.getDescription());
+        exam.setPassingScore(request.getPassingScore() > 0 ? request.getPassingScore() : 70);
+        exam.setTimeLimitMinutes(request.getTimeLimitMinutes());
+        exam.setTargetAudience(request.getTargetAudience());
+
+        List<ExamQuestion> questions = request.getQuestions().stream()
+                .map(q -> ExamQuestion.builder()
+                        .id(UUID.randomUUID().toString())
+                        .questionText(q.getQuestionText())
+                        .type(q.getType())
+                        .options(q.getOptions())
+                        .correctOptionIndex(q.getCorrectOptionIndex())
+                        .correctOptionIndexes(q.getCorrectOptionIndexes() != null
+                                ? q.getCorrectOptionIndexes() : List.of())
+                        .explanation(q.getExplanation())
+                        .points(q.getPoints() > 0 ? q.getPoints() : 1)
+                        .build())
+                .toList();
+        exam.setQuestions(new ArrayList<>(questions));
+
+        return toResponse(examRepo.save(exam));
+    }
+
+    // ── Eliminar examen (soft delete) ────────────────────────────────────
+
+    @Override
+    public void delete(String examId) {
+        Exam exam = findExamOrThrow(examId);
+        exam.setActivo(false);
+        examRepo.save(exam);
+    }
+
     // ── Helpers privados ──────────────────────────────────────────────────
 
     private Exam findExamOrThrow(String examId) {
@@ -443,6 +483,7 @@ public class ExamServiceImpl implements ExamService {
         return ExamResponse.builder()
                 .id(exam.getId()).title(exam.getTitle()).description(exam.getDescription())
                 .trainingId(exam.getTrainingId()).storeId(exam.getStoreId())
+                .targetAudience(exam.getTargetAudience() != null ? exam.getTargetAudience() : ExamAudience.EJECUTADOR)
                 .questions(questions)
                 .passingScore(exam.getPassingScore()).timeLimitMinutes(exam.getTimeLimitMinutes())
                 .maxAttempts(exam.getMaxAttempts()).createdByName(exam.getCreatedByName())

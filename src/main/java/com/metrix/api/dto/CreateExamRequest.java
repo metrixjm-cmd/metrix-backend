@@ -3,6 +3,7 @@ package com.metrix.api.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Data;
+import com.metrix.api.model.ExamAudience;
 
 import java.util.List;
 
@@ -20,6 +21,9 @@ public class CreateExamRequest {
 
     @NotBlank
     private String storeId;
+
+    @NotNull
+    private ExamAudience targetAudience;
 
     @NotNull
     @Size(min = 5, message = "El examen debe tener al menos 5 preguntas")

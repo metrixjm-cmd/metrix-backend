@@ -61,6 +61,9 @@ public interface TrainingRepository extends MongoRepository<Training, String> {
 
     long countByStoreIdAndProgress_StatusAndActivoTrue(String storeId, TrainingStatus status);
 
+    // ── Duplicado examen-usuario ───────────────────────────────────────
+    boolean existsByExamIdAndAssignedUserIdAndActivoTrue(String examId, String assignedUserId);
+
     // ── Alertas de vencimiento ───────────────────────────────────────────
 
     List<Training> findByProgress_StatusInAndDueAtBetweenAndActivoTrue(

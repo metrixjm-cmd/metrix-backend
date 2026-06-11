@@ -1,6 +1,7 @@
 package com.metrix.api.dto;
 
 import com.metrix.api.model.QuestionType;
+import com.metrix.api.model.ExamAudience;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,6 +17,7 @@ public class ExamResponse {
     private String description;
     private String trainingId;
     private String storeId;
+    private ExamAudience targetAudience;
     private List<QuestionDto> questions;
     private int passingScore;
     private Integer timeLimitMinutes;

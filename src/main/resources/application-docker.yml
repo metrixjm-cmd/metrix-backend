@@ -21,6 +21,14 @@ metrix:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
+# En producción la documentación OpenAPI/Swagger se desactiva para no exponer
+# la superficie completa de la API públicamente (defensa en profundidad).
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 logging:
   level:
     root: INFO

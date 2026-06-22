@@ -53,6 +53,8 @@ class TrainingServiceImplEditDeletePolicyTest {
     private ApplicationEventPublisher eventPublisher;
     @Mock
     private GcsService gcsService;
+    @Mock
+    private com.metrix.api.repository.ExamRepository examRepository;
 
     private TrainingServiceImpl service;
     private static final String ADMIN_ID = "admin-test-id";
@@ -69,7 +71,8 @@ class TrainingServiceImplEditDeletePolicyTest {
                 eventPublisher,
                 new TrainingStateMachine(),
                 new RolePolicy(),
-                gcsService
+                gcsService,
+                examRepository
         );
         // Mock ADMIN user for ownership checks
         User adminUser = User.builder()

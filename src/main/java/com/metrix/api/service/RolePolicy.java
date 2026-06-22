@@ -1,5 +1,6 @@
 package com.metrix.api.service;
 
+import com.metrix.api.model.ExamAudience;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
 import org.springframework.stereotype.Component;
@@ -52,6 +53,49 @@ public class RolePolicy {
         }
 
         throw new IllegalStateException("No tienes permisos para asignar capacitaciones.");
+    }
+
+    /**
+     * Valida la asignación específica de un <b>examen</b> (capacitación con examId).
+     * <p>
+     * Regla de delegación en dos niveles:
+     * <ul>
+     *   <li>ADMIN → solo puede asignar exámenes a GERENTES, sin importar el tipo de
+     *       examen. Si el examen es para ejecutadores, será el gerente quien lo
+     *       reparta a su equipo.</li>
+     *   <li>GERENTE → solo puede asignar (redistribuir) exámenes de tipo EJECUTADOR
+     *       a sus ejecutadores. Un examen para gerentes no se redistribuye.</li>
+     * </ul>
+     * Esta validación es adicional a {@link #validateAssignment(User, User, String)},
+     * que sigue aplicando para las reglas de sucursal.
+     *
+     * @param audience público objetivo del examen (puede ser null → se trata como EJECUTADOR).
+     */
+    public void validateExamAssignment(User creator, User assignee, ExamAudience audience) {
+        ExamAudience target = audience != null ? audience : ExamAudience.EJECUTADOR;
+
+        if (hasRole(creator, Role.ADMIN)) {
+            if (!hasRole(assignee, Role.GERENTE)) {
+                throw new IllegalStateException(
+                        "El administrador solo puede asignar exámenes a gerentes. " +
+                        "El gerente será quien lo asigne a sus ejecutadores.");
+            }
+            return;
+        }
+
+        if (hasRole(creator, Role.GERENTE)) {
+            if (target != ExamAudience.EJECUTADOR) {
+                throw new IllegalStateException(
+                        "Este examen es para gerentes y no puede redistribuirse a ejecutadores.");
+            }
+            if (!hasRole(assignee, Role.EJECUTADOR)) {
+                throw new IllegalStateException(
+                        "El gerente solo puede asignar exámenes a ejecutadores.");
+            }
+            return;
+        }
+
+        throw new IllegalStateException("No tienes permisos para asignar exámenes.");
     }
 
     /**

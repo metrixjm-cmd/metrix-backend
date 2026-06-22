@@ -1,5 +1,6 @@
 package com.metrix.api.service;
 
+import com.metrix.api.model.ExamAudience;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,12 +34,14 @@ class RolePolicyTest {
     }
 
     @Test
-    void admin_cannotAssign_toEjecutador() {
+    void admin_canAssign_toEjecutador_forGenericTraining() {
+        // La política GENÉRICA de capacitaciones permite ADMIN → GERENTE o EJECUTADOR.
+        // La restricción "ADMIN solo a gerentes" aplica únicamente a exámenes
+        // (ver validateExamAssignment).
         User admin = buildUser("admin1", Role.ADMIN, "store-a");
         User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
 
-        assertThrows(IllegalStateException.class,
-                () -> rolePolicy.validateAssignment(admin, ejecutador, "store-a"));
+        assertDoesNotThrow(() -> rolePolicy.validateAssignment(admin, ejecutador, "store-a"));
     }
 
     @Test
@@ -83,6 +86,73 @@ class RolePolicyTest {
 
         assertThrows(IllegalStateException.class,
                 () -> rolePolicy.validateAssignment(admin, gerente, "store-a"));
+    }
+
+    // ── validateExamAssignment (delegación en dos niveles) ──────────────
+
+    @Test
+    void examAssign_admin_canAssign_toGerente_regardlessOfAudience() {
+        User admin = buildUser("admin1", Role.ADMIN, "store-a");
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+
+        assertDoesNotThrow(() ->
+                rolePolicy.validateExamAssignment(admin, gerente, ExamAudience.EJECUTADOR));
+        assertDoesNotThrow(() ->
+                rolePolicy.validateExamAssignment(admin, gerente, ExamAudience.GERENTE));
+    }
+
+    @Test
+    void examAssign_admin_cannotAssign_toEjecutador() {
+        User admin = buildUser("admin1", Role.ADMIN, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+
+        assertThrows(IllegalStateException.class,
+                () -> rolePolicy.validateExamAssignment(admin, ejecutador, ExamAudience.EJECUTADOR));
+    }
+
+    @Test
+    void examAssign_gerente_canRedistribute_executorExam_toEjecutador() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+
+        assertDoesNotThrow(() ->
+                rolePolicy.validateExamAssignment(gerente, ejecutador, ExamAudience.EJECUTADOR));
+    }
+
+    @Test
+    void examAssign_gerente_cannotRedistribute_managerExam() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+
+        assertThrows(IllegalStateException.class,
+                () -> rolePolicy.validateExamAssignment(gerente, ejecutador, ExamAudience.GERENTE));
+    }
+
+    @Test
+    void examAssign_gerente_cannotAssign_toGerente() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User otroGerente = buildUser("ger2", Role.GERENTE, "store-a");
+
+        assertThrows(IllegalStateException.class,
+                () -> rolePolicy.validateExamAssignment(gerente, otroGerente, ExamAudience.EJECUTADOR));
+    }
+
+    @Test
+    void examAssign_nullAudience_treatedAsEjecutador() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+
+        assertDoesNotThrow(() ->
+                rolePolicy.validateExamAssignment(gerente, ejecutador, null));
+    }
+
+    @Test
+    void examAssign_ejecutador_cannotAssign() {
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+        User otro = buildUser("eje2", Role.EJECUTADOR, "store-a");
+
+        assertThrows(IllegalStateException.class,
+                () -> rolePolicy.validateExamAssignment(ejecutador, otro, ExamAudience.EJECUTADOR));
     }
 
     // ── validateOperationScope ──────────────────────────────────────────

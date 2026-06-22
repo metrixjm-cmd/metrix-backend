@@ -5,6 +5,7 @@ import com.metrix.api.event.DomainEvents.TrainingCreatedEvent;
 import com.metrix.api.event.DomainEvents.TrainingProgressChangedEvent;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.*;
+import com.metrix.api.repository.ExamRepository;
 import com.metrix.api.repository.TrainingMaterialRepository;
 import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.TrainingTemplateRepository;
@@ -49,6 +50,7 @@ public class TrainingServiceImpl implements TrainingService {
     private final TrainingStateMachine       stateMachine;
     private final RolePolicy                 rolePolicy;
     private final GcsService                 gcsService;
+    private final ExamRepository             examRepository;
 
     // ── Crear ────────────────────────────────────────────────────────────
 
@@ -58,10 +60,17 @@ public class TrainingServiceImpl implements TrainingService {
         User assignedUser = resolveUser(req.getAssignedUserId());
         rolePolicy.validateAssignment(creator, assignedUser, req.getStoreId());
 
-        if (req.getExamId() != null && !req.getExamId().isBlank()
-                && trainingRepository.existsByExamIdAndAssignedUserIdAndActivoTrue(
-                        req.getExamId(), assignedUser.getId())) {
-            throw new IllegalStateException("Este examen ya fue asignado a este usuario.");
+        if (req.getExamId() != null && !req.getExamId().isBlank()) {
+            // Regla de delegación en dos niveles: ADMIN → gerentes; GERENTE → sus ejecutadores.
+            ExamAudience audience = examRepository.findById(req.getExamId())
+                    .map(Exam::getTargetAudience)
+                    .orElse(null);
+            rolePolicy.validateExamAssignment(creator, assignedUser, audience);
+
+            if (trainingRepository.existsByExamIdAndAssignedUserIdAndActivoTrue(
+                    req.getExamId(), assignedUser.getId())) {
+                throw new IllegalStateException("Este examen ya fue asignado a este usuario.");
+            }
         }
 
         List<TrainingMaterialRef> materialRefs = buildMaterialRefs(req.getMaterialIds());

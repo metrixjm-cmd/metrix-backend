@@ -1,17 +1,31 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.CorrectionSpeedResponse;
+import com.metrix.api.dto.ExamKpiResponse;
 import com.metrix.api.dto.IgeoAnalyticsResponse;
+import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
+import com.metrix.api.dto.LabelCount;
 import com.metrix.api.dto.ShiftBreakdownResponse;
 import com.metrix.api.dto.StoreRankingResponse;
+import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
+import com.metrix.api.model.Exam;
+import com.metrix.api.model.ExamSubmission;
+import com.metrix.api.model.Incident;
+import com.metrix.api.model.IncidentCategory;
+import com.metrix.api.model.IncidentSeverity;
+import com.metrix.api.model.IncidentStatus;
 import com.metrix.api.model.StatusTransition;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
+import com.metrix.api.model.Training;
 import com.metrix.api.model.TrainingStatus;
 import com.metrix.api.model.User;
 import com.metrix.api.model.Store;
+import com.metrix.api.repository.ExamRepository;
+import com.metrix.api.repository.ExamSubmissionRepository;
+import com.metrix.api.repository.IncidentRepository;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.TrainingRepository;
@@ -33,6 +47,7 @@ import org.springframework.http.ResponseEntity;
 import com.metrix.api.dto.StatusCount;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -53,10 +68,13 @@ public class KpiServiceImpl implements KpiService {
     private static final Logger log = LoggerFactory.getLogger(KpiServiceImpl.class);
 
     // ── Repositorios (inyección por constructor vía @RequiredArgsConstructor) ─
-    private final TaskRepository     taskRepository;
-    private final UserRepository     userRepository;
-    private final TrainingRepository trainingRepository;
-    private final StoreRepository    storeRepository;
+    private final TaskRepository             taskRepository;
+    private final UserRepository             userRepository;
+    private final TrainingRepository         trainingRepository;
+    private final StoreRepository            storeRepository;
+    private final IncidentRepository         incidentRepository;
+    private final ExamRepository             examRepository;
+    private final ExamSubmissionRepository   examSubmissionRepository;
 
     // ── Cliente HTTP para analytics-service Python (Sprint 17) ───────────────
     // RestTemplate se inyecta por constructor junto con los repositorios.
@@ -279,6 +297,271 @@ public class KpiServiceImpl implements KpiService {
             }
         }
         return durations;
+    }
+
+    // ── KPIs de Incidencias ───────────────────────────────────────────────
+
+    @Cacheable(value = "kpiIncidents", key = "#storeId")
+    @Override
+    public IncidentKpiResponse getIncidentKpis(String storeId) {
+        List<Incident> incidents = incidentRepository.findByStoreIdAndActivoTrue(storeId);
+        long total = incidents.size();
+
+        if (total == 0) {
+            return IncidentKpiResponse.builder()
+                    .storeId(storeId).total(0)
+                    .abiertas(0).enResolucion(0).cerradas(0)
+                    .resolutionRate(-1.0).criticalOpen(0).avgResolutionHours(-1.0)
+                    .bySeverity(zeroLabelCounts(enumNames(IncidentSeverity.values())))
+                    .byCategory(zeroLabelCounts(enumNames(IncidentCategory.values())))
+                    .build();
+        }
+
+        long abiertas     = incidents.stream().filter(i -> i.getStatus() == IncidentStatus.ABIERTA).count();
+        long enResolucion = incidents.stream().filter(i -> i.getStatus() == IncidentStatus.EN_RESOLUCION).count();
+        long cerradas     = incidents.stream().filter(i -> i.getStatus() == IncidentStatus.CERRADA).count();
+
+        long criticalOpen = incidents.stream()
+                .filter(i -> i.getSeverity() == IncidentSeverity.CRITICA && i.getStatus() != IncidentStatus.CERRADA)
+                .count();
+
+        double avgResMinutes = incidents.stream()
+                .filter(i -> i.getStatus() == IncidentStatus.CERRADA
+                        && i.getResolvedAt() != null && i.getCreatedAt() != null)
+                .mapToLong(i -> Duration.between(i.getCreatedAt(), i.getResolvedAt()).toMinutes())
+                .average()
+                .orElse(-1.0);
+
+        Map<String, Long> sevCounts = incidents.stream()
+                .filter(i -> i.getSeverity() != null)
+                .collect(Collectors.groupingBy(i -> i.getSeverity().name(), Collectors.counting()));
+        Map<String, Long> catCounts = incidents.stream()
+                .filter(i -> i.getCategory() != null)
+                .collect(Collectors.groupingBy(i -> i.getCategory().name(), Collectors.counting()));
+
+        return IncidentKpiResponse.builder()
+                .storeId(storeId).total(total)
+                .abiertas(abiertas).enResolucion(enResolucion).cerradas(cerradas)
+                .resolutionRate(round2(cerradas * 100.0 / total))
+                .criticalOpen(criticalOpen)
+                .avgResolutionHours(avgResMinutes < 0 ? -1.0 : round2(avgResMinutes / 60.0))
+                .bySeverity(orderedLabelCounts(enumNames(IncidentSeverity.values()), sevCounts, total))
+                .byCategory(orderedLabelCounts(enumNames(IncidentCategory.values()), catCounts, total))
+                .build();
+    }
+
+    // ── KPIs de Capacitaciones ────────────────────────────────────────────
+
+    @Cacheable(value = "kpiTrainings", key = "#storeId")
+    @Override
+    public TrainingKpiResponse getTrainingKpis(String storeId) {
+        List<Training> trainings = trainingRepository.findByStoreIdAndActivoTrue(storeId);
+        long total = trainings.size();
+
+        if (total == 0) {
+            return TrainingKpiResponse.builder()
+                    .storeId(storeId).total(0)
+                    .programadas(0).enCurso(0).completadas(0).noCompletadas(0)
+                    .completionRate(-1.0).onTimeRate(-1.0).passRate(-1.0).avgGrade(-1.0).avgProgress(0.0)
+                    .overduePending(0).byCategory(List.of())
+                    .build();
+        }
+
+        long programadas   = countTrainingStatus(trainings, TrainingStatus.PROGRAMADA);
+        long enCurso       = countTrainingStatus(trainings, TrainingStatus.EN_CURSO);
+        long completadas   = countTrainingStatus(trainings, TrainingStatus.COMPLETADA);
+        long noCompletadas = countTrainingStatus(trainings, TrainingStatus.NO_COMPLETADA);
+
+        List<Training> completed = trainings.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getStatus() == TrainingStatus.COMPLETADA)
+                .collect(Collectors.toList());
+        double onTimeRate = completed.isEmpty() ? -1.0 : round2(completed.stream()
+                .filter(t -> Boolean.TRUE.equals(t.getProgress().getOnTime())).count() * 100.0 / completed.size());
+
+        List<Training> withVerdict = trainings.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getPassed() != null)
+                .collect(Collectors.toList());
+        double passRate = withVerdict.isEmpty() ? -1.0 : round2(withVerdict.stream()
+                .filter(t -> Boolean.TRUE.equals(t.getProgress().getPassed())).count() * 100.0 / withVerdict.size());
+
+        OptionalDouble avgGradeOpt = trainings.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getGrade() != null)
+                .mapToDouble(t -> t.getProgress().getGrade())
+                .average();
+
+        double avgProgress = round2(trainings.stream()
+                .filter(t -> t.getProgress() != null)
+                .mapToInt(t -> t.getProgress().getPercentage())
+                .average()
+                .orElse(0.0));
+
+        Instant now = Instant.now();
+        long overduePending = trainings.stream()
+                .filter(t -> t.getProgress() != null
+                        && (t.getProgress().getStatus() == TrainingStatus.PROGRAMADA
+                            || t.getProgress().getStatus() == TrainingStatus.EN_CURSO)
+                        && t.getDueAt() != null && t.getDueAt().isBefore(now))
+                .count();
+
+        Map<String, Long> catCounts = trainings.stream()
+                .map(t -> (t.getCategory() != null && !t.getCategory().isBlank()) ? t.getCategory() : "Sin categoría")
+                .collect(Collectors.groupingBy(c -> c, Collectors.counting()));
+        List<LabelCount> byCategory = catCounts.entrySet().stream()
+                .map(e -> LabelCount.builder()
+                        .label(e.getKey())
+                        .count(e.getValue())
+                        .percentage((int) Math.round(e.getValue() * 100.0 / total))
+                        .build())
+                .sorted(Comparator.comparingLong(LabelCount::getCount).reversed())
+                .collect(Collectors.toList());
+
+        return TrainingKpiResponse.builder()
+                .storeId(storeId).total(total)
+                .programadas(programadas).enCurso(enCurso)
+                .completadas(completadas).noCompletadas(noCompletadas)
+                .completionRate(round2(completadas * 100.0 / total))
+                .onTimeRate(onTimeRate)
+                .passRate(passRate)
+                .avgGrade(avgGradeOpt.isPresent() ? round2(avgGradeOpt.getAsDouble()) : -1.0)
+                .avgProgress(avgProgress)
+                .overduePending(overduePending)
+                .byCategory(byCategory)
+                .build();
+    }
+
+    private long countTrainingStatus(List<Training> list, TrainingStatus status) {
+        return list.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getStatus() == status)
+                .count();
+    }
+
+    // ── KPIs de Exámenes ──────────────────────────────────────────────────
+
+    @Cacheable(value = "kpiExams", key = "#storeId")
+    @Override
+    public ExamKpiResponse getExamKpis(String storeId) {
+        List<Exam> exams = examRepository.findByStoreIdAndActivoTrue(storeId);
+        List<ExamSubmission> subs = examSubmissionRepository.findByStoreId(storeId);
+        long totalExams = exams.size();
+        long totalSubs  = subs.size();
+
+        if (totalSubs == 0) {
+            return ExamKpiResponse.builder()
+                    .storeId(storeId).totalExams(totalExams).totalSubmissions(0)
+                    .passRate(-1.0).avgScore(-1.0).minScore(0).maxScore(0).avgTimeSecs(-1.0)
+                    .scoreDistribution(emptyScoreDistribution())
+                    .perExam(buildExamRows(exams, subs))
+                    .perUser(List.of())
+                    .build();
+        }
+
+        long passed = subs.stream().filter(ExamSubmission::isPassed).count();
+
+        List<Integer> times = subs.stream()
+                .filter(s -> s.getTimeTakenSeconds() != null && s.getTimeTakenSeconds() > 0)
+                .map(ExamSubmission::getTimeTakenSeconds)
+                .collect(Collectors.toList());
+
+        long r0  = subs.stream().filter(s -> s.getScore() < 50).count();
+        long r50 = subs.stream().filter(s -> s.getScore() >= 50 && s.getScore() < 70).count();
+        long r70 = subs.stream().filter(s -> s.getScore() >= 70 && s.getScore() < 90).count();
+        long r90 = subs.stream().filter(s -> s.getScore() >= 90).count();
+
+        return ExamKpiResponse.builder()
+                .storeId(storeId).totalExams(totalExams).totalSubmissions(totalSubs)
+                .passRate(round2(passed * 100.0 / totalSubs))
+                .avgScore(round2(subs.stream().mapToDouble(ExamSubmission::getScore).average().orElse(0)))
+                .minScore(subs.stream().mapToDouble(ExamSubmission::getScore).min().orElse(0))
+                .maxScore(subs.stream().mapToDouble(ExamSubmission::getScore).max().orElse(0))
+                .avgTimeSecs(times.isEmpty() ? -1.0 : round2(times.stream().mapToInt(i -> i).average().orElse(0)))
+                .scoreDistribution(List.of(
+                        labelCount("0–49",   r0,  totalSubs),
+                        labelCount("50–69",  r50, totalSubs),
+                        labelCount("70–89",  r70, totalSubs),
+                        labelCount("90–100", r90, totalSubs)))
+                .perExam(buildExamRows(exams, subs))
+                .perUser(buildUserRows(subs))
+                .build();
+    }
+
+    private List<ExamKpiResponse.ExamUserRow> buildUserRows(List<ExamSubmission> subs) {
+        Map<String, List<ExamSubmission>> byUser = subs.stream()
+                .filter(s -> s.getUserId() != null)
+                .collect(Collectors.groupingBy(ExamSubmission::getUserId));
+
+        return byUser.entrySet().stream()
+                .map(e -> {
+                    List<ExamSubmission> us = e.getValue();
+                    long t = us.size();
+                    long passed = us.stream().filter(ExamSubmission::isPassed).count();
+                    return ExamKpiResponse.ExamUserRow.builder()
+                            .userId(e.getKey())
+                            .userName(us.get(0).getUserName())
+                            .submissions(t)
+                            .passed(passed)
+                            .passRate((int) Math.round(passed * 100.0 / t))
+                            .avgScore(round2(us.stream().mapToDouble(ExamSubmission::getScore).average().orElse(0)))
+                            .build();
+                })
+                .sorted(Comparator.comparingDouble(ExamKpiResponse.ExamUserRow::getAvgScore).reversed())
+                .collect(Collectors.toList());
+    }
+
+    private List<ExamKpiResponse.ExamRow> buildExamRows(List<Exam> exams, List<ExamSubmission> subs) {
+        Map<String, List<ExamSubmission>> byExam = subs.stream()
+                .filter(s -> s.getExamId() != null)
+                .collect(Collectors.groupingBy(ExamSubmission::getExamId));
+
+        return exams.stream()
+                .map(e -> {
+                    List<ExamSubmission> es = byExam.getOrDefault(e.getId(), List.of());
+                    long t = es.size();
+                    int passRate = t > 0
+                            ? (int) Math.round(es.stream().filter(ExamSubmission::isPassed).count() * 100.0 / t)
+                            : 0;
+                    double avgScore = t > 0
+                            ? round2(es.stream().mapToDouble(ExamSubmission::getScore).average().orElse(0))
+                            : 0.0;
+                    return ExamKpiResponse.ExamRow.builder()
+                            .examId(e.getId()).examTitle(e.getTitle())
+                            .submissions(t).passRate(passRate).avgScore(avgScore)
+                            .build();
+                })
+                .sorted(Comparator.comparingLong(ExamKpiResponse.ExamRow::getSubmissions).reversed())
+                .collect(Collectors.toList());
+    }
+
+    private List<LabelCount> emptyScoreDistribution() {
+        return List.of(
+                labelCount("0–49", 0, 0), labelCount("50–69", 0, 0),
+                labelCount("70–89", 0, 0), labelCount("90–100", 0, 0));
+    }
+
+    // ── Helpers de distribución (LabelCount) ──────────────────────────────
+
+    private List<String> enumNames(Enum<?>[] values) {
+        return Arrays.stream(values).map(Enum::name).collect(Collectors.toList());
+    }
+
+    /** Construye LabelCounts en el orden dado, rellenando con 0 las categorías ausentes. */
+    private List<LabelCount> orderedLabelCounts(List<String> orderedLabels, Map<String, Long> counts, long total) {
+        return orderedLabels.stream()
+                .map(label -> labelCount(label, counts.getOrDefault(label, 0L), total))
+                .collect(Collectors.toList());
+    }
+
+    private List<LabelCount> zeroLabelCounts(List<String> orderedLabels) {
+        return orderedLabels.stream()
+                .map(label -> labelCount(label, 0L, 0L))
+                .collect(Collectors.toList());
+    }
+
+    private LabelCount labelCount(String label, long count, long total) {
+        return LabelCount.builder()
+                .label(label)
+                .count(count)
+                .percentage(total > 0 ? (int) Math.round(count * 100.0 / total) : 0)
+                .build();
     }
 
     // ── Builder principal ─────────────────────────────────────────────────

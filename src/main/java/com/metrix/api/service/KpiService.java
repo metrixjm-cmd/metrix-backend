@@ -1,9 +1,12 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.CorrectionSpeedResponse;
+import com.metrix.api.dto.ExamKpiResponse;
 import com.metrix.api.dto.IgeoAnalyticsResponse;
+import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
+import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 
 import java.util.List;
@@ -65,4 +68,27 @@ public interface KpiService {
      *         no está disponible en {@code metrix.analytics.url}.
      */
     IgeoAnalyticsResponse getGlobalIgeoAnalytics();
+
+    /**
+     * KPIs agregados de incidencias de una sucursal: tasa de resolución,
+     * desglose por estado/severidad/categoría, críticas abiertas y tiempo medio
+     * de resolución.
+     * Acceso: ADMIN, GERENTE.
+     */
+    IncidentKpiResponse getIncidentKpis(String storeId);
+
+    /**
+     * KPIs agregados de capacitaciones de una sucursal: completación, aprobación,
+     * calificación promedio, desglose por estado y vencidas pendientes.
+     * Acceso: ADMIN, GERENTE.
+     */
+    TrainingKpiResponse getTrainingKpis(String storeId);
+
+    /**
+     * KPIs agregados de exámenes de una sucursal: tasa de aprobación global,
+     * distribución de puntajes y ranking por examen, agregando todas las
+     * submissions de la sucursal.
+     * Acceso: ADMIN, GERENTE.
+     */
+    ExamKpiResponse getExamKpis(String storeId);
 }

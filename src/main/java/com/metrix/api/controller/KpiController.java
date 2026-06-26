@@ -1,9 +1,12 @@
 package com.metrix.api.controller;
 
 import com.metrix.api.dto.CorrectionSpeedResponse;
+import com.metrix.api.dto.ExamKpiResponse;
 import com.metrix.api.dto.IgeoAnalyticsResponse;
+import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
+import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.repository.UserRepository;
@@ -145,6 +148,54 @@ public class KpiController {
         } catch (RestClientException ex) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
+    }
+
+    /**
+     * GET /api/v1/kpis/incidents/store/{storeId}
+     * KPIs agregados de incidencias de una sucursal.
+     */
+    @Operation(summary = "KPIs de incidencias", description = "KPIs agregados de incidencias de una sucursal: tasa de resolución, desglose por estado/severidad/categoría, críticas abiertas y tiempo medio de resolución.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de incidencias de la sucursal"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN o GERENTE")
+    })
+    @GetMapping("/incidents/store/{storeId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<IncidentKpiResponse> getIncidentKpis(
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+        return ResponseEntity.ok(kpiService.getIncidentKpis(storeId));
+    }
+
+    /**
+     * GET /api/v1/kpis/trainings/store/{storeId}
+     * KPIs agregados de capacitaciones de una sucursal.
+     */
+    @Operation(summary = "KPIs de capacitaciones", description = "KPIs agregados de capacitaciones de una sucursal: completación, aprobación, calificación promedio, desglose por estado y vencidas pendientes.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de capacitaciones de la sucursal"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN o GERENTE")
+    })
+    @GetMapping("/trainings/store/{storeId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<TrainingKpiResponse> getTrainingKpis(
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+        return ResponseEntity.ok(kpiService.getTrainingKpis(storeId));
+    }
+
+    /**
+     * GET /api/v1/kpis/exams/store/{storeId}
+     * KPIs agregados de exámenes de una sucursal.
+     */
+    @Operation(summary = "KPIs de exámenes", description = "KPIs agregados de exámenes de una sucursal: tasa de aprobación global, distribución de puntajes y ranking por examen.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de exámenes de la sucursal"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN o GERENTE")
+    })
+    @GetMapping("/exams/store/{storeId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<ExamKpiResponse> getExamKpis(
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+        return ResponseEntity.ok(kpiService.getExamKpis(storeId));
     }
 
     // ── Helper ───────────────────────────────────────────────────────────

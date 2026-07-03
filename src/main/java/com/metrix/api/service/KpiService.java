@@ -28,6 +28,20 @@ public interface KpiService {
     KpiSummaryResponse getStoreSummary(String storeId);
 
     /**
+     * KPIs globales: agrega TODAS las tareas activas del sistema (todas las sucursales).
+     * Vista principal del dashboard del ADMIN, que no está ligado a una sucursal.
+     * Acceso: ADMIN.
+     */
+    KpiSummaryResponse getGlobalSummary();
+
+    /**
+     * KPI #7 global — Responsabilidad Individual de TODOS los colaboradores activos
+     * del sistema, sin filtrar por sucursal. Para el dashboard del ADMIN.
+     * Acceso: ADMIN.
+     */
+    List<UserResponsibilityResponse> getUsersResponsibilityGlobal();
+
+    /**
      * KPIs del usuario autenticado: agrega todas sus tareas activas.
      * Acceso: cualquier rol autenticado.
      */

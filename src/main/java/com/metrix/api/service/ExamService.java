@@ -10,6 +10,9 @@ public interface ExamService {
 
     List<ExamResponse> getByStore(String storeId);
 
+    /** Todos los exámenes activos del sistema (todas las sucursales). Vista del ADMIN. */
+    List<ExamResponse> getAll();
+
     ExamResponse getById(String examId);
 
     ExamForTakeResponse getForTake(String examId);

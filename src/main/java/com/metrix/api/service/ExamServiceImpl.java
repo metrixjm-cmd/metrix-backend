@@ -92,6 +92,17 @@ public class ExamServiceImpl implements ExamService {
     }
 
     @Override
+    public List<ExamResponse> getAll() {
+        List<Exam> exams = examRepo.findByActivoTrue();
+        if (exams.isEmpty()) return List.of();
+        return exams.stream()
+                .map(e -> toResponse(e,
+                        submissionRepo.countByExamId(e.getId()),
+                        submissionRepo.countByExamIdAndPassedTrue(e.getId())))
+                .toList();
+    }
+
+    @Override
     public ExamResponse getById(String examId) {
         return toResponse(findExamOrThrow(examId));
     }

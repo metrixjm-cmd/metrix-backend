@@ -63,9 +63,9 @@ public class TrainingTemplateController {
         return templateService.getById(id);
     }
 
-    @Operation(summary = "Actualizar plantilla")
+    @Operation(summary = "Actualizar plantilla", description = "Solo ADMIN. Los gerentes consumen plantillas pero no pueden modificarlas.")
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    @PreAuthorize("hasRole('ADMIN')")
     public TrainingTemplateResponse update(
             @PathVariable String id,
             @Valid @RequestBody CreateTrainingTemplateRequest request,

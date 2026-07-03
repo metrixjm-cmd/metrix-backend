@@ -163,6 +163,46 @@ public class GcsService {
         }
     }
 
+    /**
+     * Elimina un archivo del bucket GCS o del filesystem local (fallback).
+     * Best-effort: si el archivo no existe o falla el borrado, solo se registra
+     * en el log — el registro en MongoDB es la fuente de verdad.
+     *
+     * @param storedUrl URL almacenada (gs://, storage.googleapis.com o fallback local)
+     */
+    public void deleteFile(String storedUrl) {
+        if (!StringUtils.hasText(storedUrl)) {
+            return;
+        }
+
+        BlobId blobId = parseBlobIdFromUrl(storedUrl);
+        if (blobId != null && storage != null) {
+            try {
+                boolean deleted = storage.delete(blobId);
+                log.info("Evidencia {} en GCS: {}", deleted ? "eliminada" : "no encontrada", storedUrl);
+            } catch (Exception e) {
+                log.warn("No se pudo eliminar evidencia de GCS: {}. Causa: {}", storedUrl, e.getMessage());
+            }
+            return;
+        }
+
+        String localMarker = "/api/v1/evidence/local/";
+        int idx = storedUrl.indexOf(localMarker);
+        if (idx >= 0 && localStoragePath != null) {
+            String relativePath = storedUrl.substring(idx + localMarker.length());
+            try {
+                Path filePath = localStoragePath.resolve(relativePath).normalize();
+                if (filePath.startsWith(localStoragePath.toAbsolutePath().normalize())
+                        || filePath.startsWith(localStoragePath.normalize())) {
+                    Files.deleteIfExists(filePath);
+                    log.info("Evidencia local eliminada: {}", filePath);
+                }
+            } catch (IOException e) {
+                log.warn("No se pudo eliminar evidencia local: {}. Causa: {}", storedUrl, e.getMessage());
+            }
+        }
+    }
+
     public List<String> toClientReadableUrls(List<String> urls) {
         if (urls == null || urls.isEmpty()) {
             return urls != null ? urls : List.of();

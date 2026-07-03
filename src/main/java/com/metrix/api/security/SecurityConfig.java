@@ -121,7 +121,8 @@ public class SecurityConfig {
 
                 .requestMatchers(HttpMethod.GET,    "/api/v1/training-templates/**").authenticated()
                 .requestMatchers(HttpMethod.POST,   "/api/v1/training-templates/**").hasAnyRole("ADMIN", "GERENTE")
-                .requestMatchers(HttpMethod.PUT,    "/api/v1/training-templates/**").hasAnyRole("ADMIN", "GERENTE")
+                // Modificación de plantillas de capacitación: solo ADMIN (los gerentes solo las consumen)
+                .requestMatchers(HttpMethod.PUT,    "/api/v1/training-templates/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/v1/training-templates/**").hasRole("ADMIN")
 
                 // ── Plantillas de Tarea (Banco de Tareas) ─────────────

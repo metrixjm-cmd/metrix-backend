@@ -16,6 +16,7 @@ import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -63,6 +64,7 @@ public class TaskServiceImpl implements TaskService {
      * de reportes históricos aunque el puesto del usuario cambie (Obj. #11).
      */
     @Override
+    @CacheEvict(value = {"kpiSummary", "storeRanking"}, allEntries = true)
     public TaskResponse createTask(CreateTaskRequest request, String createdBy) {
         // Buscar por ObjectId primero, fallback a numeroUsuario
         User assignedUser = userRepository.findById(request.getAssignedUserId())
@@ -175,6 +177,7 @@ public class TaskServiceImpl implements TaskService {
      * </ol>
      */
     @Override
+    @CacheEvict(value = {"kpiSummary", "storeRanking"}, allEntries = true)
     public TaskResponse updateStatus(String taskId, UpdateStatusRequest request, String currentUser) {
         Task task = taskRepository.findById(taskId)
                 .filter(Task::isActivo)
@@ -363,6 +366,7 @@ public class TaskServiceImpl implements TaskService {
     // ── Calificación de Calidad (Sprint 18) ─────────────────────────────
 
     @Override
+    @CacheEvict(value = {"kpiSummary", "storeRanking"}, allEntries = true)
     public TaskResponse rateQuality(String taskId, QualityRatingRequest request, String currentUser) {
         Task task = taskRepository.findById(taskId)
                 .filter(Task::isActivo)
@@ -455,6 +459,60 @@ public class TaskServiceImpl implements TaskService {
                 .type(mediaType.toUpperCase())
                 .url(gcsService.toClientReadableUrl(url))
                 .build();
+    }
+
+    @Override
+    public void removeEvidence(String taskId, String url, String numeroUsuario) {
+        User user = userRepository.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado: " + numeroUsuario));
+
+        Task task = taskRepository.findById(taskId)
+                .filter(Task::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+
+        boolean isManager = user.getRoles() != null
+                && (user.getRoles().contains(Role.ADMIN) || user.getRoles().contains(Role.GERENTE));
+        boolean isAssignee = task.getAssignedUserId().equals(user.getId());
+        if (!isAssignee && !isManager) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Solo el colaborador asignado o un gerente pueden eliminar evidencias de esta tarea.");
+        }
+
+        // El asignado solo puede corregir evidencias mientras la tarea sigue en ejecución;
+        // ADMIN/GERENTE pueden depurar evidencias en cualquier estado.
+        if (isAssignee && !isManager
+                && task.getExecution().getStatus() != TaskStatus.IN_PROGRESS) {
+            throw new IllegalStateException(
+                    "Las evidencias solo se pueden eliminar mientras la tarea está en ejecución.");
+        }
+
+        // El cliente puede mandar la URL firmada (con query params);
+        // en MongoDB se guarda la URL base sin query.
+        String normalizedUrl = url.contains("?") ? url.substring(0, url.indexOf('?')) : url;
+
+        Evidence evidence = task.getExecution().getEvidence();
+        boolean removed = false;
+        if (evidence != null) {
+            removed = evidence.getImages().remove(normalizedUrl)
+                    | evidence.getVideos().remove(normalizedUrl);
+        }
+
+        List<TaskEvidence> records = taskEvidenceRepository.findByTaskId(taskId).stream()
+                .filter(e -> normalizedUrl.equals(e.getUrl()))
+                .toList();
+        if (!records.isEmpty()) {
+            taskEvidenceRepository.deleteAll(records);
+            removed = true;
+        }
+
+        if (!removed) {
+            throw new ResourceNotFoundException("Evidencia no encontrada en la tarea: " + normalizedUrl);
+        }
+
+        taskRepository.save(task);
+        gcsService.deleteFile(normalizedUrl);
+        log.info("[AUDIT] Evidence removed: taskId={}, url={}, user={}", taskId, normalizedUrl, numeroUsuario);
     }
 
     @Override

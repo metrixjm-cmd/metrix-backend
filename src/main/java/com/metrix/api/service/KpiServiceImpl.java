@@ -98,6 +98,13 @@ public class KpiServiceImpl implements KpiService {
         return buildSummary(tasks, "STORE", storeId);
     }
 
+    @Cacheable(value = "kpiSummary", key = "'global'")
+    @Override
+    public KpiSummaryResponse getGlobalSummary() {
+        List<Task> tasks = taskRepository.findByActivoTrue();
+        return buildSummary(tasks, "GLOBAL", "all");
+    }
+
     @Override
     public KpiSummaryResponse getUserSummary(String userId) {
         List<Task> tasks = taskRepository.findByAssignedUserIdAndActivoTrue(userId);
@@ -149,11 +156,22 @@ public class KpiServiceImpl implements KpiService {
     @Cacheable(value = "kpiSummary", key = "'users-' + #storeId")
     @Override
     public List<UserResponsibilityResponse> getUsersResponsibility(String storeId) {
-        List<User> users = userRepository.findByStoreIdAndActivoTrue(storeId);
+        return buildUsersResponsibility(
+                userRepository.findByStoreIdAndActivoTrue(storeId),
+                taskRepository.findByStoreIdAndActivoTrue(storeId));
+    }
 
-        // Batch fetch: 1 sola query para TODAS las tareas de la sucursal (elimina N+1)
-        List<Task> allStoreTasks = taskRepository.findByStoreIdAndActivoTrue(storeId);
-        Map<String, List<Task>> tasksByUser = allStoreTasks.stream()
+    @Cacheable(value = "kpiSummary", key = "'users-global'")
+    @Override
+    public List<UserResponsibilityResponse> getUsersResponsibilityGlobal() {
+        return buildUsersResponsibility(
+                userRepository.findByActivoTrue(),
+                taskRepository.findByActivoTrue());
+    }
+
+    private List<UserResponsibilityResponse> buildUsersResponsibility(List<User> users, List<Task> allTasks) {
+        // Batch fetch: 1 sola query para TODAS las tareas del scope (elimina N+1)
+        Map<String, List<Task>> tasksByUser = allTasks.stream()
                 .filter(t -> t.getAssignedUserId() != null)
                 .collect(Collectors.groupingBy(Task::getAssignedUserId));
 

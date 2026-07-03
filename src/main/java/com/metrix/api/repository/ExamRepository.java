@@ -9,5 +9,7 @@ public interface ExamRepository extends MongoRepository<Exam, String> {
 
     List<Exam> findByStoreIdAndActivoTrue(String storeId);
 
+    List<Exam> findByActivoTrue();
+
     List<Exam> findByTrainingIdAndActivoTrue(String trainingId);
 }

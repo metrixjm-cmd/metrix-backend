@@ -88,6 +88,27 @@ public class EvidenceController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    /**
+     * DELETE /api/v1/tasks/{taskId}/evidence?url={url}
+     * <p>
+     * Elimina una evidencia previamente subida (registro + archivo).
+     * Puede hacerlo el EJECUTADOR asignado (mientras la tarea esté IN_PROGRESS)
+     * o un ADMIN/GERENTE en cualquier estado.
+     */
+    @Operation(summary = "Eliminar evidencia de una tarea",
+               description = "Elimina el archivo de evidencia y sus registros. EJECUTADOR asignado (tarea IN_PROGRESS) o ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "204", description = "Evidencia eliminada")
+    @ApiResponse(responseCode = "404", description = "Evidencia no encontrada en la tarea")
+    @DeleteMapping
+    public ResponseEntity<Void> delete(
+            @PathVariable String taskId,
+            @Parameter(description = "URL de la evidencia a eliminar") @RequestParam("url") String url,
+            Authentication auth) {
+
+        taskService.removeEvidence(taskId, url, auth.getName());
+        return ResponseEntity.noContent().build();
+    }
+
     // ── Validaciones ─────────────────────────────────────────────────────
 
     private void validateMediaType(String mediaType) {

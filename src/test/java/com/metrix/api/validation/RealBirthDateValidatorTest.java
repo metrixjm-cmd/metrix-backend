@@ -46,10 +46,7 @@ class RealBirthDateValidatorTest {
     }
 
     @Test
-    void requests_accept_today_and_recent_past_birth_dates() {
-        UpdateUserRequest todayUpdateRequest = new UpdateUserRequest();
-        todayUpdateRequest.setFechaNacimiento(LocalDate.now());
-
+    void requests_accept_adult_birth_dates() {
         CreateUserRequest createRequest = new CreateUserRequest();
         createRequest.setFechaNacimiento(LocalDate.now().minusYears(35));
 
@@ -57,7 +54,16 @@ class RealBirthDateValidatorTest {
         pastUpdateRequest.setFechaNacimiento(LocalDate.now().minusYears(35));
 
         assertTrue(validator.validateProperty(createRequest, "fechaNacimiento").isEmpty());
-        assertTrue(validator.validateProperty(todayUpdateRequest, "fechaNacimiento").isEmpty());
         assertTrue(validator.validateProperty(pastUpdateRequest, "fechaNacimiento").isEmpty());
+    }
+
+    @Test
+    void update_request_rejects_underage_birth_date() {
+        // Regla @OlderThanYears(17): el colaborador debe tener mas de 17 años cumplidos,
+        // por lo que una fecha de nacimiento de hoy nunca es valida.
+        UpdateUserRequest todayUpdateRequest = new UpdateUserRequest();
+        todayUpdateRequest.setFechaNacimiento(LocalDate.now());
+
+        assertFalse(validator.validateProperty(todayUpdateRequest, "fechaNacimiento").isEmpty());
     }
 }

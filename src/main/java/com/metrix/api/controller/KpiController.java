@@ -66,6 +66,36 @@ public class KpiController {
     }
 
     /**
+     * GET /api/v1/kpis/summary
+     * KPIs globales de todo el sistema (todas las sucursales). Vista del ADMIN.
+     */
+    @Operation(summary = "KPIs globales", description = "KPIs agregados de todas las tareas activas del sistema, sin filtrar por sucursal. Vista principal del dashboard del ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Resumen global de KPIs"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN")
+    })
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<KpiSummaryResponse> getGlobalSummary() {
+        return ResponseEntity.ok(kpiService.getGlobalSummary());
+    }
+
+    /**
+     * GET /api/v1/kpis/users
+     * KPI #7 global — Ranking de TODOS los colaboradores del sistema.
+     */
+    @Operation(summary = "KPI #7 global — Ranking de colaboradores", description = "Ranking de todos los colaboradores activos del sistema con sus KPIs individuales. Vista del ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista global de colaboradores con KPIs"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN")
+    })
+    @GetMapping("/users")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<UserResponsibilityResponse>> getUsersResponsibilityGlobal() {
+        return ResponseEntity.ok(kpiService.getUsersResponsibilityGlobal());
+    }
+
+    /**
      * GET /api/v1/kpis/ranking
      * Ranking inter-sucursal ordenado por IGEO descendente.
      */

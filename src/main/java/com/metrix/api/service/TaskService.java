@@ -114,6 +114,21 @@ public interface TaskService {
                                        String extension, String numeroUsuario);
 
     /**
+     * Elimina una evidencia previamente subida (archivo + registros).
+     * <p>
+     * Reglas de negocio:
+     * <ul>
+     *   <li>La tarea debe estar en estado {@code IN_PROGRESS}.</li>
+     *   <li>Puede eliminar el colaborador asignado, o un ADMIN/GERENTE.</li>
+     * </ul>
+     *
+     * @param taskId        MongoDB _id de la tarea
+     * @param url           URL exacta de la evidencia a eliminar
+     * @param numeroUsuario subject del JWT del usuario autenticado
+     */
+    void removeEvidence(String taskId, String url, String numeroUsuario);
+
+    /**
      * Permite a GERENTE/ADMIN calificar la calidad de una tarea ya COMPLETADA.
      * Alimenta el Pilar Calidad del IGEO (Sprint 17/18).
      *

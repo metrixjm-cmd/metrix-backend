@@ -51,6 +51,15 @@ public class ExamController {
                 .body(examService.create(request, auth.getName()));
     }
 
+    /** Listar TODOS los exámenes del sistema — solo ADMIN. */
+    @Operation(summary = "Todos los exámenes", description = "Lista todos los exámenes activos del sistema (todas las sucursales). Solo ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Lista global de exámenes")
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ExamResponse>> getAll() {
+        return ResponseEntity.ok(examService.getAll());
+    }
+
     /** Listar exámenes de una sucursal. */
     @Operation(summary = "Exámenes por sucursal", description = "Lista todos los exámenes asociados a una sucursal. Solo ADMIN/GERENTE.")
     @ApiResponse(responseCode = "200", description = "Lista de exámenes de la sucursal")

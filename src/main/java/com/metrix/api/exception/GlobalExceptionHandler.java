@@ -7,10 +7,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -113,6 +115,25 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleOptimisticLock(OptimisticLockingFailureException ex) {
         return buildResponse(HttpStatus.CONFLICT,
                 "El recurso fue modificado por otro usuario. Recarga e intenta de nuevo.");
+    }
+
+    /**
+     * 404 Not Found — ruta o recurso estático inexistente.
+     * Sin este handler, el catch-all convertía cualquier ruta desconocida
+     * (p.ej. /swagger-ui.html con springdoc desactivado en prod) en un 500
+     * que filtraba detalles internos ("No static resource ...").
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResourceFound(NoResourceFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Recurso no encontrado");
+    }
+
+    /**
+     * 405 Method Not Allowed — la ruta existe pero no soporta el método HTTP.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, "Método HTTP no soportado para esta ruta");
     }
 
     @ExceptionHandler(Exception.class)

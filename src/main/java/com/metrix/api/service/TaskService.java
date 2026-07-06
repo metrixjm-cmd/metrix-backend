@@ -158,6 +158,12 @@ public interface TaskService {
     /** Paginated: all active tasks for a store. */
     Page<TaskResponse> getTasksByStore(String storeId, Pageable pageable);
 
+    /** Paginated: active tasks of a manager's team within a store. */
+    Page<TaskResponse> getTasksByStoreForManager(String storeId, String managerId, Pageable pageable);
+
+    /** Team-scoped store tasks filtered by shift. */
+    List<TaskResponse> getTasksByStoreAndShiftForManager(String storeId, String shift, String managerId);
+
     /** Paginated: all active tasks for a user. */
     Page<TaskResponse> getTasksByUser(String assignedUserId, Pageable pageable);
 

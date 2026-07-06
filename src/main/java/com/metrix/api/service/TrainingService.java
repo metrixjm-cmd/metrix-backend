@@ -26,6 +26,9 @@ public interface TrainingService {
     List<TrainingResponse> getByStore(String storeId, String callerIdentifier);
     List<TrainingResponse> getByAssignmentGroupId(String assignmentGroupId, String callerIdentifier);
 
+    /** Asignaciones activas vinculadas a un examen (para pantalla de asignación). */
+    List<TrainingResponse> getByExamId(String examId, String callerIdentifier);
+
     /** Retorna una capacitación por ID. */
     TrainingResponse getById(String id, String callerIdentifier);
 

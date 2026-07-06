@@ -65,7 +65,7 @@ public class ExamServiceImpl implements ExamService {
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .trainingId(request.getTrainingId())
-                .storeId(request.getStoreId())
+                .storeId(normalizeStoreId(request.getStoreId()))
                 .targetAudience(request.getTargetAudience())
                 .questions(questions)
                 .passingScore(request.getPassingScore() > 0 ? request.getPassingScore() : 70)
@@ -82,7 +82,7 @@ public class ExamServiceImpl implements ExamService {
 
     @Override
     public List<ExamResponse> getByStore(String storeId) {
-        List<Exam> exams = examRepo.findByStoreIdAndActivoTrue(storeId);
+        List<Exam> exams = examRepo.findAvailableForStore(storeId);
         if (exams.isEmpty()) return List.of();
         return exams.stream()
                 .map(e -> toResponse(e,
@@ -312,7 +312,7 @@ public class ExamServiceImpl implements ExamService {
         Exam exam = Exam.builder()
                 .title(template.getTitle())
                 .description(template.getDescription())
-                .storeId(request.getStoreId())
+                .storeId(normalizeStoreId(request.getStoreId()))
                 .questions(new ArrayList<>(examQuestions))
                 .passingScore(passingScore)
                 .timeLimitMinutes(timeLimit)
@@ -466,6 +466,14 @@ public class ExamServiceImpl implements ExamService {
         return examRepo.findById(examId)
                 .filter(Exam::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen no encontrado: " + examId));
+    }
+
+    /** Blank → null para exámenes de catálogo global (sin sucursal). */
+    private static String normalizeStoreId(String storeId) {
+        if (storeId == null || storeId.isBlank()) {
+            return null;
+        }
+        return storeId.trim();
     }
 
     private ExamResponse toResponse(Exam exam) {

@@ -1,6 +1,5 @@
 package com.metrix.api.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**
@@ -10,7 +9,7 @@ import lombok.Data;
 @Data
 public class CreateExamFromTemplateRequest {
 
-    @NotBlank
+    /** Sucursal opcional: null = catálogo global. */
     private String storeId;
 
     /** Override opcional de passingScore. 0 = usar el de la plantilla. */

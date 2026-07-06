@@ -107,6 +107,16 @@ public class TrainingController {
         return ResponseEntity.ok(list);
     }
 
+    @Operation(summary = "Asignaciones por examen",
+               description = "Devuelve capacitaciones activas vinculadas a un examen. ADMIN o GERENTE.")
+    @GetMapping("/exam/{examId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<List<TrainingResponse>> getByExamId(
+            @PathVariable String examId,
+            Authentication auth) {
+        return ResponseEntity.ok(trainingService.getByExamId(examId, auth.getName()));
+    }
+
     // ── Detalle ──────────────────────────────────────────────────────────
 
     @Operation(summary = "Detalle de capacitación",

@@ -39,6 +39,8 @@ public interface TrainingRepository extends MongoRepository<Training, String> {
 
     List<Training> findByAssignmentGroupIdAndActivoTrue(String assignmentGroupId);
 
+    List<Training> findByExamIdAndActivoTrue(String examId);
+
     // ── Vista global ADMIN ───────────────────────────────────────────────
 
     /** Todas las capacitaciones activas en todas las sucursales (uso exclusivo ADMIN). */

@@ -94,7 +94,7 @@ public class AlertScheduler {
             if (task.getAssignedUserId() != null) {
                 notificationService.sendToUser(task.getAssignedUserId(), event);
             }
-            notificationService.sendToStoreManagers(task.getStoreId(), event);
+            notificationService.sendToManagerOfAssignee(task.getAssignedUserId(), event);
             log.debug("TASK_DEADLINE_WARNING - taskId: {}", task.getId());
         }
 
@@ -135,7 +135,7 @@ public class AlertScheduler {
             if (task.getAssignedUserId() != null) {
                 notificationService.sendToUser(task.getAssignedUserId(), event);
             }
-            notificationService.sendToStoreManagers(task.getStoreId(), event);
+            notificationService.sendToManagerOfAssignee(task.getAssignedUserId(), event);
             log.debug("TASK_OVERDUE - taskId: {} | critical: {}", task.getId(), task.isCritical());
         }
 
@@ -206,7 +206,7 @@ public class AlertScheduler {
             if (training.getAssignedUserId() != null) {
                 notificationService.sendToUser(training.getAssignedUserId(), event);
             }
-            notificationService.sendToStoreManagers(training.getStoreId(), event);
+            notificationService.sendToManagerOfAssignee(training.getAssignedUserId(), event);
             log.debug("TRAINING_DEADLINE_WARNING - trainingId: {}", training.getId());
         }
 
@@ -256,7 +256,7 @@ public class AlertScheduler {
             if (training.getAssignedUserId() != null) {
                 notificationService.sendToUser(training.getAssignedUserId(), event);
             }
-            notificationService.sendToStoreManagers(training.getStoreId(), event);
+            notificationService.sendToManagerOfAssignee(training.getAssignedUserId(), event);
         }
 
         if (expired > 0) {

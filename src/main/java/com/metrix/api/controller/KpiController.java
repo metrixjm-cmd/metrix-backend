@@ -9,6 +9,8 @@ import com.metrix.api.dto.StoreRankingResponse;
 import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.Role;
+import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.KpiService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -135,7 +137,17 @@ public class KpiController {
     @GetMapping("/store/{storeId}/users")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<List<UserResponsibilityResponse>> getUsersResponsibility(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        User current = resolveCurrentUser(auth.getName());
+        if (isGerenteOnly(current)) {
+            if (!storeId.equals(current.getStoreId())) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "El GERENTE solo puede consultar colaboradores de su propia sucursal.");
+            }
+            return ResponseEntity.ok(
+                    kpiService.getUsersResponsibilityForManager(storeId, current.getId()));
+        }
         return ResponseEntity.ok(kpiService.getUsersResponsibility(storeId));
     }
 
@@ -235,5 +247,17 @@ public class KpiController {
                 .map(u -> u.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario autenticado no encontrado en base de datos: " + numeroUsuario));
+    }
+
+    private User resolveCurrentUser(String numeroUsuario) {
+        return userRepository.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado en base de datos: " + numeroUsuario));
+    }
+
+    private boolean isGerenteOnly(User user) {
+        return user.getRoles() != null
+                && user.getRoles().contains(Role.GERENTE)
+                && !user.getRoles().contains(Role.ADMIN);
     }
 }

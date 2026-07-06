@@ -161,6 +161,23 @@ public class KpiServiceImpl implements KpiService {
                 taskRepository.findByStoreIdAndActivoTrue(storeId));
     }
 
+    @Cacheable(value = "kpiSummary", key = "'users-mgr-' + #managerId")
+    @Override
+    public List<UserResponsibilityResponse> getUsersResponsibilityForManager(String storeId, String managerId) {
+        List<User> team = userRepository.findByStoreIdAndManagerOwnerIdAndActivoTrue(storeId, managerId);
+        List<User> executors = team.stream()
+                .filter(u -> u.getRoles() != null && u.getRoles().contains(com.metrix.api.model.Role.EJECUTADOR))
+                .toList();
+        if (executors.isEmpty()) {
+            return List.of();
+        }
+        Set<String> teamIds = executors.stream().map(User::getId).collect(Collectors.toSet());
+        List<Task> teamTasks = taskRepository.findByStoreIdAndActivoTrue(storeId).stream()
+                .filter(t -> t.getAssignedUserId() != null && teamIds.contains(t.getAssignedUserId()))
+                .toList();
+        return buildUsersResponsibility(executors, teamTasks);
+    }
+
     @Cacheable(value = "kpiSummary", key = "'users-global'")
     @Override
     public List<UserResponsibilityResponse> getUsersResponsibilityGlobal() {

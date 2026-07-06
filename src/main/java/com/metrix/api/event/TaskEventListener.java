@@ -68,7 +68,7 @@ public class TaskEventListener {
                 ? " - " + comments.substring(0, Math.min(60, comments.length()))
                 : "");
 
-        notificationService.sendToStoreManagers(event.storeId(), NotificationEvent.builder()
+        notificationService.sendToManagerOfAssignee(event.assignedUserId(), NotificationEvent.builder()
                 .id(UUID.randomUUID().toString())
                 .type(type)
                 .severity(severity)

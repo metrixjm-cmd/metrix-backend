@@ -74,6 +74,7 @@ public final class DomainEvents {
             String trainingId,
             TrainingStatus newStatus,
             String storeId,
+            String assignedUserId,
             String title,
             String position
     ) {}

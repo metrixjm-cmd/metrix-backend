@@ -19,7 +19,7 @@ public class CreateExamRequest {
     /** ID de capacitación relacionada. Opcional. */
     private String trainingId;
 
-    @NotBlank
+    /** Sucursal opcional: null = examen en catálogo global (banco). Se asigna al distribuir. */
     private String storeId;
 
     @NotNull

@@ -292,13 +292,13 @@ class ExamServiceImplTest {
                 buildSavedExam("exam-b", "Exam B", storeId, 120)
         );
 
-        when(examRepo.findByStoreIdAndActivoTrue(storeId)).thenReturn(mockExams);
+        when(examRepo.findAvailableForStore(storeId)).thenReturn(mockExams);
 
         List<ExamResponse> result = examService.getByStore(storeId);
 
         assertNotNull(result);
         assertEquals(2, result.size());
-        verify(examRepo).findByStoreIdAndActivoTrue(storeId);
+        verify(examRepo).findAvailableForStore(storeId);
     }
 
     /** Test 11: getMySubmissions retorna submissions del usuario */

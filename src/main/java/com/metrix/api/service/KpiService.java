@@ -61,6 +61,12 @@ public interface KpiService {
     List<UserResponsibilityResponse> getUsersResponsibility(String storeId);
 
     /**
+     * KPI #7 — Responsabilidad Individual de los ejecutadores bajo un gerente.
+     * Acceso: GERENTE (su propio equipo).
+     */
+    List<UserResponsibilityResponse> getUsersResponsibilityForManager(String storeId, String managerId);
+
+    /**
      * KPI #9 — Velocidad de Corrección: tiempo promedio para re-ejecutar tareas fallidas.
      * Requiere el historial de {@link com.metrix.api.model.StatusTransition} en Task.
      * Acceso: ADMIN, GERENTE.

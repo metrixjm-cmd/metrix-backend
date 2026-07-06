@@ -592,6 +592,28 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    public Page<TaskResponse> getTasksByStoreForManager(String storeId, String managerId, Pageable pageable) {
+        List<String> teamIds = resolveTeamAssigneeIds(storeId, managerId);
+        if (teamIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        Page<Task> page = taskRepository.findByStoreIdAndAssignedUserIdInAndActivoTrue(storeId, teamIds, pageable);
+        Map<String, String> names = batchResolveUserNames(page.getContent());
+        return page.map(t -> toResponse(t, names.getOrDefault(t.getAssignedUserId(), t.getPosition())));
+    }
+
+    @Override
+    public List<TaskResponse> getTasksByStoreAndShiftForManager(String storeId, String shift, String managerId) {
+        List<String> teamIds = resolveTeamAssigneeIds(storeId, managerId);
+        if (teamIds.isEmpty()) {
+            return List.of();
+        }
+        List<Task> tasks = taskRepository.findByStoreIdAndShiftAndAssignedUserIdInAndActivoTrue(
+                storeId, shift, teamIds);
+        return toResponseList(tasks);
+    }
+
+    @Override
     public Page<TaskResponse> getTasksByUser(String assignedUserId, Pageable pageable) {
         Page<Task> page = taskRepository.findByAssignedUserIdAndActivoTrue(assignedUserId, pageable);
         Map<String, String> names = batchResolveUserNames(page.getContent());
@@ -663,6 +685,14 @@ public class TaskServiceImpl implements TaskService {
         return userRepository.findById(userId)
                 .map(User::getNombre)
                 .orElse(null);
+    }
+
+    /** IDs de ejecutadores activos bajo un gerente en la sucursal. */
+    private List<String> resolveTeamAssigneeIds(String storeId, String managerId) {
+        return userRepository.findByStoreIdAndManagerOwnerIdAndActivoTrue(storeId, managerId).stream()
+                .filter(u -> u.getRoles() != null && u.getRoles().contains(Role.EJECUTADOR))
+                .map(User::getId)
+                .toList();
     }
 
     /** Converts a list of tasks with batch-resolved names (eliminates N+1). */

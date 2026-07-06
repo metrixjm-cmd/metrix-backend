@@ -31,7 +31,7 @@ public class IncidentEventListener {
                 ? "Incidencia CRITICA reportada"
                 : "Nueva incidencia reportada";
 
-        notificationService.sendToStoreManagers(event.storeId(), NotificationEvent.builder()
+        notificationService.sendToManagerOfAssignee(event.reporterUserId(), NotificationEvent.builder()
                 .id(UUID.randomUUID().toString())
                 .type("INCIDENT_CREATED")
                 .severity(severity)
@@ -71,7 +71,7 @@ public class IncidentEventListener {
             }
 
             case ABIERTA ->
-                notificationService.sendToStoreManagers(event.storeId(), NotificationEvent.builder()
+                notificationService.sendToManagerOfAssignee(event.reporterUserId(), NotificationEvent.builder()
                         .id(UUID.randomUUID().toString())
                         .type("INCIDENT_REOPENED")
                         .severity("warning")

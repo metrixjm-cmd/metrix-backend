@@ -153,8 +153,10 @@ public class TaskController {
         User currentUserObj = userRepository.findByNumeroUsuario(auth.getName())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario autenticado no encontrado: " + auth.getName()));
-        if (currentUserObj.getRoles() != null && currentUserObj.getRoles().contains(Role.GERENTE)
-                && !currentUserObj.getRoles().contains(Role.ADMIN)) {
+        boolean gerenteOnly = currentUserObj.getRoles() != null
+                && currentUserObj.getRoles().contains(Role.GERENTE)
+                && !currentUserObj.getRoles().contains(Role.ADMIN);
+        if (gerenteOnly) {
             if (!storeId.equals(currentUserObj.getStoreId())) {
                 throw new org.springframework.security.access.AccessDeniedException(
                         "El GERENTE solo puede ver tareas de su propia sucursal.");
@@ -165,12 +167,19 @@ public class TaskController {
 
         // If shift filter is specified, use non-paginated (shift lists are small)
         if (shift != null && !shift.isBlank()) {
+            if (gerenteOnly) {
+                return ResponseEntity.ok(taskService.getTasksByStoreAndShiftForManager(
+                        storeId, shift, currentUserObj.getId()));
+            }
             return ResponseEntity.ok(taskService.getTasksByStoreAndShift(storeId, shift));
         }
 
         // DB-level pagination for unfiltered store queries
-        Page<TaskResponse> result = taskService.getTasksByStore(storeId,
-                PageRequest.of(page, safeSize, Sort.by("createdAt").descending()));
+        Page<TaskResponse> result = gerenteOnly
+                ? taskService.getTasksByStoreForManager(storeId, currentUserObj.getId(),
+                        PageRequest.of(page, safeSize, Sort.by("createdAt").descending()))
+                : taskService.getTasksByStore(storeId,
+                        PageRequest.of(page, safeSize, Sort.by("createdAt").descending()));
         return ResponseEntity.ok(result);
     }
 

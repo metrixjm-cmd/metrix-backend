@@ -148,6 +148,23 @@ public class TrainingServiceImpl implements TrainingService {
     }
 
     @Override
+    public List<TrainingResponse> getByExamId(String examId, String callerIdentifier) {
+        User caller = resolveUser(callerIdentifier);
+        List<Training> trainings = trainingRepository.findByExamIdAndActivoTrue(examId);
+        if (hasRole(caller, Role.ADMIN)) {
+            return trainings.stream().map(this::toResponse).toList();
+        }
+        if (isScopedManager(caller)) {
+            String storeId = caller.getStoreId();
+            return trainings.stream()
+                    .filter(t -> Objects.equals(t.getStoreId(), storeId))
+                    .map(this::toResponse)
+                    .toList();
+        }
+        throw new AccessDeniedException("No puedes consultar asignaciones de este examen.");
+    }
+
+    @Override
     public TrainingResponse getById(String id, String callerIdentifier) {
         Training training = trainingRepository.findById(id)
                 .filter(Training::isActivo)
@@ -203,7 +220,7 @@ public class TrainingServiceImpl implements TrainingService {
 
         eventPublisher.publishEvent(new TrainingProgressChangedEvent(
                 saved.getId(), req.getNewStatus(), saved.getStoreId(),
-                saved.getTitle(), saved.getPosition()));
+                saved.getAssignedUserId(), saved.getTitle(), saved.getPosition()));
 
         return toResponse(saved);
     }
@@ -352,7 +369,8 @@ public class TrainingServiceImpl implements TrainingService {
         if (statusChanged) {
             eventPublisher.publishEvent(new TrainingProgressChangedEvent(
                     saved.getId(), saved.getProgress().getStatus(),
-                    saved.getStoreId(), saved.getTitle(), saved.getPosition()));
+                    saved.getStoreId(), saved.getAssignedUserId(),
+                    saved.getTitle(), saved.getPosition()));
         }
 
         return toResponse(saved);

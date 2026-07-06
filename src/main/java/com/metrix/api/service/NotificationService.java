@@ -71,6 +71,33 @@ public class NotificationService {
         deliverToLocalEmitter(userId, event);
     }
 
+    /**
+     * Notifica al gerente responsable del colaborador ({@code managerOwnerId}).
+     * Evita que todos los gerentes de la sucursal reciban alertas de equipos ajenos.
+     */
+    public void sendToManagerOfAssignee(String assigneeUserId, NotificationEvent event) {
+        if (assigneeUserId == null || assigneeUserId.isBlank()) {
+            log.debug("Omitiendo notificación a gerente: assigneeUserId vacío ({})", event.getType());
+            return;
+        }
+
+        userRepository.findById(assigneeUserId).ifPresentOrElse(assignee -> {
+            String managerId = assignee.getManagerOwnerId();
+            if (managerId != null && !managerId.isBlank()) {
+                deliverToLocalEmitter(managerId, event);
+                return;
+            }
+            if (assignee.getRoles() != null && assignee.getRoles().contains(Role.GERENTE)) {
+                sendToAllAdmins(event);
+                return;
+            }
+            log.warn("Colaborador {} sin managerOwnerId — alerta {} no enviada a gerente",
+                    assigneeUserId, event.getType());
+        }, () -> log.warn("Assignee {} no encontrado — alerta {} omitida", assigneeUserId, event.getType()));
+    }
+
+    /** @deprecated Preferir {@link #sendToManagerOfAssignee(String, NotificationEvent)}. */
+    @Deprecated
     public void sendToStoreManagers(String storeId, NotificationEvent event) {
         userRepository.findByStoreIdAndActivoTrue(storeId).stream()
                 .filter(u -> u.getRoles().contains(Role.GERENTE) || u.getRoles().contains(Role.ADMIN))

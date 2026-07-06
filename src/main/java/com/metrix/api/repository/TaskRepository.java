@@ -76,6 +76,14 @@ public interface TaskRepository extends MongoRepository<Task, String> {
     /** Paginated: all active tasks for a store. */
     Page<Task> findByStoreIdAndActivoTrue(String storeId, Pageable pageable);
 
+    /** Paginated: active tasks for a store limited to assignees in the given set. */
+    Page<Task> findByStoreIdAndAssignedUserIdInAndActivoTrue(
+            String storeId, Collection<String> assignedUserIds, Pageable pageable);
+
+    /** Active tasks for a store, shift and assignee set (vista gerente por equipo). */
+    List<Task> findByStoreIdAndShiftAndAssignedUserIdInAndActivoTrue(
+            String storeId, String shift, Collection<String> assignedUserIds);
+
     /** Paginated: all active tasks for a user. */
     Page<Task> findByAssignedUserIdAndActivoTrue(String assignedUserId, Pageable pageable);
 

@@ -2,6 +2,7 @@ package com.metrix.api.event;
 
 import com.metrix.api.event.DomainEvents.TaskCreatedEvent;
 import com.metrix.api.event.DomainEvents.TaskStatusChangedEvent;
+import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.CacheManager;
@@ -21,27 +22,47 @@ import org.springframework.stereotype.Component;
 public class KpiCacheInvalidator {
 
     private final CacheManager cacheManager;
+    private final UserRepository userRepository;
 
     @EventListener
     public void onTaskCreated(TaskCreatedEvent event) {
         evictStoreCache(event.storeId());
+        evictManagerTeamCache(event.assignedUserId());
     }
 
     @EventListener
     public void onTaskStatusChanged(TaskStatusChangedEvent event) {
         evictStoreCache(event.storeId());
+        evictManagerTeamCache(event.assignedUserId());
     }
 
     private void evictStoreCache(String storeId) {
         var kpiCache = cacheManager.getCache("kpiSummary");
         if (kpiCache != null) {
             kpiCache.evict(storeId);
-            kpiCache.evict("users-" + storeId);  // getUsersResponsibility cache key
+            kpiCache.evict("users-" + storeId);
         }
         var rankingCache = cacheManager.getCache("storeRanking");
         if (rankingCache != null) {
-            rankingCache.clear();  // Ranking is global — must be fully invalidated
+            rankingCache.clear();
         }
         log.debug("[CACHE] Invalidated kpiSummary for storeId={}", storeId);
+    }
+
+    private void evictManagerTeamCache(String assignedUserId) {
+        if (assignedUserId == null || assignedUserId.isBlank()) {
+            return;
+        }
+        var kpiCache = cacheManager.getCache("kpiSummary");
+        if (kpiCache == null) {
+            return;
+        }
+        userRepository.findById(assignedUserId).ifPresent(user -> {
+            String managerId = user.getManagerOwnerId();
+            if (managerId != null && !managerId.isBlank()) {
+                kpiCache.evict("users-mgr-" + managerId);
+                log.debug("[CACHE] Invalidated team KPI cache for managerId={}", managerId);
+            }
+        });
     }
 }

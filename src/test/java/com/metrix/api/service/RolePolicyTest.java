@@ -5,6 +5,7 @@ import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Set;
 
@@ -215,6 +216,53 @@ class RolePolicyTest {
     void ejecutador_targetsNull() {
         User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
         assertNull(rolePolicy.targetRoleFor(ejecutador));
+    }
+
+    // ── validateTaskAssignment ─────────────────────────────────────────
+
+    @Test
+    void gerente_canAssignTask_toOwnedEjecutador() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+        ejecutador.setManagerOwnerId("ger1");
+
+        assertDoesNotThrow(() -> rolePolicy.validateTaskAssignment(gerente, ejecutador, "store-a"));
+    }
+
+    @Test
+    void gerente_cannotAssignTask_toEjecutadorOfOtherManager() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-a");
+        ejecutador.setManagerOwnerId("ger2");
+
+        assertThrows(AccessDeniedException.class,
+                () -> rolePolicy.validateTaskAssignment(gerente, ejecutador, "store-a"));
+    }
+
+    @Test
+    void gerente_cannotAssignTask_inOtherStore() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+        User ejecutador = buildUser("eje1", Role.EJECUTADOR, "store-b");
+        ejecutador.setManagerOwnerId("ger1");
+
+        assertThrows(AccessDeniedException.class,
+                () -> rolePolicy.validateTaskAssignment(gerente, ejecutador, "store-b"));
+    }
+
+    @Test
+    void assertGerenteStoreAccess_blocksCrossStore() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+
+        assertThrows(AccessDeniedException.class,
+                () -> rolePolicy.assertGerenteStoreAccess(gerente, "store-b"));
+    }
+
+    @Test
+    void assertGerenteExamWriteAccess_blocksGlobalExamForGerente() {
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+
+        assertThrows(AccessDeniedException.class,
+                () -> rolePolicy.assertGerenteExamWriteAccess(gerente, null));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

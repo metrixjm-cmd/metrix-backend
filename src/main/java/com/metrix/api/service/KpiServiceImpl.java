@@ -475,7 +475,7 @@ public class KpiServiceImpl implements KpiService {
     @Cacheable(value = "kpiExams", key = "#storeId")
     @Override
     public ExamKpiResponse getExamKpis(String storeId) {
-        List<Exam> exams = examRepository.findByStoreIdAndActivoTrue(storeId);
+        List<Exam> exams = examRepository.findAvailableForStore(storeId);
         List<ExamSubmission> subs = examSubmissionRepository.findByStoreId(storeId);
         long totalExams = exams.size();
         long totalSubs  = subs.size();

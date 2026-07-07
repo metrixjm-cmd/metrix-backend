@@ -53,6 +53,7 @@ public class TaskServiceImpl implements TaskService {
     private final UserRepository           userRepository;
     private final GcsService               gcsService;
     private final ApplicationEventPublisher eventPublisher;
+    private final RolePolicy               rolePolicy;
 
     // ── Crear Tarea ──────────────────────────────────────────────────────
 
@@ -79,18 +80,8 @@ public class TaskServiceImpl implements TaskService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Usuario creador no encontrado: " + createdBy));
 
-        // Validar restricción de asignación por rol del creador
-        Role creatorRole = creatorUser.getRoles() == null || creatorUser.getRoles().isEmpty()
-                ? null : creatorUser.getRoles().iterator().next();
-        Role assigneeRole = assignedUser.getRoles() == null || assignedUser.getRoles().isEmpty()
-                ? null : assignedUser.getRoles().iterator().next();
-
-        if (Role.ADMIN.equals(creatorRole) && !Role.GERENTE.equals(assigneeRole)) {
-            throw new IllegalArgumentException("El ADMIN solo puede asignar tareas a un GERENTE.");
-        }
-        if (Role.GERENTE.equals(creatorRole) && !Role.EJECUTADOR.equals(assigneeRole)) {
-            throw new IllegalArgumentException("El GERENTE solo puede asignar tareas a un EJECUTADOR.");
-        }
+        // Validar restricción de asignación por rol del creador y scope de gerente
+        rolePolicy.validateTaskAssignment(creatorUser, assignedUser, request.getStoreId());
 
         Task task = Task.builder()
                 .title(request.getTitle())
@@ -98,7 +89,7 @@ public class TaskServiceImpl implements TaskService {
                 .referenceUrl(request.getReferenceUrl())
                 .category(request.getCategory())
                 .critical(request.isCritical())
-                .assignedUserId(request.getAssignedUserId())
+                .assignedUserId(assignedUser.getId())
                 .position(assignedUser.getPuesto())     // Desnormalizado para reportes históricos
                 .storeId(request.getStoreId())
                 .shift(request.getShift())
@@ -471,12 +462,20 @@ public class TaskServiceImpl implements TaskService {
                 .filter(Task::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
 
-        boolean isManager = user.getRoles() != null
-                && (user.getRoles().contains(Role.ADMIN) || user.getRoles().contains(Role.GERENTE));
-        boolean isAssignee = task.getAssignedUserId().equals(user.getId());
+        boolean isAdmin = user.getRoles() != null && user.getRoles().contains(Role.ADMIN);
+        boolean isGerente = user.getRoles() != null && user.getRoles().contains(Role.GERENTE);
+        boolean isManager = isAdmin || isGerente;
+        boolean isAssignee = isTaskAssignee(user, task);
         if (!isAssignee && !isManager) {
             throw new org.springframework.security.access.AccessDeniedException(
                     "Solo el colaborador asignado o un gerente pueden eliminar evidencias de esta tarea.");
+        }
+
+        if (isGerente && !isAdmin) {
+            User assignee = userRepository.findById(task.getAssignedUserId())
+                    .or(() -> userRepository.findByNumeroUsuario(task.getAssignedUserId()))
+                    .orElse(null);
+            rolePolicy.assertGerenteCanManageTask(user, assignee, task.getStoreId());
         }
 
         // El asignado solo puede corregir evidencias mientras la tarea sigue en ejecución;
@@ -740,5 +739,14 @@ public class TaskServiceImpl implements TaskService {
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())
                 .build();
+    }
+
+    private boolean isTaskAssignee(User user, Task task) {
+        String assigneeId = task.getAssignedUserId();
+        if (assigneeId == null) {
+            return false;
+        }
+        return Objects.equals(assigneeId, user.getId())
+                || Objects.equals(assigneeId, user.getNumeroUsuario());
     }
 }

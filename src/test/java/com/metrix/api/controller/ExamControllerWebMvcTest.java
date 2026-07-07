@@ -4,10 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.metrix.api.dto.*;
 import com.metrix.api.model.ExamAudience;
 import com.metrix.api.model.QuestionType;
+import com.metrix.api.model.Role;
+import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.security.JwtService;
 import com.metrix.api.security.UserDetailsServiceImpl;
 import com.metrix.api.service.ExamService;
+import com.metrix.api.service.RolePolicy;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -26,6 +30,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
@@ -77,6 +83,27 @@ class ExamControllerWebMvcTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    @MockBean
+    private RolePolicy rolePolicy;
+
+    @BeforeEach
+    void stubAuthUsers() {
+        stubUser("ADMIN001", Role.ADMIN, "store-1");
+        stubUser("GER001", Role.GERENTE, "store-1");
+        stubUser("EJE001", Role.EJECUTADOR, "store-1");
+    }
+
+    private void stubUser(String numero, Role role, String storeId) {
+        when(userRepository.findByNumeroUsuario(numero)).thenReturn(Optional.of(
+                User.builder()
+                        .id(numero.toLowerCase())
+                        .numeroUsuario(numero)
+                        .roles(Set.of(role))
+                        .storeId(storeId)
+                        .activo(true)
+                        .build()));
+    }
 
     @MockBean
     private JwtService jwtService;

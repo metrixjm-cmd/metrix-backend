@@ -13,6 +13,7 @@ import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.KpiService;
+import com.metrix.api.service.RolePolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -50,6 +51,7 @@ public class KpiController {
 
     private final KpiService     kpiService;
     private final UserRepository userRepository;
+    private final RolePolicy     rolePolicy;
 
     /**
      * GET /api/v1/kpis/store/{storeId}
@@ -63,7 +65,9 @@ public class KpiController {
     @GetMapping("/store/{storeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<KpiSummaryResponse> getStoreSummary(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getStoreSummary(storeId));
     }
 
@@ -163,7 +167,9 @@ public class KpiController {
     @GetMapping("/store/{storeId}/correction-speed")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<CorrectionSpeedResponse> getCorrectionSpeed(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getCorrectionSpeed(storeId));
     }
 
@@ -184,9 +190,14 @@ public class KpiController {
     })
     @GetMapping("/analytics/igeo")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<IgeoAnalyticsResponse> getGlobalIgeoAnalytics() {
+    public ResponseEntity<IgeoAnalyticsResponse> getGlobalIgeoAnalytics(Authentication auth) {
         try {
-            return ResponseEntity.ok(kpiService.getGlobalIgeoAnalytics());
+            IgeoAnalyticsResponse response = kpiService.getGlobalIgeoAnalytics();
+            User current = resolveCurrentUser(auth.getName());
+            if (rolePolicy.isGerenteOnly(current)) {
+                response = filterIgeoForStore(response, current.getStoreId());
+            }
+            return ResponseEntity.ok(response);
         } catch (RestClientException ex) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
         }
@@ -204,7 +215,9 @@ public class KpiController {
     @GetMapping("/incidents/store/{storeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<IncidentKpiResponse> getIncidentKpis(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getIncidentKpis(storeId));
     }
 
@@ -220,7 +233,9 @@ public class KpiController {
     @GetMapping("/trainings/store/{storeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<TrainingKpiResponse> getTrainingKpis(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getTrainingKpis(storeId));
     }
 
@@ -236,7 +251,9 @@ public class KpiController {
     @GetMapping("/exams/store/{storeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<ExamKpiResponse> getExamKpis(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId) {
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getExamKpis(storeId));
     }
 
@@ -256,8 +273,35 @@ public class KpiController {
     }
 
     private boolean isGerenteOnly(User user) {
-        return user.getRoles() != null
-                && user.getRoles().contains(Role.GERENTE)
-                && !user.getRoles().contains(Role.ADMIN);
+        return rolePolicy.isGerenteOnly(user);
+    }
+
+    private void assertGerenteStoreAccess(String storeId, Authentication auth) {
+        rolePolicy.assertGerenteStoreAccess(resolveCurrentUser(auth.getName()), storeId);
+    }
+
+    /** GERENTE solo ve IGEO de su sucursal, no el desglose global completo. */
+    private IgeoAnalyticsResponse filterIgeoForStore(IgeoAnalyticsResponse full, String storeId) {
+        if (full.data() == null || full.data().byStore() == null) {
+            return full;
+        }
+        IgeoAnalyticsResponse.StoreResult storeEntry = full.data().byStore().stream()
+                .filter(s -> storeId.equals(s.storeId()))
+                .findFirst()
+                .orElse(null);
+        if (storeEntry == null) {
+            return full;
+        }
+        IgeoAnalyticsResponse.GlobalResult scopedGlobal = new IgeoAnalyticsResponse.GlobalResult(
+                storeEntry.totalTasks(),
+                storeEntry.completed(),
+                storeEntry.pillarScores(),
+                storeEntry.igeo());
+        IgeoAnalyticsResponse.AnalyticsData scopedData = new IgeoAnalyticsResponse.AnalyticsData(
+                scopedGlobal,
+                List.of(storeEntry));
+        return new IgeoAnalyticsResponse(
+                full.status(), full.metric(), full.description(),
+                full.weights(), full.computedAt(), scopedData);
     }
 }

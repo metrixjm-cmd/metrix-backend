@@ -22,7 +22,7 @@ public class TrainingEventListener {
 
     @EventListener
     public void onTrainingCreated(TrainingCreatedEvent event) {
-        notificationService.sendToUser(event.assignedUserId(), NotificationEvent.builder()
+        NotificationEvent assigned = NotificationEvent.builder()
                 .id(UUID.randomUUID().toString())
                 .type("TRAINING_ASSIGNED")
                 .severity("info")
@@ -31,7 +31,9 @@ public class TrainingEventListener {
                 .taskId(event.trainingId())
                 .storeId(event.storeId())
                 .timestamp(Instant.now())
-                .build());
+                .build();
+        notificationService.sendToUser(event.assignedUserId(), assigned);
+        notificationService.sendToManagerOfAssignee(event.assignedUserId(), assigned);
     }
 
     @EventListener

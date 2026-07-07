@@ -264,21 +264,8 @@ public class AlertScheduler {
         }
     }
 
-    @Scheduled(cron = "0 0 * * * *")
-    public void clearWarningSets() {
-        int d = warnedDeadlineIds.size();
-        int o = warnedOverdueIds.size();
-        int td = warnedTrainingDeadlineIds.size();
-        int to = warnedTrainingOverdueIds.size();
-        warnedDeadlineIds.clear();
-        warnedOverdueIds.clear();
-        warnedTrainingDeadlineIds.clear();
-        warnedTrainingOverdueIds.clear();
-        if (d + o + td + to > 0) {
-            log.info("[AlertScheduler] Sets limpiados - taskDeadline: {} | taskOverdue: {} | trainingDeadline: {} | trainingOverdue: {}",
-                    d, o, td, to);
-        }
-    }
+    // Eliminado clearWarningSets horario: re-alertaba tareas vencidas cada hora.
+    // Los IDs permanecen en memoria hasta reinicio; evita duplicados en prod.
 
     private String resolveAssignedUserName(String assignedUserId) {
         if (assignedUserId == null || assignedUserId.isBlank()) {

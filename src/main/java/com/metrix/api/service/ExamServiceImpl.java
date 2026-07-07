@@ -32,6 +32,7 @@ public class ExamServiceImpl implements ExamService {
     private final ExamTemplateRepository   templateRepo;
     private final BankQuestionRepository   bankQuestionRepo;
     private final ExamTemplateService      templateService;
+    private final RolePolicy               rolePolicy;
 
     // ── Crear examen ──────────────────────────────────────────────────────
 
@@ -458,6 +459,22 @@ public class ExamServiceImpl implements ExamService {
         Exam exam = findExamOrThrow(examId);
         exam.setActivo(false);
         examRepo.save(exam);
+    }
+
+    @Override
+    public void assertManagerReadAccess(String examId, String numeroUsuario) {
+        User user = userRepo.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + numeroUsuario));
+        Exam exam = findExamOrThrow(examId);
+        rolePolicy.assertGerenteExamReadAccess(user, exam.getStoreId());
+    }
+
+    @Override
+    public void assertManagerWriteAccess(String examId, String numeroUsuario) {
+        User user = userRepo.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + numeroUsuario));
+        Exam exam = findExamOrThrow(examId);
+        rolePolicy.assertGerenteExamWriteAccess(user, exam.getStoreId());
     }
 
     // ── Helpers privados ──────────────────────────────────────────────────

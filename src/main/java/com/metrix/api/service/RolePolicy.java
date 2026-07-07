@@ -3,6 +3,7 @@ package com.metrix.api.service;
 import com.metrix.api.model.ExamAudience;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -136,6 +137,139 @@ public class RolePolicy {
         if (hasRole(creator, Role.ADMIN)) return Role.GERENTE;
         if (hasRole(creator, Role.GERENTE)) return Role.EJECUTADOR;
         return null;
+    }
+
+    /**
+     * Valida que un GERENTE puede asignar una tarea al ejecutador en la sucursal indicada.
+     * ADMIN puede asignar a GERENTE en cualquier sucursal; GERENTE solo a su equipo.
+     */
+    public void validateTaskAssignment(User creator, User assignee, String storeId) {
+        if (storeId == null || storeId.isBlank()) {
+            throw new IllegalArgumentException("La sucursal de la tarea es obligatoria.");
+        }
+        if (!storeId.equals(assignee.getStoreId())) {
+            throw new IllegalStateException(
+                    "El colaborador asignado no pertenece a la sucursal seleccionada.");
+        }
+
+        if (hasRole(creator, Role.ADMIN)) {
+            if (!hasRole(assignee, Role.GERENTE)) {
+                throw new IllegalStateException("El ADMIN solo puede asignar tareas a un GERENTE.");
+            }
+            return;
+        }
+
+        if (hasRole(creator, Role.GERENTE)) {
+            if (!storeId.equals(creator.getStoreId())) {
+                throw new AccessDeniedException(
+                        "El GERENTE solo puede crear tareas en su propia sucursal.");
+            }
+            if (!hasRole(assignee, Role.EJECUTADOR)) {
+                throw new IllegalStateException("El GERENTE solo puede asignar tareas a un EJECUTADOR.");
+            }
+            if (!isOwnedByManager(assignee, creator)) {
+                throw new AccessDeniedException(
+                        "Solo puedes asignar tareas a colaboradores de tu propia plantilla.");
+            }
+            return;
+        }
+
+        throw new AccessDeniedException("No tienes permisos para crear tareas.");
+    }
+
+    /** GERENTE (sin rol ADMIN) consultando datos de otra sucursal. */
+    public void assertGerenteStoreAccess(User user, String storeId) {
+        if (hasRole(user, Role.ADMIN)) {
+            return;
+        }
+        if (isGerenteOnly(user) && (storeId == null || !storeId.equals(user.getStoreId()))) {
+            throw new AccessDeniedException(
+                    "El GERENTE solo puede consultar datos de su propia sucursal.");
+        }
+    }
+
+    /**
+     * GERENTE puede operar sobre un ejecutador solo si pertenece a su plantilla y sucursal.
+     */
+    public void assertGerenteCanManageUser(User manager, User target) {
+        if (hasRole(manager, Role.ADMIN)) {
+            return;
+        }
+        if (!isGerenteOnly(manager)) {
+            throw new AccessDeniedException("Sin permisos para esta operación.");
+        }
+        if (target.getStoreId() == null || !target.getStoreId().equals(manager.getStoreId())) {
+            throw new AccessDeniedException(
+                    "El colaborador no pertenece a tu sucursal.");
+        }
+        if (!hasRole(target, Role.EJECUTADOR) || !isOwnedByManager(target, manager)) {
+            throw new AccessDeniedException(
+                    "Solo puedes operar sobre colaboradores de tu propia plantilla.");
+        }
+    }
+
+    /**
+     * GERENTE puede leer un examen global (sin store) o de su sucursal.
+     */
+    public void assertGerenteExamReadAccess(User user, String examStoreId) {
+        if (hasRole(user, Role.ADMIN)) {
+            return;
+        }
+        if (examStoreId == null || examStoreId.isBlank()) {
+            return;
+        }
+        assertGerenteStoreAccess(user, examStoreId);
+    }
+
+    /**
+     * GERENTE solo puede modificar exámenes de su sucursal (no globales).
+     */
+    public void assertGerenteExamWriteAccess(User user, String examStoreId) {
+        if (hasRole(user, Role.ADMIN)) {
+            return;
+        }
+        if (examStoreId == null || examStoreId.isBlank()) {
+            throw new AccessDeniedException("Solo ADMIN puede modificar exámenes globales.");
+        }
+        assertGerenteStoreAccess(user, examStoreId);
+    }
+
+    /**
+     * @deprecated use {@link #assertGerenteExamReadAccess}
+     */
+    public void assertGerenteExamAccess(User user, String examStoreId) {
+        assertGerenteExamReadAccess(user, examStoreId);
+    }
+
+    /**
+     * GERENTE puede eliminar evidencias solo de tareas de su equipo en su sucursal.
+     */
+    public void assertGerenteCanManageTask(User manager, User assignee, String taskStoreId) {
+        if (hasRole(manager, Role.ADMIN)) {
+            return;
+        }
+        if (!isGerenteOnly(manager)) {
+            throw new AccessDeniedException("Sin permisos para eliminar evidencias.");
+        }
+        if (taskStoreId == null || !taskStoreId.equals(manager.getStoreId())) {
+            throw new AccessDeniedException(
+                    "No puedes modificar evidencias de tareas de otra sucursal.");
+        }
+        if (assignee == null || !isOwnedByManager(assignee, manager)) {
+            throw new AccessDeniedException(
+                    "Solo puedes eliminar evidencias de tareas de tu propia plantilla.");
+        }
+    }
+
+    public boolean isGerenteOnly(User user) {
+        return hasRole(user, Role.GERENTE) && !hasRole(user, Role.ADMIN);
+    }
+
+    public boolean isOwnedByManager(User target, User manager) {
+        boolean byId = manager.getId() != null && manager.getId().equals(target.getManagerOwnerId());
+        boolean byNumero = manager.getNumeroUsuario() != null
+                && manager.getNumeroUsuario().equals(target.getManagerOwnerNumeroUsuario());
+        return byId || byNumero;
     }
 
     private boolean hasRole(User user, Role role) {

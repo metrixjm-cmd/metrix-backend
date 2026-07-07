@@ -100,6 +100,7 @@ public class EvidenceController {
     @ApiResponse(responseCode = "204", description = "Evidencia eliminada")
     @ApiResponse(responseCode = "404", description = "Evidencia no encontrada en la tarea")
     @DeleteMapping
+    @PreAuthorize("hasAnyRole('EJECUTADOR','GERENTE','ADMIN')")
     public ResponseEntity<Void> delete(
             @PathVariable String taskId,
             @Parameter(description = "URL de la evidencia a eliminar") @RequestParam("url") String url,

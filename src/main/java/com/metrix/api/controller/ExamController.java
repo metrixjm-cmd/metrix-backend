@@ -1,7 +1,11 @@
 package com.metrix.api.controller;
 
 import com.metrix.api.dto.*;
+import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.*;
+import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.ExamService;
+import com.metrix.api.service.RolePolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -37,7 +41,9 @@ import java.util.List;
 @Tag(name = "Exámenes", description = "Módulo Trainer — exámenes y calificación automática (Sprint 19)")
 public class ExamController {
 
-    private final ExamService examService;
+    private final ExamService    examService;
+    private final UserRepository userRepository;
+    private final RolePolicy     rolePolicy;
 
     /** Crear examen — solo ADMIN. */
     @Operation(summary = "Crear examen", description = "Crea un nuevo examen con preguntas y respuestas. Solo ADMIN.")
@@ -65,7 +71,10 @@ public class ExamController {
     @ApiResponse(responseCode = "200", description = "Lista de exámenes de la sucursal")
     @GetMapping("/store/{storeId}")
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<List<ExamResponse>> getByStore(@PathVariable String storeId) {
+    public ResponseEntity<List<ExamResponse>> getByStore(
+            @PathVariable String storeId,
+            Authentication auth) {
+        rolePolicy.assertGerenteStoreAccess(resolveUser(auth.getName()), storeId);
         return ResponseEntity.ok(examService.getByStore(storeId));
     }
 
@@ -74,7 +83,10 @@ public class ExamController {
     @ApiResponse(responseCode = "200", description = "Detalle completo del examen")
     @GetMapping("/{examId}")
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<ExamResponse> getById(@PathVariable String examId) {
+    public ResponseEntity<ExamResponse> getById(
+            @PathVariable String examId,
+            Authentication auth) {
+        examService.assertManagerReadAccess(examId, auth.getName());
         return ResponseEntity.ok(examService.getById(examId));
     }
 
@@ -103,7 +115,10 @@ public class ExamController {
     @ApiResponse(responseCode = "200", description = "Lista de submissions del examen")
     @GetMapping("/{examId}/submissions")
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<List<ExamSubmissionResponse>> getSubmissions(@PathVariable String examId) {
+    public ResponseEntity<List<ExamSubmissionResponse>> getSubmissions(
+            @PathVariable String examId,
+            Authentication auth) {
+        examService.assertManagerReadAccess(examId, auth.getName());
         return ResponseEntity.ok(examService.getSubmissions(examId));
     }
 
@@ -120,7 +135,10 @@ public class ExamController {
                description = "Distribución de puntajes, tasa de fallo por pregunta, tiempos y pendientes de revisión.")
     @GetMapping("/{examId}/stats")
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<ExamStatsResponse> getStats(@PathVariable String examId) {
+    public ResponseEntity<ExamStatsResponse> getStats(
+            @PathVariable String examId,
+            Authentication auth) {
+        examService.assertManagerReadAccess(examId, auth.getName());
         return ResponseEntity.ok(examService.getStats(examId));
     }
 
@@ -141,7 +159,9 @@ public class ExamController {
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
     public ResponseEntity<ExamResponse> update(
             @PathVariable String examId,
-            @Valid @RequestBody CreateExamRequest request) {
+            @Valid @RequestBody CreateExamRequest request,
+            Authentication auth) {
+        examService.assertManagerWriteAccess(examId, auth.getName());
         return ResponseEntity.ok(examService.update(examId, request));
     }
 
@@ -150,7 +170,10 @@ public class ExamController {
     @ApiResponse(responseCode = "204", description = "Examen eliminado")
     @DeleteMapping("/{examId}")
     @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<Void> delete(@PathVariable String examId) {
+    public ResponseEntity<Void> delete(
+            @PathVariable String examId,
+            Authentication auth) {
+        examService.assertManagerWriteAccess(examId, auth.getName());
         examService.delete(examId);
         return ResponseEntity.noContent().build();
     }
@@ -166,5 +189,11 @@ public class ExamController {
             Authentication auth) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(examService.createFromTemplate(templateId, request, auth.getName()));
+    }
+
+    private User resolveUser(String numeroUsuario) {
+        return userRepository.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado: " + numeroUsuario));
     }
 }

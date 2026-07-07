@@ -9,6 +9,7 @@ import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.TaskService;
+import com.metrix.api.service.RolePolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -54,6 +55,7 @@ public class TaskController {
 
     private final TaskService    taskService;
     private final UserRepository userRepository;
+    private final RolePolicy     rolePolicy;
 
     // ── Crear Tarea ──────────────────────────────────────────────────────
 
@@ -120,11 +122,25 @@ public class TaskController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<List<TaskResponse>> getTasksByUser(
             @Parameter(description = "ID del usuario (MongoDB _id)") @PathVariable String userId,
-            @Parameter(description = "Filtro de turno opcional") @RequestParam(required = false) String shift) {
+            @Parameter(description = "Filtro de turno opcional") @RequestParam(required = false) String shift,
+            Authentication auth) {
+
+        User currentUser = userRepository.findByNumeroUsuario(auth.getName())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario autenticado no encontrado: " + auth.getName()));
+        String resolvedUserId = userId;
+        if (rolePolicy.isGerenteOnly(currentUser)) {
+            User targetUser = userRepository.findById(userId)
+                    .or(() -> userRepository.findByNumeroUsuario(userId))
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Colaborador no encontrado: " + userId));
+            rolePolicy.assertGerenteCanManageUser(currentUser, targetUser);
+            resolvedUserId = targetUser.getId();
+        }
 
         List<TaskResponse> tasks = (shift != null && !shift.isBlank())
-                ? taskService.getTasksByUserAndShift(userId, shift)
-                : taskService.getTasksByUser(userId);
+                ? taskService.getTasksByUserAndShift(resolvedUserId, shift)
+                : taskService.getTasksByUser(resolvedUserId);
 
         return ResponseEntity.ok(tasks);
     }

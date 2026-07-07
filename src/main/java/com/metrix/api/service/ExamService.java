@@ -33,4 +33,10 @@ public interface ExamService {
     ExamResponse update(String examId, CreateExamRequest request);
 
     void delete(String examId);
+
+    /** Valida que un GERENTE puede acceder al examen (global o de su sucursal). */
+    void assertManagerReadAccess(String examId, String numeroUsuario);
+
+    /** Valida que un GERENTE puede modificar el examen (solo de su sucursal). */
+    void assertManagerWriteAccess(String examId, String numeroUsuario);
 }

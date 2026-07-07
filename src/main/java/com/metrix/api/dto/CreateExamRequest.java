@@ -34,7 +34,7 @@ public class CreateExamRequest {
     @Min(0) @Max(100)
     private int passingScore = 70;
 
-    /** Límite de tiempo en minutos. Null = sin límite. */
-    @Min(1)
+    /** Límite de tiempo en minutos. Máximo 5 horas (300 min). */
+    @Min(1) @Max(300)
     private Integer timeLimitMinutes;
 }

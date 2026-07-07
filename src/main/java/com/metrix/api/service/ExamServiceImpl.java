@@ -142,11 +142,8 @@ public class ExamServiceImpl implements ExamService {
         User user = userRepo.findByNumeroUsuario(userNumeroUsuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + userNumeroUsuario));
 
-        if (exam.getMaxAttempts() > 0) {
-            long count = submissionRepo.countByExamIdAndUserId(examId, user.getId());
-            if (count >= exam.getMaxAttempts()) {
-                throw new IllegalStateException("Límite de intentos alcanzado (" + exam.getMaxAttempts() + ")");
-            }
+        if (submissionRepo.countByExamIdAndUserId(examId, user.getId()) >= 1) {
+            throw new IllegalStateException("Solo puedes resolver este examen una vez.");
         }
 
         List<ExamQuestion> questions = exam.getQuestions();
@@ -413,12 +410,10 @@ public class ExamServiceImpl implements ExamService {
         User user = userRepo.findByNumeroUsuario(userNumeroUsuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + userNumeroUsuario));
         long    count     = submissionRepo.countByExamIdAndUserId(examId, user.getId());
-        int     maxAtt    = exam.getMaxAttempts();
-        boolean canAtt    = maxAtt == 0 || count < maxAtt;
-        long    remaining = maxAtt == 0 ? -1L : maxAtt - count;
+        boolean canAtt    = count < 1;
         return AttemptInfoResponse.builder()
-                .attemptCount(count).maxAttempts(maxAtt)
-                .canAttempt(canAtt).remainingAttempts(remaining)
+                .attemptCount(count).maxAttempts(1)
+                .canAttempt(canAtt).remainingAttempts(canAtt ? 1 : 0)
                 .build();
     }
 

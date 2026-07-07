@@ -35,7 +35,7 @@ public class CreateTrainingRequest {
     /** Fecha de inicio (capacitación multi-día). Opcional — si null se usa dueAt como día único. */
     private Instant startDate;
 
-    @NotNull @FutureOrPresent
+    /** Opcional en asignaciones de examen sin fecha límite. */
     private Instant dueAt;
 
     private String assignmentGroupId;

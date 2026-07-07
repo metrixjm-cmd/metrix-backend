@@ -92,14 +92,21 @@ class RolePolicyTest {
     // ── validateExamAssignment (delegación en dos niveles) ──────────────
 
     @Test
-    void examAssign_admin_canAssign_toGerente_regardlessOfAudience() {
+    void examAssign_admin_canAssign_managerExam_toGerente() {
         User admin = buildUser("admin1", Role.ADMIN, "store-a");
         User gerente = buildUser("ger1", Role.GERENTE, "store-a");
 
         assertDoesNotThrow(() ->
-                rolePolicy.validateExamAssignment(admin, gerente, ExamAudience.EJECUTADOR));
-        assertDoesNotThrow(() ->
                 rolePolicy.validateExamAssignment(admin, gerente, ExamAudience.GERENTE));
+    }
+
+    @Test
+    void examAssign_admin_cannotAssign_executorExam_toGerente() {
+        User admin = buildUser("admin1", Role.ADMIN, "store-a");
+        User gerente = buildUser("ger1", Role.GERENTE, "store-a");
+
+        assertThrows(IllegalStateException.class,
+                () -> rolePolicy.validateExamAssignment(admin, gerente, ExamAudience.EJECUTADOR));
     }
 
     @Test

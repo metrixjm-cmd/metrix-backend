@@ -76,10 +76,13 @@ public class RolePolicy {
         ExamAudience target = audience != null ? audience : ExamAudience.EJECUTADOR;
 
         if (hasRole(creator, Role.ADMIN)) {
+            if (target == ExamAudience.EJECUTADOR) {
+                throw new IllegalStateException(
+                        "Los exámenes para ejecutadores los asignan los gerentes a su equipo.");
+            }
             if (!hasRole(assignee, Role.GERENTE)) {
                 throw new IllegalStateException(
-                        "El administrador solo puede asignar exámenes a gerentes. " +
-                        "El gerente será quien lo asigne a sus ejecutadores.");
+                        "El administrador solo puede asignar exámenes para gerentes.");
             }
             return;
         }

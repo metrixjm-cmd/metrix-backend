@@ -229,19 +229,47 @@ public class ExamServiceImpl implements ExamService {
      */
     private void syncLinkedTraining(String examId, String userId, double scoreOn100, boolean passed) {
         List<Training> linked = trainingRepository.findByExamIdAndAssignedUserIdAndActivoTrue(examId, userId);
-        if (linked.isEmpty()) return;
-
-        double gradeOn10 = Math.round(scoreOn100 / 10.0 * 10.0) / 10.0;
         for (Training training : linked) {
-            trainingStateMachine.completeByExam(training, gradeOn10, passed);
+            applyExamResultToTraining(training, scoreOn100, passed);
         }
-        trainingRepository.saveAll(linked);
+        if (!linked.isEmpty()) trainingRepository.saveAll(linked);
+    }
 
-        for (Training training : linked) {
+    /** @return true si el Training cambió de estado (permite detectar no-ops en el backfill). */
+    private boolean applyExamResultToTraining(Training training, double scoreOn100, boolean passed) {
+        TrainingStatus before = training.getProgress().getStatus();
+        double gradeOn10 = Math.round(scoreOn100 / 10.0 * 10.0) / 10.0;
+        trainingStateMachine.completeByExam(training, gradeOn10, passed);
+        boolean changed = training.getProgress().getStatus() != before;
+        if (changed) {
             eventPublisher.publishEvent(new TrainingProgressChangedEvent(
                     training.getId(), training.getProgress().getStatus(), training.getStoreId(),
                     training.getAssignedUserId(), training.getTitle(), training.getPosition()));
         }
+        return changed;
+    }
+
+    /**
+     * Backfill único: recorre TODAS las submissions históricas y sincroniza
+     * cualquier Training vinculado que se haya quedado sin calificar porque
+     * fue enviado antes de que existiera {@link #syncLinkedTraining}.
+     * Idempotente — no-op para trainings ya en estado terminal.
+     */
+    @Override
+    public int reconcileTrainingSync() {
+        int fixed = 0;
+        for (ExamSubmission submission : submissionRepo.findAll()) {
+            List<Training> linked = trainingRepository.findByExamIdAndAssignedUserIdAndActivoTrue(
+                    submission.getExamId(), submission.getUserId());
+            for (Training training : linked) {
+                boolean changed = applyExamResultToTraining(training, submission.getScore(), submission.isPassed());
+                if (changed) {
+                    trainingRepository.save(training);
+                    fixed++;
+                }
+            }
+        }
+        return fixed;
     }
 
     // ── Historial de submissions ──────────────────────────────────────────

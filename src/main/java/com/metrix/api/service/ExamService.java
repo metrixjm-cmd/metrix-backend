@@ -39,4 +39,11 @@ public interface ExamService {
 
     /** Valida que un GERENTE puede modificar el examen (solo de su sucursal). */
     void assertManagerWriteAccess(String examId, String numeroUsuario);
+
+    /**
+     * Backfill administrativo: sincroniza Trainings cuya calificación quedó
+     * huérfana por submissions anteriores al fix de sincronización.
+     * @return número de Trainings corregidos.
+     */
+    int reconcileTrainingSync();
 }

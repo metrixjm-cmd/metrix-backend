@@ -110,6 +110,20 @@ public class ExamController {
                 .body(examService.submit(examId, request, auth.getName()));
     }
 
+    /**
+     * Backfill administrativo (uso único) — sincroniza Trainings cuya
+     * calificación quedó huérfana por submissions previas al fix de
+     * sincronización Exam→Training. Solo ADMIN. Idempotente: re-ejecutarlo
+     * no tiene efecto sobre Trainings ya sincronizados.
+     */
+    @Operation(summary = "Backfill de calificaciones huérfanas", description = "Sincroniza Trainings con submissions previas al fix de sincronización. Solo ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Número de Trainings corregidos")
+    @PostMapping("/reconcile-training-sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Integer> reconcileTrainingSync() {
+        return ResponseEntity.ok(examService.reconcileTrainingSync());
+    }
+
     /** Historial de submissions de un examen — solo ADMIN/GERENTE. */
     @Operation(summary = "Historial de submissions", description = "Lista todas las submissions (intentos) de un examen. Solo ADMIN/GERENTE.")
     @ApiResponse(responseCode = "200", description = "Lista de submissions del examen")

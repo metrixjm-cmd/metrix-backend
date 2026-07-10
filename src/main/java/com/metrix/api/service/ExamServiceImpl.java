@@ -1,14 +1,17 @@
 package com.metrix.api.service;
 
 import com.metrix.api.dto.*;
+import com.metrix.api.event.DomainEvents.TrainingProgressChangedEvent;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.*;
 import com.metrix.api.repository.BankQuestionRepository;
 import com.metrix.api.repository.ExamRepository;
 import com.metrix.api.repository.ExamSubmissionRepository;
 import com.metrix.api.repository.ExamTemplateRepository;
+import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -33,6 +36,9 @@ public class ExamServiceImpl implements ExamService {
     private final BankQuestionRepository   bankQuestionRepo;
     private final ExamTemplateService      templateService;
     private final RolePolicy               rolePolicy;
+    private final TrainingRepository       trainingRepository;
+    private final TrainingStateMachine     trainingStateMachine;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ── Crear examen ──────────────────────────────────────────────────────
 
@@ -211,7 +217,31 @@ public class ExamServiceImpl implements ExamService {
                 .build();
 
         ExamSubmission saved = submissionRepo.save(submission);
+        syncLinkedTraining(examId, user.getId(), scoring.score(), passed);
         return toSubmissionResponse(saved, questionResults, exam.getPassingScore());
+    }
+
+    /**
+     * Propaga el resultado del examen a la(s) capacitación(es) del colaborador
+     * que lo tengan vinculado ({@code training.examId}). Sin esto, la UI de
+     * Trainer (tarjetas de asignación) siempre muestra "Sin calificación"
+     * porque {@code Training.progress} nunca se toca al enviar un examen.
+     */
+    private void syncLinkedTraining(String examId, String userId, double scoreOn100, boolean passed) {
+        List<Training> linked = trainingRepository.findByExamIdAndAssignedUserIdAndActivoTrue(examId, userId);
+        if (linked.isEmpty()) return;
+
+        double gradeOn10 = Math.round(scoreOn100 / 10.0 * 10.0) / 10.0;
+        for (Training training : linked) {
+            trainingStateMachine.completeByExam(training, gradeOn10, passed);
+        }
+        trainingRepository.saveAll(linked);
+
+        for (Training training : linked) {
+            eventPublisher.publishEvent(new TrainingProgressChangedEvent(
+                    training.getId(), training.getProgress().getStatus(), training.getStoreId(),
+                    training.getAssignedUserId(), training.getTitle(), training.getPosition()));
+        }
     }
 
     // ── Historial de submissions ──────────────────────────────────────────

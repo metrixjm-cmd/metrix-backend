@@ -7,6 +7,7 @@ import java.util.Set;
 import com.metrix.api.repository.ExamRepository;
 import com.metrix.api.repository.ExamSubmissionRepository;
 import com.metrix.api.repository.ExamTemplateRepository;
+import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,6 +54,15 @@ class ExamServiceImplTest {
 
     @Mock
     private ExamTemplateService templateService;
+
+    @Mock
+    private TrainingRepository trainingRepository;
+
+    @Mock
+    private TrainingStateMachine trainingStateMachine;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ExamServiceImpl examService;

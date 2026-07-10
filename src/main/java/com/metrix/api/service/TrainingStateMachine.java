@@ -98,6 +98,42 @@ public class TrainingStateMachine {
         }
     }
 
+    // ── Auto-transición por examen vinculado (ExamServiceImpl.submit) ────
+
+    /**
+     * Completa automáticamente una capacitación vinculada a un examen cuando
+     * el colaborador envía sus respuestas. Salta directo a COMPLETADA sin
+     * importar si venía de PROGRAMADA o EN_CURSO (mismo patrón que
+     * {@link #tryAutoCompleteByMaterials}), porque el examen ya define el
+     * resultado final — no hay paso intermedio "EN_CURSO" observable.
+     * <p>
+     * {@code passed} se recibe ya calculado por el motor de examen (contra
+     * {@code exam.passingScore}), NO se recalcula contra
+     * {@code training.minPassGrade}: son dos criterios de aprobación
+     * independientes.
+     * <p>
+     * No-op si la capacitación ya está en un estado terminal (evita que un
+     * reenvío, si algún día se permite, sobrescriba el resultado).
+     */
+    public void completeByExam(Training training, double grade, boolean passed) {
+        TrainingProgress progress = ensureProgress(training);
+        if (progress.getStatus() == TrainingStatus.COMPLETADA
+                || progress.getStatus() == TrainingStatus.NO_COMPLETADA) {
+            return;
+        }
+
+        Instant now = Instant.now();
+        if (progress.getStartedAt() == null) {
+            progress.setStartedAt(now);
+        }
+        progress.setStatus(TrainingStatus.COMPLETADA);
+        progress.setCompletedAt(now);
+        progress.setGrade(grade);
+        progress.setPassed(passed);
+        progress.setPercentage(100);
+        progress.setOnTime(training.getDueAt() == null || !now.isAfter(training.getDueAt()));
+    }
+
     // ── Auto-transición por materiales (markMaterialViewed) ──────────────
 
     /**

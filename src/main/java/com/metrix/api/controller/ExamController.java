@@ -179,16 +179,25 @@ public class ExamController {
         return ResponseEntity.ok(examService.update(examId, request));
     }
 
-    /** Eliminar examen (soft delete) — solo ADMIN/GERENTE. */
-    @Operation(summary = "Eliminar examen", description = "Desactiva un examen (soft delete). Solo ADMIN/GERENTE.")
+    /** Eliminar examen (soft delete) — solo ADMIN. GERENTE debe solicitarlo (ver /request-deletion). */
+    @Operation(summary = "Eliminar examen", description = "Desactiva un examen (soft delete). Solo ADMIN.")
     @ApiResponse(responseCode = "204", description = "Examen eliminado")
     @DeleteMapping("/{examId}")
-    @PreAuthorize("hasAnyRole('ADMIN','GERENTE')")
-    public ResponseEntity<Void> delete(
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Void> delete(@PathVariable String examId) {
+        examService.delete(examId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** GERENTE solicita al ADMIN eliminar un examen — no lo elimina, solo notifica. */
+    @Operation(summary = "Solicitar eliminación de examen", description = "Notifica a todos los ADMIN que un GERENTE solicita eliminar este examen. Solo GERENTE.")
+    @ApiResponse(responseCode = "204", description = "Solicitud enviada")
+    @PostMapping("/{examId}/request-deletion")
+    @PreAuthorize("hasRole('GERENTE')")
+    public ResponseEntity<Void> requestDeletion(
             @PathVariable String examId,
             Authentication auth) {
-        examService.assertManagerWriteAccess(examId, auth.getName());
-        examService.delete(examId);
+        examService.requestDeletion(examId, auth.getName());
         return ResponseEntity.noContent().build();
     }
 

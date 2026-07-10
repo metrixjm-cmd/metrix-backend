@@ -24,6 +24,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+
+
 @Service
 @RequiredArgsConstructor
 public class ExamServiceImpl implements ExamService {
@@ -39,6 +41,7 @@ public class ExamServiceImpl implements ExamService {
     private final TrainingRepository       trainingRepository;
     private final TrainingStateMachine     trainingStateMachine;
     private final ApplicationEventPublisher eventPublisher;
+    private final NotificationService      notificationService;
 
     // ── Crear examen ──────────────────────────────────────────────────────
 
@@ -512,6 +515,26 @@ public class ExamServiceImpl implements ExamService {
         Exam exam = findExamOrThrow(examId);
         exam.setActivo(false);
         examRepo.save(exam);
+    }
+
+    @Override
+    public void requestDeletion(String examId, String numeroUsuario) {
+        User requester = userRepo.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + numeroUsuario));
+        Exam exam = findExamOrThrow(examId);
+        assertManagerReadAccess(examId, numeroUsuario);
+
+        notificationService.sendToAllAdmins(NotificationEvent.builder()
+                .id(UUID.randomUUID().toString())
+                .type("EXAM_DELETION_REQUESTED")
+                .severity("warning")
+                .title("Solicitud de eliminación de examen")
+                .body(requester.getNombre() + " solicita eliminar \"" + exam.getTitle() + "\" ("
+                        + exam.getQuestions().size() + " preguntas)")
+                .examId(exam.getId())
+                .storeId(exam.getStoreId())
+                .timestamp(Instant.now())
+                .build());
     }
 
     @Override

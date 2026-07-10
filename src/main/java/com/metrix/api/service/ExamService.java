@@ -46,4 +46,11 @@ public interface ExamService {
      * @return número de Trainings corregidos.
      */
     int reconcileTrainingSync();
+
+    /**
+     * GERENTE solicita al ADMIN eliminar un examen (no lo elimina directamente).
+     * Notifica a todos los ADMIN; la eliminación efectiva la hace el ADMIN
+     * manualmente si aprueba la solicitud.
+     */
+    void requestDeletion(String examId, String numeroUsuario);
 }

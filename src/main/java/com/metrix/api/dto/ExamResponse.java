@@ -31,6 +31,11 @@ public class ExamResponse {
     private long submissionCount;
     private int passRate; // 0–100
 
+    /** Solicitud de eliminación (GERENTE) pendiente de revisión del ADMIN. */
+    private boolean deletionRequested;
+    private String deletionRequestedByName;
+    private int deletionRequestCount;
+
     @Data
     @Builder
     public static class QuestionDto {

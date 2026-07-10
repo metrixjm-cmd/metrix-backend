@@ -189,16 +189,24 @@ public class ExamController {
         return ResponseEntity.noContent().build();
     }
 
-    /** GERENTE solicita al ADMIN eliminar un examen — no lo elimina, solo notifica. */
+    /** GERENTE solicita al ADMIN eliminar un examen — no lo elimina, solo notifica y marca el examen. */
     @Operation(summary = "Solicitar eliminación de examen", description = "Notifica a todos los ADMIN que un GERENTE solicita eliminar este examen. Solo GERENTE.")
-    @ApiResponse(responseCode = "204", description = "Solicitud enviada")
+    @ApiResponse(responseCode = "200", description = "Solicitud enviada — devuelve el examen actualizado")
     @PostMapping("/{examId}/request-deletion")
     @PreAuthorize("hasRole('GERENTE')")
-    public ResponseEntity<Void> requestDeletion(
+    public ResponseEntity<ExamResponse> requestDeletion(
             @PathVariable String examId,
             Authentication auth) {
-        examService.requestDeletion(examId, auth.getName());
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(examService.requestDeletion(examId, auth.getName()));
+    }
+
+    /** ADMIN descarta una solicitud de eliminación sin borrar el examen. */
+    @Operation(summary = "Descartar solicitud de eliminación", description = "Rechaza la solicitud de un GERENTE sin borrar el examen. Solo ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Solicitud descartada — devuelve el examen actualizado")
+    @PostMapping("/{examId}/dismiss-deletion-request")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ExamResponse> dismissDeletionRequest(@PathVariable String examId) {
+        return ResponseEntity.ok(examService.dismissDeletionRequest(examId));
     }
 
     /** Crear examen desde plantilla — preguntas copiadas como snapshot. Solo ADMIN. */

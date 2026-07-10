@@ -85,6 +85,25 @@ public class Exam {
     @Field("activo")
     private boolean activo = true;
 
+    /** true mientras haya una solicitud de eliminación (GERENTE) pendiente de revisión del ADMIN. */
+    @Builder.Default
+    @Field("deletion_requested")
+    private boolean deletionRequested = false;
+
+    @Field("deletion_requested_by_id")
+    private String deletionRequestedByUserId;
+
+    @Field("deletion_requested_by_name")
+    private String deletionRequestedByName;
+
+    @Field("deletion_requested_at")
+    private Instant deletionRequestedAt;
+
+    /** Total histórico de solicitudes de eliminación recibidas (no se resetea al descartar). */
+    @Builder.Default
+    @Field("deletion_request_count")
+    private int deletionRequestCount = 0;
+
     @CreatedDate
     @Field("created_at")
     private Instant createdAt;

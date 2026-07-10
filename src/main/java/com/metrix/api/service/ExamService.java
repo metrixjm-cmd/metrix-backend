@@ -50,7 +50,14 @@ public interface ExamService {
     /**
      * GERENTE solicita al ADMIN eliminar un examen (no lo elimina directamente).
      * Notifica a todos los ADMIN; la eliminación efectiva la hace el ADMIN
-     * manualmente si aprueba la solicitud.
+     * manualmente si aprueba la solicitud. Marca el examen como
+     * {@code deletionRequested} para que la UI lo distinga visualmente.
      */
-    void requestDeletion(String examId, String numeroUsuario);
+    ExamResponse requestDeletion(String examId, String numeroUsuario);
+
+    /**
+     * ADMIN descarta una solicitud de eliminación sin borrar el examen.
+     * Notifica al GERENTE que la solicitó.
+     */
+    ExamResponse dismissDeletionRequest(String examId);
 }

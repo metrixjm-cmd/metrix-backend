@@ -518,23 +518,56 @@ public class ExamServiceImpl implements ExamService {
     }
 
     @Override
-    public void requestDeletion(String examId, String numeroUsuario) {
+    public ExamResponse requestDeletion(String examId, String numeroUsuario) {
         User requester = userRepo.findByNumeroUsuario(numeroUsuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + numeroUsuario));
         Exam exam = findExamOrThrow(examId);
         assertManagerReadAccess(examId, numeroUsuario);
 
+        exam.setDeletionRequested(true);
+        exam.setDeletionRequestedByUserId(requester.getId());
+        exam.setDeletionRequestedByName(requester.getNombre());
+        exam.setDeletionRequestedAt(Instant.now());
+        exam.setDeletionRequestCount(exam.getDeletionRequestCount() + 1);
+        Exam saved = examRepo.save(exam);
+
         notificationService.sendToAllAdmins(NotificationEvent.builder()
                 .id(UUID.randomUUID().toString())
                 .type("EXAM_DELETION_REQUESTED")
                 .severity("warning")
-                .title("Solicitud de eliminación de examen")
-                .body(requester.getNombre() + " solicita eliminar \"" + exam.getTitle() + "\" ("
-                        + exam.getQuestions().size() + " preguntas)")
-                .examId(exam.getId())
-                .storeId(exam.getStoreId())
+                .title("Solicitud de eliminación de examen"
+                        + (saved.getDeletionRequestCount() > 1 ? " (repetida x" + saved.getDeletionRequestCount() + ")" : ""))
+                .body(requester.getNombre() + " solicita eliminar \"" + saved.getTitle() + "\" ("
+                        + saved.getQuestions().size() + " preguntas)")
+                .examId(saved.getId())
+                .storeId(saved.getStoreId())
                 .timestamp(Instant.now())
                 .build());
+
+        return toResponse(saved);
+    }
+
+    @Override
+    public ExamResponse dismissDeletionRequest(String examId) {
+        Exam exam = findExamOrThrow(examId);
+        String requesterId = exam.getDeletionRequestedByUserId();
+        exam.setDeletionRequested(false);
+        Exam saved = examRepo.save(exam);
+
+        if (requesterId != null) {
+            notificationService.sendToUser(requesterId, NotificationEvent.builder()
+                    .id(UUID.randomUUID().toString())
+                    .type("EXAM_DELETION_REQUESTED")
+                    .severity("info")
+                    .title("Solicitud de eliminación rechazada")
+                    .body("El administrador no eliminó \"" + saved.getTitle() + "\". Puedes contactarlo directamente si es necesario.")
+                    .examId(saved.getId())
+                    .storeId(saved.getStoreId())
+                    .timestamp(Instant.now())
+                    .build());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -601,6 +634,9 @@ public class ExamServiceImpl implements ExamService {
                 .maxAttempts(exam.getMaxAttempts()).createdByName(exam.getCreatedByName())
                 .createdAt(exam.getCreatedAt()).updatedAt(exam.getUpdatedAt())
                 .submissionCount(submissionCount).passRate(passRate)
+                .deletionRequested(exam.isDeletionRequested())
+                .deletionRequestedByName(exam.getDeletionRequestedByName())
+                .deletionRequestCount(exam.getDeletionRequestCount())
                 .build();
     }
 

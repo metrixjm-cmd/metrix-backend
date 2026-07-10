@@ -269,6 +269,22 @@ public class TrainingController {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Reasignación única tras reprobar ───────────────────────────────────
+
+    @Operation(summary = "Reasignar examen reprobado",
+               description = "Otorga UN intento adicional a un examen COMPLETADA y reprobado: desactiva la asignación actual y crea una nueva. Solo ADMIN/GERENTE, y solo una vez por examen+usuario.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Nueva capacitación creada con el intento adicional"),
+            @ApiResponse(responseCode = "422", description = "No cumple los requisitos (no reprobado, ya reasignado, etc.)")
+    })
+    @PostMapping("/{id}/reassign-retry")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<TrainingResponse> reassignRetry(
+            @Parameter(description = "ID de la capacitación reprobada") @PathVariable String id,
+            Authentication auth) {
+        return ResponseEntity.ok(trainingService.reassignRetry(id, auth.getName()));
+    }
+
     // ── Helper: resuelve MongoDB _id desde numeroUsuario ─────────────────
 
     private String resolveUserId(String numeroUsuario) {

@@ -44,6 +44,13 @@ public interface TrainingService {
     /** Soft-delete: marca activo = false. */
     void deactivate(String id, String callerIdentifier);
 
+    /**
+     * Reasignación única de un examen reprobado: desactiva la capacitación
+     * COMPLETADA+reprobada y crea una nueva con {@code retryGranted=true},
+     * habilitando un intento adicional. Falla si ya se otorgó antes.
+     */
+    TrainingResponse reassignRetry(String id, String callerIdentifier);
+
     // ── Variantes paginadas ───────────────────────────────────────────────
     Page<TrainingResponse> getMyTrainingsPaged(String userId, int page, int size);
     Page<TrainingResponse> getByStorePaged(String storeId, int page, int size, String callerIdentifier);

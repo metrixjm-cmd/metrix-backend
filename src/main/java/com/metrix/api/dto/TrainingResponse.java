@@ -33,6 +33,7 @@ public class TrainingResponse {
     private Instant dueAt;
     private String assignmentGroupId;
     private String examId;
+    private boolean retryGranted;
 
     // Progreso (aplanado de TrainingProgress)
     private TrainingStatus status;

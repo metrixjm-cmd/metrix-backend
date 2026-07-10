@@ -249,6 +249,56 @@ public class TrainingServiceImpl implements TrainingService {
         trainingRepository.save(training);
     }
 
+    // ── Reasignación única tras reprobar examen ───────────────────────────
+
+    @Override
+    public TrainingResponse reassignRetry(String id, String callerIdentifier) {
+        Training training = trainingRepository.findById(id)
+                .filter(Training::isActivo)
+                .orElseThrow(() -> new ResourceNotFoundException("Capacitación no encontrada: " + id));
+        ensureOwnership(training, callerIdentifier);
+
+        if (training.getExamId() == null || training.getExamId().isBlank()) {
+            throw new IllegalStateException("Solo se puede reasignar una capacitación vinculada a un examen.");
+        }
+        TrainingProgress progress = training.getProgress();
+        if (progress == null || progress.getStatus() != TrainingStatus.COMPLETADA
+                || !Boolean.FALSE.equals(progress.getPassed())) {
+            throw new IllegalStateException("Solo se puede reasignar un examen COMPLETADA y reprobado.");
+        }
+        if (training.isRetryGranted()) {
+            throw new IllegalStateException("Ya se otorgó la reasignación única para este examen.");
+        }
+
+        training.setActivo(false);
+        trainingRepository.save(training);
+
+        Training retry = Training.builder()
+                .title(training.getTitle())
+                .description(training.getDescription())
+                .durationHours(training.getDurationHours())
+                .minPassGrade(training.getMinPassGrade())
+                .assignedUserId(training.getAssignedUserId())
+                .assignedUserName(training.getAssignedUserName())
+                .position(training.getPosition())
+                .storeId(training.getStoreId())
+                .shift(training.getShift())
+                .examId(training.getExamId())
+                .retryGranted(true)
+                .progress(TrainingProgress.builder().build())
+                .createdBy(callerIdentifier)
+                .activo(true)
+                .build();
+
+        Training saved = trainingRepository.save(retry);
+
+        eventPublisher.publishEvent(new TrainingCreatedEvent(
+                saved.getId(), saved.getAssignedUserId(),
+                saved.getStoreId(), saved.getTitle(), saved.getShift()));
+
+        return toResponse(saved);
+    }
+
     // ── Consultas paginadas ───────────────────────────────────────────────
 
     @Override
@@ -527,6 +577,7 @@ public class TrainingServiceImpl implements TrainingService {
                 .dueAt(t.getDueAt())
                 .assignmentGroupId(t.getAssignmentGroupId())
                 .examId(t.getExamId())
+                .retryGranted(t.isRetryGranted())
                 .templateId(t.getTemplateId())
                 .materials(resolvedMaterials)
                 .category(t.getCategory())

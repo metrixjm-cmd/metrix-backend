@@ -151,7 +151,7 @@ public class ExamServiceImpl implements ExamService {
         User user = userRepo.findByNumeroUsuario(userNumeroUsuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + userNumeroUsuario));
 
-        if (submissionRepo.countByExamIdAndUserId(examId, user.getId()) >= 1) {
+        if (submissionRepo.countByExamIdAndUserId(examId, user.getId()) >= allowedAttempts(examId, user.getId())) {
             throw new IllegalStateException("Solo puedes resolver este examen una vez.");
         }
 
@@ -470,12 +470,26 @@ public class ExamServiceImpl implements ExamService {
         Exam exam = findExamOrThrow(examId);
         User user = userRepo.findByNumeroUsuario(userNumeroUsuario)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + userNumeroUsuario));
-        long    count     = submissionRepo.countByExamIdAndUserId(examId, user.getId());
-        boolean canAtt    = count < 1;
+        long count   = submissionRepo.countByExamIdAndUserId(examId, user.getId());
+        int  allowed = allowedAttempts(examId, user.getId());
+        boolean canAtt = count < allowed;
         return AttemptInfoResponse.builder()
-                .attemptCount(count).maxAttempts(1)
-                .canAttempt(canAtt).remainingAttempts(canAtt ? 1 : 0)
+                .attemptCount(count).maxAttempts(allowed)
+                .canAttempt(canAtt).remainingAttempts(canAtt ? (allowed - (int) count) : 0)
                 .build();
+    }
+
+    /**
+     * 1 intento por defecto, 2 si el usuario tiene una capacitación activa
+     * con {@code retryGranted=true} para este examen (reasignación única
+     * tras reprobar, ver {@link com.metrix.api.service.TrainingServiceImpl#reassignRetry}).
+     */
+    private int allowedAttempts(String examId, String userId) {
+        boolean hasRetryGrant = trainingRepository
+                .findByExamIdAndAssignedUserIdAndActivoTrue(examId, userId)
+                .stream()
+                .anyMatch(Training::isRetryGranted);
+        return hasRetryGrant ? 2 : 1;
     }
 
     // ── Actualizar examen ──────────────────────────────────────────────────

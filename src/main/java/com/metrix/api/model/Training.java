@@ -101,6 +101,16 @@ public class Training {
     @Field("exam_id")
     private String examId;
 
+    /**
+     * true si esta capacitación es la reasignación única otorgada tras
+     * reprobar el examen vinculado. Habilita un intento adicional en
+     * {@link com.metrix.api.service.ExamServiceImpl} y bloquea que se
+     * vuelva a otorgar otra reasignación para el mismo examen+usuario.
+     */
+    @Builder.Default
+    @Field("retry_granted")
+    private boolean retryGranted = false;
+
     @Indexed
     @Field("assignment_group_id")
     private String assignmentGroupId;

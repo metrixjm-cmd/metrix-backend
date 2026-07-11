@@ -1,5 +1,6 @@
 package com.metrix.api.controller;
 
+import com.metrix.api.dto.NotificationResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.User;
 import com.metrix.api.repository.UserRepository;
@@ -12,14 +13,19 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -95,5 +101,44 @@ public class NotificationController {
 
         // 3. Registrar emitter SSE
         return notificationService.subscribe(user.getId());
+    }
+
+    // ── Historial persistido ──────────────────────────────────────────────
+
+    /**
+     * GET /api/v1/notifications
+     * <p>
+     * Últimas 50 notificaciones del usuario autenticado, persistidas en Mongo.
+     * Complementa al stream SSE: cubre el caso de notificaciones enviadas
+     * mientras el usuario no tenía una conexión en vivo.
+     */
+    @Operation(summary = "Historial de notificaciones", description = "Últimas 50 notificaciones del usuario autenticado.")
+    @ApiResponse(responseCode = "200", description = "Lista de notificaciones")
+    @GetMapping
+    public ResponseEntity<List<NotificationResponse>> getRecent(Authentication auth) {
+        String userId = resolveUserId(auth.getName());
+        return ResponseEntity.ok(notificationService.getRecent(userId));
+    }
+
+    @Operation(summary = "Marcar notificación como leída")
+    @ApiResponse(responseCode = "204", description = "Marcada como leída")
+    @PostMapping("/{id}/read")
+    public ResponseEntity<Void> markRead(@PathVariable String id, Authentication auth) {
+        notificationService.markRead(resolveUserId(auth.getName()), id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Marcar todas las notificaciones como leídas")
+    @ApiResponse(responseCode = "204", description = "Todas marcadas como leídas")
+    @PostMapping("/read-all")
+    public ResponseEntity<Void> markAllRead(Authentication auth) {
+        notificationService.markAllRead(resolveUserId(auth.getName()));
+        return ResponseEntity.noContent().build();
+    }
+
+    private String resolveUserId(String numeroUsuario) {
+        return userRepository.findByNumeroUsuario(numeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado: " + numeroUsuario))
+                .getId();
     }
 }

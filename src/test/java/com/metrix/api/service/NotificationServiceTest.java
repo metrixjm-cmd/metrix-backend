@@ -3,6 +3,7 @@ package com.metrix.api.service;
 import com.metrix.api.dto.NotificationEvent;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.repository.NotificationRepository;
 import com.metrix.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,11 +26,14 @@ class NotificationServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private NotificationRepository notificationRepository;
+
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(userRepository);
+        notificationService = new NotificationService(userRepository, notificationRepository);
     }
 
     @Test

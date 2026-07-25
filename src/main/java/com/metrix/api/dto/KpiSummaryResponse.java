@@ -31,9 +31,6 @@ public class KpiSummaryResponse {
     // KPI #3 — Tasa de Re-trabajo
     private double reworkRate;           // 0.0 si no hay tareas
 
-    // KPI #4 — Tiempo Promedio de Ejecución (minutos)
-    private double avgExecutionMinutes;  // -1.0 = sin datos
-
     // KPI #5 — Cumplimiento por Turno
     private List<ShiftBreakdownResponse> shiftBreakdown;
 
@@ -52,10 +49,4 @@ public class KpiSummaryResponse {
     // Sparklines (últimas 10 tareas cerradas, orden ASC por createdAt)
     private List<Integer> sparklineOnTime;  // 100 = onTime, 0 = no
     private List<Double>  sparklineIgeo;    // IGEO rolling per task
-
-    // Calidad promedio
-    private double avgQualityRating;        // 1.0–5.0 o -1.0
-
-    // KPI Capacitación (Sprint 10) — % de trainings COMPLETADAS en la sucursal
-    private double trainingCompletionRate;  // 0.0–100.0 (0.0 si sin datos)
 }

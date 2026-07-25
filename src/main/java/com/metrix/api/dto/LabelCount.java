@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
  * (donuts, barras) en los KPIs agregados por dominio.
  *
  * @see IncidentKpiResponse
- * @see TrainingKpiResponse
  * @see ExamKpiResponse
  */
 @Data

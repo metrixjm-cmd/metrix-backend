@@ -6,7 +6,6 @@ import com.metrix.api.dto.IgeoAnalyticsResponse;
 import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
-import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Role;
@@ -219,24 +218,6 @@ public class KpiController {
             Authentication auth) {
         assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getIncidentKpis(storeId));
-    }
-
-    /**
-     * GET /api/v1/kpis/trainings/store/{storeId}
-     * KPIs agregados de capacitaciones de una sucursal.
-     */
-    @Operation(summary = "KPIs de capacitaciones", description = "KPIs agregados de capacitaciones de una sucursal: completación, aprobación, calificación promedio, desglose por estado y vencidas pendientes.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "KPIs de capacitaciones de la sucursal"),
-            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN o GERENTE")
-    })
-    @GetMapping("/trainings/store/{storeId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<TrainingKpiResponse> getTrainingKpis(
-            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
-            Authentication auth) {
-        assertGerenteStoreAccess(storeId, auth);
-        return ResponseEntity.ok(kpiService.getTrainingKpis(storeId));
     }
 
     /**

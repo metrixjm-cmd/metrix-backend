@@ -131,7 +131,6 @@ public class ReportServiceImpl implements ReportService {
                 addKpiRow(kpiTable, "On-Time Rate", formatKpiPct(kpi.getOnTimeRate()), cellFont);
                 addKpiRow(kpiTable, "Re-trabajo", formatKpiPct(kpi.getReworkRate()), cellFont);
                 addKpiRow(kpiTable, "Críticas Pendientes", String.valueOf(kpi.getCriticalPending()), cellFont);
-                addKpiRow(kpiTable, "Avg. Ejecución (min)", formatKpi(kpi.getAvgExecutionMinutes()), cellFont);
                 doc.add(kpiTable);
             }
             doc.add(Chunk.NEWLINE);
@@ -228,7 +227,6 @@ public class ReportServiceImpl implements ReportService {
                 createDataRow(kpiSheet, r++, dataStyle, "On-Time Rate (%)", formatKpiPct(kpi.getOnTimeRate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Re-trabajo (%)", formatKpiPct(kpi.getReworkRate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Críticas Pendientes", String.valueOf(kpi.getCriticalPending()));
-                createDataRow(kpiSheet, r++, dataStyle, "Avg. Ejecución (min)", formatKpi(kpi.getAvgExecutionMinutes()));
                 createDataRow(kpiSheet, r++, dataStyle, "Sucursal", report.getStoreId());
                 createDataRow(kpiSheet, r++, dataStyle, "Fecha", report.getReportDate().toString());
                 createDataRow(kpiSheet, r++, dataStyle, "Total Asignadas", String.valueOf(report.getTotalAssigned()));

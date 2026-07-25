@@ -6,7 +6,6 @@ import com.metrix.api.dto.IgeoAnalyticsResponse;
 import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
-import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 
 import java.util.List;
@@ -96,13 +95,6 @@ public interface KpiService {
      * Acceso: ADMIN, GERENTE.
      */
     IncidentKpiResponse getIncidentKpis(String storeId);
-
-    /**
-     * KPIs agregados de capacitaciones de una sucursal: completación, aprobación,
-     * calificación promedio, desglose por estado y vencidas pendientes.
-     * Acceso: ADMIN, GERENTE.
-     */
-    TrainingKpiResponse getTrainingKpis(String storeId);
 
     /**
      * KPIs agregados de exámenes de una sucursal: tasa de aprobación global,

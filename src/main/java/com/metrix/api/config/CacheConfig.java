@@ -40,10 +40,10 @@ public class CacheConfig {
                 "kpiSummary", "storeRanking", "leaderboard",
                 "templateSummaries", "materialTags", "questionBankTags",
                 "examTemplateSummaries",
-                // KPIs agregados por dominio (incidencias, capacitaciones, exámenes).
+                // KPIs agregados por dominio (incidencias, exámenes).
                 // TTL global de 5 min absorbe la staleness; no requieren invalidación
                 // por evento porque cambian con baja frecuencia relativa.
-                "kpiIncidents", "kpiTrainings", "kpiExams");
+                "kpiIncidents", "kpiExams");
         manager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(5, TimeUnit.MINUTES)
                 .maximumSize(200)

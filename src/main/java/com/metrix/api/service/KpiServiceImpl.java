@@ -8,7 +8,6 @@ import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.LabelCount;
 import com.metrix.api.dto.ShiftBreakdownResponse;
 import com.metrix.api.dto.StoreRankingResponse;
-import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.model.Exam;
 import com.metrix.api.model.ExamSubmission;
@@ -19,8 +18,6 @@ import com.metrix.api.model.IncidentStatus;
 import com.metrix.api.model.StatusTransition;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
-import com.metrix.api.model.Training;
-import com.metrix.api.model.TrainingStatus;
 import com.metrix.api.model.User;
 import com.metrix.api.model.Store;
 import com.metrix.api.repository.ExamRepository;
@@ -28,7 +25,6 @@ import com.metrix.api.repository.ExamSubmissionRepository;
 import com.metrix.api.repository.IncidentRepository;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
-import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -47,7 +43,6 @@ import org.springframework.http.ResponseEntity;
 import com.metrix.api.dto.StatusCount;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -70,7 +65,6 @@ public class KpiServiceImpl implements KpiService {
     // ── Repositorios (inyección por constructor vía @RequiredArgsConstructor) ─
     private final TaskRepository             taskRepository;
     private final UserRepository             userRepository;
-    private final TrainingRepository         trainingRepository;
     private final StoreRepository            storeRepository;
     private final IncidentRepository         incidentRepository;
     private final ExamRepository             examRepository;
@@ -385,91 +379,6 @@ public class KpiServiceImpl implements KpiService {
                 .build();
     }
 
-    // ── KPIs de Capacitaciones ────────────────────────────────────────────
-
-    @Cacheable(value = "kpiTrainings", key = "#storeId")
-    @Override
-    public TrainingKpiResponse getTrainingKpis(String storeId) {
-        List<Training> trainings = trainingRepository.findByStoreIdAndActivoTrue(storeId);
-        long total = trainings.size();
-
-        if (total == 0) {
-            return TrainingKpiResponse.builder()
-                    .storeId(storeId).total(0)
-                    .programadas(0).enCurso(0).completadas(0).noCompletadas(0)
-                    .completionRate(-1.0).onTimeRate(-1.0).passRate(-1.0).avgGrade(-1.0).avgProgress(0.0)
-                    .overduePending(0).byCategory(List.of())
-                    .build();
-        }
-
-        long programadas   = countTrainingStatus(trainings, TrainingStatus.PROGRAMADA);
-        long enCurso       = countTrainingStatus(trainings, TrainingStatus.EN_CURSO);
-        long completadas   = countTrainingStatus(trainings, TrainingStatus.COMPLETADA);
-        long noCompletadas = countTrainingStatus(trainings, TrainingStatus.NO_COMPLETADA);
-
-        List<Training> completed = trainings.stream()
-                .filter(t -> t.getProgress() != null && t.getProgress().getStatus() == TrainingStatus.COMPLETADA)
-                .collect(Collectors.toList());
-        double onTimeRate = completed.isEmpty() ? -1.0 : round2(completed.stream()
-                .filter(t -> Boolean.TRUE.equals(t.getProgress().getOnTime())).count() * 100.0 / completed.size());
-
-        List<Training> withVerdict = trainings.stream()
-                .filter(t -> t.getProgress() != null && t.getProgress().getPassed() != null)
-                .collect(Collectors.toList());
-        double passRate = withVerdict.isEmpty() ? -1.0 : round2(withVerdict.stream()
-                .filter(t -> Boolean.TRUE.equals(t.getProgress().getPassed())).count() * 100.0 / withVerdict.size());
-
-        OptionalDouble avgGradeOpt = trainings.stream()
-                .filter(t -> t.getProgress() != null && t.getProgress().getGrade() != null)
-                .mapToDouble(t -> t.getProgress().getGrade())
-                .average();
-
-        double avgProgress = round2(trainings.stream()
-                .filter(t -> t.getProgress() != null)
-                .mapToInt(t -> t.getProgress().getPercentage())
-                .average()
-                .orElse(0.0));
-
-        Instant now = Instant.now();
-        long overduePending = trainings.stream()
-                .filter(t -> t.getProgress() != null
-                        && (t.getProgress().getStatus() == TrainingStatus.PROGRAMADA
-                            || t.getProgress().getStatus() == TrainingStatus.EN_CURSO)
-                        && t.getDueAt() != null && t.getDueAt().isBefore(now))
-                .count();
-
-        Map<String, Long> catCounts = trainings.stream()
-                .map(t -> (t.getCategory() != null && !t.getCategory().isBlank()) ? t.getCategory() : "Sin categoría")
-                .collect(Collectors.groupingBy(c -> c, Collectors.counting()));
-        List<LabelCount> byCategory = catCounts.entrySet().stream()
-                .map(e -> LabelCount.builder()
-                        .label(e.getKey())
-                        .count(e.getValue())
-                        .percentage((int) Math.round(e.getValue() * 100.0 / total))
-                        .build())
-                .sorted(Comparator.comparingLong(LabelCount::getCount).reversed())
-                .collect(Collectors.toList());
-
-        return TrainingKpiResponse.builder()
-                .storeId(storeId).total(total)
-                .programadas(programadas).enCurso(enCurso)
-                .completadas(completadas).noCompletadas(noCompletadas)
-                .completionRate(round2(completadas * 100.0 / total))
-                .onTimeRate(onTimeRate)
-                .passRate(passRate)
-                .avgGrade(avgGradeOpt.isPresent() ? round2(avgGradeOpt.getAsDouble()) : -1.0)
-                .avgProgress(avgProgress)
-                .overduePending(overduePending)
-                .byCategory(byCategory)
-                .build();
-    }
-
-    private long countTrainingStatus(List<Training> list, TrainingStatus status) {
-        return list.stream()
-                .filter(t -> t.getProgress() != null && t.getProgress().getStatus() == status)
-                .count();
-    }
-
     // ── KPIs de Exámenes ──────────────────────────────────────────────────
 
     @Cacheable(value = "kpiExams", key = "#storeId")
@@ -616,24 +525,12 @@ public class KpiServiceImpl implements KpiService {
 
         List<Task> last10 = last10ClosedByCreatedAt(closed);
 
-        // KPI Capacitación: % COMPLETADAS en la sucursal (solo aplica en contexto STORE)
-        double trainingRate = 0.0;
-        if ("STORE".equals(context)) {
-            long totalTrainings = trainingRepository.countByStoreIdAndActivoTrue(contextId);
-            if (totalTrainings > 0) {
-                long completedTrainings = trainingRepository
-                        .countByStoreIdAndProgress_StatusAndActivoTrue(contextId, TrainingStatus.COMPLETADA);
-                trainingRate = round2(completedTrainings * 100.0 / totalTrainings);
-            }
-        }
-
         return KpiSummaryResponse.builder()
                 .context(context)
                 .contextId(contextId)
                 .onTimeRate(round2(otr))
                 .delegacionEfectiva(round2(computeDelegacion(completed)))
                 .reworkRate(round2(rwr))
-                .avgExecutionMinutes(round2(computeAvgExecutionMinutes(completed)))
                 .shiftBreakdown(computeShiftBreakdown(tasks))
                 .criticalPending(computeCriticalPending(tasks))
                 .igeo(round2(igeo))
@@ -643,8 +540,6 @@ public class KpiServiceImpl implements KpiService {
                 .pipelineFailed(pipelineCount(context, contextId, tasks, "FAILED"))
                 .sparklineOnTime(buildOnTimeSparkline(last10))
                 .sparklineIgeo(buildIgeoSparkline(last10))
-                .avgQualityRating(round2(computeQualityRatingAvg(tasks)))
-                .trainingCompletionRate(trainingRate)
                 .build();
     }
 
@@ -841,7 +736,6 @@ public class KpiServiceImpl implements KpiService {
                 .onTimeRate(-1.0)
                 .delegacionEfectiva(-1.0)
                 .reworkRate(0.0)
-                .avgExecutionMinutes(-1.0)
                 .shiftBreakdown(Collections.emptyList())
                 .criticalPending(0)
                 .igeo(-1.0)
@@ -851,8 +745,6 @@ public class KpiServiceImpl implements KpiService {
                 .pipelineFailed(0)
                 .sparklineOnTime(Collections.emptyList())
                 .sparklineIgeo(Collections.emptyList())
-                .avgQualityRating(-1.0)
-                .trainingCompletionRate(0.0)
                 .build();
     }
 

@@ -15,6 +15,9 @@ public interface IncidentRepository extends MongoRepository<Incident, String> {
 
     // ── Vista gerencial / admin ───────────────────────────────────────────────
     List<Incident> findByStoreIdAndActivoTrue(String storeId);
+
+    /** Todas las incidencias activas del sistema — alcance global para ADMIN. */
+    List<Incident> findByActivoTrue();
     List<Incident> findByStoreIdAndStatusAndActivoTrue(String storeId, IncidentStatus status);
     List<Incident> findByStoreIdAndSeverityAndActivoTrue(String storeId, IncidentSeverity severity);
 

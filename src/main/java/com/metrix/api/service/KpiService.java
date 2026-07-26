@@ -6,6 +6,7 @@ import com.metrix.api.dto.IgeoAnalyticsResponse;
 import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
+import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 
 import java.util.List;
@@ -97,10 +98,36 @@ public interface KpiService {
     IncidentKpiResponse getIncidentKpis(String storeId);
 
     /**
+     * Igual que {@link #getIncidentKpis(String)} pero agregando todas las
+     * sucursales. Lo consume ADMIN, que no tiene sucursal asignada.
+     * Acceso: ADMIN.
+     */
+    IncidentKpiResponse getGlobalIncidentKpis();
+
+    /**
+     * KPIs agregados de capacitaciones de una sucursal: completación, aprobación,
+     * calificación promedio, desglose por estado y vencidas pendientes.
+     * Acceso: ADMIN, GERENTE.
+     */
+    TrainingKpiResponse getTrainingKpis(String storeId);
+
+    /**
+     * Igual que {@link #getTrainingKpis(String)} pero agregando todas las
+     * sucursales. Acceso: ADMIN.
+     */
+    TrainingKpiResponse getGlobalTrainingKpis();
+
+    /**
      * KPIs agregados de exámenes de una sucursal: tasa de aprobación global,
      * distribución de puntajes y ranking por examen, agregando todas las
      * submissions de la sucursal.
      * Acceso: ADMIN, GERENTE.
      */
     ExamKpiResponse getExamKpis(String storeId);
+
+    /**
+     * Igual que {@link #getExamKpis(String)} pero agregando todas las
+     * sucursales. Acceso: ADMIN.
+     */
+    ExamKpiResponse getGlobalExamKpis();
 }

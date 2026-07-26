@@ -8,6 +8,7 @@ import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.LabelCount;
 import com.metrix.api.dto.ShiftBreakdownResponse;
 import com.metrix.api.dto.StoreRankingResponse;
+import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.model.Exam;
 import com.metrix.api.model.ExamSubmission;
@@ -18,6 +19,8 @@ import com.metrix.api.model.IncidentStatus;
 import com.metrix.api.model.StatusTransition;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
+import com.metrix.api.model.Training;
+import com.metrix.api.model.TrainingStatus;
 import com.metrix.api.model.User;
 import com.metrix.api.model.Store;
 import com.metrix.api.repository.ExamRepository;
@@ -25,6 +28,7 @@ import com.metrix.api.repository.ExamSubmissionRepository;
 import com.metrix.api.repository.IncidentRepository;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
+import com.metrix.api.repository.TrainingRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -43,6 +47,7 @@ import org.springframework.http.ResponseEntity;
 import com.metrix.api.dto.StatusCount;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -62,9 +67,18 @@ public class KpiServiceImpl implements KpiService {
 
     private static final Logger log = LoggerFactory.getLogger(KpiServiceImpl.class);
 
+    /**
+     * Identificador de alcance global: los KPIs por dominio (incidencias,
+     * capacitaciones, exámenes) se calculan igual para una sucursal o para todo
+     * el sistema; solo cambia el conjunto de datos de entrada. ADMIN no tiene
+     * sucursal asignada, así que consume siempre el alcance global.
+     */
+    private static final String ALL_SCOPE = "all";
+
     // ── Repositorios (inyección por constructor vía @RequiredArgsConstructor) ─
     private final TaskRepository             taskRepository;
     private final UserRepository             userRepository;
+    private final TrainingRepository         trainingRepository;
     private final StoreRepository            storeRepository;
     private final IncidentRepository         incidentRepository;
     private final ExamRepository             examRepository;
@@ -333,12 +347,21 @@ public class KpiServiceImpl implements KpiService {
     @Cacheable(value = "kpiIncidents", key = "#storeId")
     @Override
     public IncidentKpiResponse getIncidentKpis(String storeId) {
-        List<Incident> incidents = incidentRepository.findByStoreIdAndActivoTrue(storeId);
+        return buildIncidentKpis(incidentRepository.findByStoreIdAndActivoTrue(storeId), storeId);
+    }
+
+    @Cacheable(value = "kpiIncidents", key = "'global'")
+    @Override
+    public IncidentKpiResponse getGlobalIncidentKpis() {
+        return buildIncidentKpis(incidentRepository.findByActivoTrue(), ALL_SCOPE);
+    }
+
+    private IncidentKpiResponse buildIncidentKpis(List<Incident> incidents, String scopeId) {
         long total = incidents.size();
 
         if (total == 0) {
             return IncidentKpiResponse.builder()
-                    .storeId(storeId).total(0)
+                    .storeId(scopeId).total(0)
                     .abiertas(0).enResolucion(0).cerradas(0)
                     .resolutionRate(-1.0).criticalOpen(0).avgResolutionHours(-1.0)
                     .bySeverity(zeroLabelCounts(enumNames(IncidentSeverity.values())))
@@ -369,7 +392,7 @@ public class KpiServiceImpl implements KpiService {
                 .collect(Collectors.groupingBy(i -> i.getCategory().name(), Collectors.counting()));
 
         return IncidentKpiResponse.builder()
-                .storeId(storeId).total(total)
+                .storeId(scopeId).total(total)
                 .abiertas(abiertas).enResolucion(enResolucion).cerradas(cerradas)
                 .resolutionRate(round2(cerradas * 100.0 / total))
                 .criticalOpen(criticalOpen)
@@ -379,19 +402,123 @@ public class KpiServiceImpl implements KpiService {
                 .build();
     }
 
+    // ── KPIs de Capacitaciones ────────────────────────────────────────────
+
+    @Cacheable(value = "kpiTrainings", key = "#storeId")
+    @Override
+    public TrainingKpiResponse getTrainingKpis(String storeId) {
+        return buildTrainingKpis(trainingRepository.findByStoreIdAndActivoTrue(storeId), storeId);
+    }
+
+    @Cacheable(value = "kpiTrainings", key = "'global'")
+    @Override
+    public TrainingKpiResponse getGlobalTrainingKpis() {
+        return buildTrainingKpis(trainingRepository.findByActivoTrue(), ALL_SCOPE);
+    }
+
+    private TrainingKpiResponse buildTrainingKpis(List<Training> trainings, String scopeId) {
+        long total = trainings.size();
+
+        if (total == 0) {
+            return TrainingKpiResponse.builder()
+                    .storeId(scopeId).total(0)
+                    .programadas(0).enCurso(0).completadas(0).noCompletadas(0)
+                    .completionRate(-1.0).onTimeRate(-1.0).passRate(-1.0).avgGrade(-1.0).avgProgress(0.0)
+                    .overduePending(0).byCategory(List.of())
+                    .build();
+        }
+
+        long programadas   = countTrainingStatus(trainings, TrainingStatus.PROGRAMADA);
+        long enCurso       = countTrainingStatus(trainings, TrainingStatus.EN_CURSO);
+        long completadas   = countTrainingStatus(trainings, TrainingStatus.COMPLETADA);
+        long noCompletadas = countTrainingStatus(trainings, TrainingStatus.NO_COMPLETADA);
+
+        List<Training> completed = trainings.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getStatus() == TrainingStatus.COMPLETADA)
+                .collect(Collectors.toList());
+        double onTimeRate = completed.isEmpty() ? -1.0 : round2(completed.stream()
+                .filter(t -> Boolean.TRUE.equals(t.getProgress().getOnTime())).count() * 100.0 / completed.size());
+
+        List<Training> withVerdict = trainings.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getPassed() != null)
+                .collect(Collectors.toList());
+        double passRate = withVerdict.isEmpty() ? -1.0 : round2(withVerdict.stream()
+                .filter(t -> Boolean.TRUE.equals(t.getProgress().getPassed())).count() * 100.0 / withVerdict.size());
+
+        OptionalDouble avgGradeOpt = trainings.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getGrade() != null)
+                .mapToDouble(t -> t.getProgress().getGrade())
+                .average();
+
+        double avgProgress = round2(trainings.stream()
+                .filter(t -> t.getProgress() != null)
+                .mapToInt(t -> t.getProgress().getPercentage())
+                .average()
+                .orElse(0.0));
+
+        Instant now = Instant.now();
+        long overduePending = trainings.stream()
+                .filter(t -> t.getProgress() != null
+                        && (t.getProgress().getStatus() == TrainingStatus.PROGRAMADA
+                            || t.getProgress().getStatus() == TrainingStatus.EN_CURSO)
+                        && t.getDueAt() != null && t.getDueAt().isBefore(now))
+                .count();
+
+        Map<String, Long> catCounts = trainings.stream()
+                .map(t -> (t.getCategory() != null && !t.getCategory().isBlank()) ? t.getCategory() : "Sin categoría")
+                .collect(Collectors.groupingBy(c -> c, Collectors.counting()));
+        List<LabelCount> byCategory = catCounts.entrySet().stream()
+                .map(e -> LabelCount.builder()
+                        .label(e.getKey())
+                        .count(e.getValue())
+                        .percentage((int) Math.round(e.getValue() * 100.0 / total))
+                        .build())
+                .sorted(Comparator.comparingLong(LabelCount::getCount).reversed())
+                .collect(Collectors.toList());
+
+        return TrainingKpiResponse.builder()
+                .storeId(scopeId).total(total)
+                .programadas(programadas).enCurso(enCurso)
+                .completadas(completadas).noCompletadas(noCompletadas)
+                .completionRate(round2(completadas * 100.0 / total))
+                .onTimeRate(onTimeRate)
+                .passRate(passRate)
+                .avgGrade(avgGradeOpt.isPresent() ? round2(avgGradeOpt.getAsDouble()) : -1.0)
+                .avgProgress(avgProgress)
+                .overduePending(overduePending)
+                .byCategory(byCategory)
+                .build();
+    }
+
+    private long countTrainingStatus(List<Training> list, TrainingStatus status) {
+        return list.stream()
+                .filter(t -> t.getProgress() != null && t.getProgress().getStatus() == status)
+                .count();
+    }
+
     // ── KPIs de Exámenes ──────────────────────────────────────────────────
 
     @Cacheable(value = "kpiExams", key = "#storeId")
     @Override
     public ExamKpiResponse getExamKpis(String storeId) {
-        List<Exam> exams = examRepository.findAvailableForStore(storeId);
-        List<ExamSubmission> subs = examSubmissionRepository.findByStoreId(storeId);
+        return buildExamKpis(examRepository.findAvailableForStore(storeId),
+                             examSubmissionRepository.findByStoreId(storeId), storeId);
+    }
+
+    @Cacheable(value = "kpiExams", key = "'global'")
+    @Override
+    public ExamKpiResponse getGlobalExamKpis() {
+        return buildExamKpis(examRepository.findByActivoTrue(),
+                             examSubmissionRepository.findAll(), ALL_SCOPE);
+    }
+
+    private ExamKpiResponse buildExamKpis(List<Exam> exams, List<ExamSubmission> subs, String scopeId) {
         long totalExams = exams.size();
         long totalSubs  = subs.size();
 
         if (totalSubs == 0) {
             return ExamKpiResponse.builder()
-                    .storeId(storeId).totalExams(totalExams).totalSubmissions(0)
+                    .storeId(scopeId).totalExams(totalExams).totalSubmissions(0)
                     .passRate(-1.0).avgScore(-1.0).minScore(0).maxScore(0).avgTimeSecs(-1.0)
                     .scoreDistribution(emptyScoreDistribution())
                     .perExam(buildExamRows(exams, subs))
@@ -412,7 +539,7 @@ public class KpiServiceImpl implements KpiService {
         long r90 = subs.stream().filter(s -> s.getScore() >= 90).count();
 
         return ExamKpiResponse.builder()
-                .storeId(storeId).totalExams(totalExams).totalSubmissions(totalSubs)
+                .storeId(scopeId).totalExams(totalExams).totalSubmissions(totalSubs)
                 .passRate(round2(passed * 100.0 / totalSubs))
                 .avgScore(round2(subs.stream().mapToDouble(ExamSubmission::getScore).average().orElse(0)))
                 .minScore(subs.stream().mapToDouble(ExamSubmission::getScore).min().orElse(0))

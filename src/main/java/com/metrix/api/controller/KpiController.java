@@ -6,6 +6,7 @@ import com.metrix.api.dto.IgeoAnalyticsResponse;
 import com.metrix.api.dto.IncidentKpiResponse;
 import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
+import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Role;
@@ -218,6 +219,70 @@ public class KpiController {
             Authentication auth) {
         assertGerenteStoreAccess(storeId, auth);
         return ResponseEntity.ok(kpiService.getIncidentKpis(storeId));
+    }
+
+    /**
+     * GET /api/v1/kpis/incidents/summary
+     * KPIs de incidencias de TODO el sistema. ADMIN no tiene sucursal asignada,
+     * por eso necesita un alcance global en vez del endpoint por sucursal.
+     */
+    @Operation(summary = "KPIs globales de incidencias", description = "KPIs agregados de incidencias de todas las sucursales. Solo ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de incidencias del sistema"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN")
+    })
+    @GetMapping("/incidents/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<IncidentKpiResponse> getGlobalIncidentKpis() {
+        return ResponseEntity.ok(kpiService.getGlobalIncidentKpis());
+    }
+
+    /**
+     * GET /api/v1/kpis/trainings/store/{storeId}
+     * KPIs agregados de capacitaciones de una sucursal.
+     */
+    @Operation(summary = "KPIs de capacitaciones", description = "KPIs agregados de capacitaciones de una sucursal: completación, aprobación, calificación promedio, desglose por estado y vencidas pendientes.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de capacitaciones de la sucursal"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN o GERENTE")
+    })
+    @GetMapping("/trainings/store/{storeId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<TrainingKpiResponse> getTrainingKpis(
+            @Parameter(description = "ID de la sucursal") @PathVariable String storeId,
+            Authentication auth) {
+        assertGerenteStoreAccess(storeId, auth);
+        return ResponseEntity.ok(kpiService.getTrainingKpis(storeId));
+    }
+
+    /**
+     * GET /api/v1/kpis/trainings/summary
+     * KPIs de capacitaciones de TODO el sistema.
+     */
+    @Operation(summary = "KPIs globales de capacitaciones", description = "KPIs agregados de capacitaciones de todas las sucursales. Solo ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de capacitaciones del sistema"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN")
+    })
+    @GetMapping("/trainings/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<TrainingKpiResponse> getGlobalTrainingKpis() {
+        return ResponseEntity.ok(kpiService.getGlobalTrainingKpis());
+    }
+
+    /**
+     * GET /api/v1/kpis/exams/summary
+     * KPIs de exámenes de TODO el sistema.
+     */
+    @Operation(summary = "KPIs globales de exámenes", description = "KPIs agregados de exámenes de todas las sucursales. Solo ADMIN.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "KPIs de exámenes del sistema"),
+            @ApiResponse(responseCode = "403", description = "Sin permisos — requiere rol ADMIN")
+    })
+    @GetMapping("/exams/summary")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ExamKpiResponse> getGlobalExamKpis() {
+        return ResponseEntity.ok(kpiService.getGlobalExamKpis());
     }
 
     /**

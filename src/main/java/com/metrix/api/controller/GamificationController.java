@@ -55,6 +55,23 @@ public class GamificationController {
     }
 
     /**
+     * GET /api/v1/gamification/gerentes/leaderboard?period=weekly|monthly
+     * <p>
+     * Ranking gerencial de toda la cadena, con el contexto de equipo de cada gerente.
+     * Por defecto: {@code weekly}.
+     */
+    @Operation(summary = "Leaderboard gerencial",
+               description = "Ranking de gerentes de toda la cadena con su sucursal, número de ejecutadores a cargo e IGEO promedio del equipo. Solo ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Ranking de gerentes")
+    @GetMapping("/gerentes/leaderboard")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<LeaderboardEntryDTO>> getGerencialesLeaderboard(
+            @Parameter(description = "Período del ranking: weekly (7 días) o monthly (30 días)")
+            @RequestParam(defaultValue = "weekly") String period) {
+        return ResponseEntity.ok(gamificationService.getGerencialesLeaderboard(period));
+    }
+
+    /**
      * GET /api/v1/gamification/exams
      * Ranking de exámenes filtrado por rol:
      * ADMIN → GERENTEs | GERENTE → EJECUTADOREs de su sucursal | EJECUTADOR → todos en su sucursal.

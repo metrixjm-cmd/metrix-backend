@@ -24,6 +24,19 @@ public interface GamificationService {
     List<LeaderboardEntryDTO> getLeaderboard(String storeId, String period);
 
     /**
+     * Ranking gerencial de toda la cadena — vista ADMIN.
+     * <p>
+     * Incluye, además del IGEO propio del gerente, el contexto de su equipo:
+     * sucursal, número de ejecutadores a cargo e IGEO promedio del equipo.
+     * Ese contexto es lo que permite distinguir a un gerente que ejecuta bien
+     * de uno cuyo equipo carga el resultado.
+     *
+     * @param period "weekly" (7 días) o "monthly" (30 días)
+     * @return lista ordenada por IGEO del gerente descendente, rank asignado 1-based
+     */
+    List<LeaderboardEntryDTO> getGerencialesLeaderboard(String period);
+
+    /**
      * Resumen personal de gamificación del usuario autenticado.
      *
      * @param userId   MongoDB ID del usuario

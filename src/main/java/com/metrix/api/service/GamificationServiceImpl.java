@@ -78,27 +78,190 @@ public class GamificationServiceImpl implements GamificationService {
             entries.get(i).setRank(i + 1);
         }
 
-        // Badge COLABORADOR_MES sólo en leaderboard mensual al top-1
-        if ("monthly".equalsIgnoreCase(period) && !entries.isEmpty()) {
-            LeaderboardEntryDTO top = entries.get(0);
-            if (top.getIgeo() > 0) {
-                List<BadgeDTO> updated = new ArrayList<>(top.getBadges());
-                boolean alreadyHas = updated.stream()
-                        .anyMatch(b -> "COLABORADOR_MES".equals(b.getType()));
-                if (!alreadyHas) {
-                    updated.add(BadgeDTO.builder()
-                            .type("COLABORADOR_MES")
-                            .title("Colaborador del Mes")
-                            .description("Top IGEO de la sucursal este mes")
-                            .icon("🥇")
-                            .earnedAt(Instant.now())
-                            .build());
-                    top.setBadges(updated);
-                }
-            }
+        if (!entries.isEmpty()) {
+            applyColaboradorMesBadge(entries, period, entries.get(0).getIgeo(),
+                                     "Top IGEO de la sucursal este mes");
         }
 
         return entries;
+    }
+
+    // ── Leaderboard gerencial (ADMIN) ─────────────────────────────────────
+
+    @Override
+    public List<LeaderboardEntryDTO> getGerencialesLeaderboard(String period) {
+        List<User> gerentes = userRepository.findByRolesContaining(Role.GERENTE).stream()
+                .filter(User::isActivo)
+                .toList();
+        if (gerentes.isEmpty()) return List.of();
+
+        Instant now         = Instant.now();
+        int     days        = "monthly".equalsIgnoreCase(period) ? 30 : 7;
+        Instant periodStart = now.minus(days, ChronoUnit.DAYS);
+        Instant prevStart   = now.minus(days * 2L, ChronoUnit.DAYS);
+
+        // Batch fetch: 3 queries fijas para toda la cadena (tareas, usuarios, sucursales).
+        List<Task> allTasks = taskRepository.findByActivoTrue();
+        Map<String, List<Task>> tasksByUser = allTasks.stream()
+                .filter(t -> t.getAssignedUserId() != null)
+                .collect(Collectors.groupingBy(Task::getAssignedUserId));
+
+        List<User> activeUsers = userRepository.findByActivoTrue();
+
+        Map<String, String> storeNames = storeRepository.findAll().stream()
+                .collect(Collectors.toMap(Store::getId, Store::getNombre, (a, b) -> a));
+
+        // VELOCIDAD_RAYO compara contra el promedio de la propia sucursal, no el de
+        // la cadena: sucursales con volúmenes distintos no son comparables entre sí.
+        Map<String, Double> avgExecByStore = allTasks.stream()
+                .filter(t -> t.getStoreId() != null)
+                .collect(Collectors.groupingBy(
+                        Task::getStoreId,
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                ts -> computeAvgExecMin(completedTasks(ts)))));
+
+        Map<String, List<User>> teamByGerente = groupEjecutadoresByGerente(gerentes, activeUsers);
+
+        List<LeaderboardEntryDTO> entries = gerentes.stream()
+                .map(g -> {
+                    double storeAvgExec = avgExecByStore.getOrDefault(g.getStoreId(), -1.0);
+                    LeaderboardEntryDTO entry = buildEntry(
+                            g, periodStart, now, prevStart, periodStart, storeAvgExec, tasksByUser);
+
+                    List<User> team = teamByGerente.getOrDefault(g.getId(), List.of());
+                    entry.setStoreName(storeNames.getOrDefault(g.getStoreId(), "—"));
+                    entry.setColaboradorCount(team.size());
+                    entry.setTeamAvgIgeo(computeTeamAvgIgeo(team, tasksByUser));
+                    return entry;
+                })
+                .sorted(POR_DESEMPENO_DE_EQUIPO)
+                .collect(Collectors.toList());
+
+        for (int i = 0; i < entries.size(); i++) {
+            entries.get(i).setRank(i + 1);
+        }
+
+        // El top-1 gerencial se premia por el desempeño de su equipo, que es el
+        // criterio con el que se le rankea.
+        double topTeamIgeo = entries.get(0).getTeamAvgIgeo();
+        applyColaboradorMesBadge(entries, period, topTeamIgeo,
+                                 "Mejor equipo de la cadena este mes");
+
+        return entries;
+    }
+
+    /**
+     * Orden del ranking gerencial: manda el IGEO del equipo.
+     * <p>
+     * A un gerente se le mide por lo que produce su equipo, no por las pocas tareas
+     * que ejecute en persona — ordenar por su IGEO propio deja a casi todos
+     * empatados en cero. Los equipos sin datos (-1.0) caen al final de forma
+     * natural. Se desempata por IGEO propio y, en última instancia, por nombre
+     * para que el orden sea estable entre llamadas.
+     */
+    private static final Comparator<LeaderboardEntryDTO> POR_DESEMPENO_DE_EQUIPO = Comparator
+            .<LeaderboardEntryDTO>comparingDouble(LeaderboardEntryDTO::getTeamAvgIgeo).reversed()
+            .thenComparing(Comparator.<LeaderboardEntryDTO>comparingDouble(LeaderboardEntryDTO::getIgeo).reversed())
+            .thenComparing(LeaderboardEntryDTO::getNombre, Comparator.nullsLast(String::compareTo));
+
+    /**
+     * Asocia cada ejecutador activo con su gerente.
+     * <p>
+     * Vínculo primario: {@code managerOwnerId}; fallback por
+     * {@code managerOwnerNumeroUsuario} cuando el ObjectId no está poblado.
+     * Los ejecutadores sin gerente asignado (datos legacy) se atribuyen a los
+     * gerentes de su misma sucursal que quedaron sin equipo — si una sucursal
+     * tiene varios gerentes en esa situación, todos comparten el mismo pool.
+     */
+    private Map<String, List<User>> groupEjecutadoresByGerente(List<User> gerentes,
+                                                               List<User> activeUsers) {
+        List<User> ejecutadores = activeUsers.stream()
+                .filter(u -> u.getRoles() != null && u.getRoles().contains(Role.EJECUTADOR))
+                .toList();
+
+        Set<String> gerenteIds = gerentes.stream().map(User::getId).collect(Collectors.toSet());
+        Map<String, String> gerenteIdByNumero = gerentes.stream()
+                .filter(g -> g.getNumeroUsuario() != null)
+                .collect(Collectors.toMap(User::getNumeroUsuario, User::getId, (a, b) -> a));
+
+        Map<String, List<User>> teams     = new HashMap<>();
+        List<User>              huerfanos = new ArrayList<>();
+
+        for (User e : ejecutadores) {
+            String ownerId = null;
+            if (e.getManagerOwnerId() != null && gerenteIds.contains(e.getManagerOwnerId())) {
+                ownerId = e.getManagerOwnerId();
+            } else if (e.getManagerOwnerNumeroUsuario() != null) {
+                ownerId = gerenteIdByNumero.get(e.getManagerOwnerNumeroUsuario());
+            }
+
+            if (ownerId != null) {
+                teams.computeIfAbsent(ownerId, k -> new ArrayList<>()).add(e);
+            } else {
+                huerfanos.add(e);
+            }
+        }
+
+        Map<String, List<User>> huerfanosByStore = huerfanos.stream()
+                .filter(u -> u.getStoreId() != null)
+                .collect(Collectors.groupingBy(User::getStoreId));
+
+        for (User g : gerentes) {
+            if (teams.containsKey(g.getId())) continue;
+            List<User> pool = huerfanosByStore.get(g.getStoreId());
+            if (pool != null && !pool.isEmpty()) {
+                teams.put(g.getId(), List.copyOf(pool));
+            }
+        }
+
+        return teams;
+    }
+
+    /**
+     * IGEO promedio del equipo, sobre el historial completo de cada ejecutador.
+     * <p>
+     * Excluye a los miembros sin tareas cerradas: promediarlos como 0 hundiría el
+     * indicador de equipos con altas recientes y haría ilegible la comparación.
+     *
+     * @return promedio redondeado, o -1.0 si ningún miembro tiene datos
+     */
+    private double computeTeamAvgIgeo(List<User> team, Map<String, List<Task>> tasksByUser) {
+        OptionalDouble avg = team.stream()
+                .mapToDouble(u -> computeUserIgeo(tasksByUser.getOrDefault(u.getId(), List.of())))
+                .filter(igeo -> igeo >= 0)
+                .average();
+        return avg.isPresent() ? round2(avg.getAsDouble()) : -1.0;
+    }
+
+    /**
+     * Otorga COLABORADOR_MES al top-1 del ranking, sólo en el período mensual.
+     *
+     * @param topScore    puntaje con el que se rankeó al primero; sin puntaje
+     *                    positivo no hay insignia (evita premiar un ranking vacío)
+     * @param description texto de la insignia, distinto según se rankee a
+     *                    colaboradores por su IGEO o a gerentes por el de su equipo
+     */
+    private void applyColaboradorMesBadge(List<LeaderboardEntryDTO> entries, String period,
+                                          double topScore, String description) {
+        if (!"monthly".equalsIgnoreCase(period) || entries.isEmpty()) return;
+        if (topScore <= 0) return;
+
+        LeaderboardEntryDTO top = entries.get(0);
+
+        List<BadgeDTO> updated = new ArrayList<>(top.getBadges());
+        boolean alreadyHas = updated.stream()
+                .anyMatch(b -> "COLABORADOR_MES".equals(b.getType()));
+        if (alreadyHas) return;
+
+        updated.add(BadgeDTO.builder()
+                .type("COLABORADOR_MES")
+                .title("Colaborador del Mes")
+                .description(description)
+                .icon("🥇")
+                .earnedAt(Instant.now())
+                .build());
+        top.setBadges(updated);
     }
 
     // ── My Gamification ───────────────────────────────────────────────────

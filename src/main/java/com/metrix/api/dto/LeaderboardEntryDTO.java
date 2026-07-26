@@ -41,4 +41,20 @@ public class LeaderboardEntryDTO {
 
     /** Insignias ganadas (calculadas sobre el historial completo del colaborador). */
     private List<BadgeDTO> badges;
+
+    // ── Campos exclusivos del leaderboard gerencial (ADMIN) ───────────────
+    // Se envían como null en el leaderboard de sucursal: son wrappers a propósito
+    // para que el frontend distinga "no aplica" de "cero".
+
+    /** Nombre de la sucursal del gerente. Null fuera del leaderboard gerencial. */
+    private String storeName;
+
+    /** Ejecutadores activos a cargo del gerente. Null fuera del leaderboard gerencial. */
+    private Integer colaboradorCount;
+
+    /**
+     * IGEO promedio del equipo de ejecutadores del gerente.
+     * Null fuera del leaderboard gerencial; -1.0 si ningún miembro del equipo tiene datos.
+     */
+    private Double teamAvgIgeo;
 }

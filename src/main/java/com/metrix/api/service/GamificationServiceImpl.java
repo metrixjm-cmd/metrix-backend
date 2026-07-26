@@ -132,7 +132,7 @@ public class GamificationServiceImpl implements GamificationService {
                     List<User> team = teamByGerente.getOrDefault(g.getId(), List.of());
                     entry.setStoreName(storeNames.getOrDefault(g.getStoreId(), "—"));
                     entry.setColaboradorCount(team.size());
-                    entry.setTeamAvgIgeo(computeTeamAvgIgeo(team, tasksByUser));
+                    entry.setTeamAvgIgeo(computeTeamAvgIgeo(team, tasksByUser, periodStart, now));
                     return entry;
                 })
                 .sorted(POR_DESEMPENO_DE_EQUIPO)
@@ -219,16 +219,24 @@ public class GamificationServiceImpl implements GamificationService {
     }
 
     /**
-     * IGEO promedio del equipo, sobre el historial completo de cada ejecutador.
+     * IGEO promedio del equipo dentro del período solicitado.
      * <p>
-     * Excluye a los miembros sin tareas cerradas: promediarlos como 0 hundiría el
-     * indicador de equipos con altas recientes y haría ilegible la comparación.
+     * Se acota a la misma ventana que el IGEO propio del gerente. Calcularlo sobre
+     * el historial completo lo dejaba insensible al período: el ranking no cambiaba
+     * entre 7 y 30 días, y contradecía al ranking de colaboradores de la misma
+     * sucursal, que sí filtra por ventana.
+     * <p>
+     * Excluye a los miembros sin tareas cerradas en el período: promediarlos como 0
+     * hundiría el indicador de equipos con altas recientes.
      *
      * @return promedio redondeado, o -1.0 si ningún miembro tiene datos
      */
-    private double computeTeamAvgIgeo(List<User> team, Map<String, List<Task>> tasksByUser) {
+    private double computeTeamAvgIgeo(List<User> team, Map<String, List<Task>> tasksByUser,
+                                      Instant periodStart, Instant periodEnd) {
         OptionalDouble avg = team.stream()
-                .mapToDouble(u -> computeUserIgeo(tasksByUser.getOrDefault(u.getId(), List.of())))
+                .mapToDouble(u -> computeUserIgeo(
+                        filterByPeriod(tasksByUser.getOrDefault(u.getId(), List.of()),
+                                       periodStart, periodEnd)))
                 .filter(igeo -> igeo >= 0)
                 .average();
         return avg.isPresent() ? round2(avg.getAsDouble()) : -1.0;

@@ -13,9 +13,12 @@ import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.metrix.api.dto.*;
 import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.Role;
+import com.metrix.api.model.Store;
 import com.metrix.api.model.Task;
 import com.metrix.api.model.TaskStatus;
 import com.metrix.api.model.User;
+import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +29,12 @@ import org.springframework.stereotype.Service;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -42,6 +48,7 @@ public class ReportServiceImpl implements ReportService {
 
     private final TaskRepository     taskRepository;
     private final UserRepository     userRepository;
+    private final StoreRepository    storeRepository;
     private final KpiService         kpiService;
     private final GamificationService gamificationService;
 
@@ -451,6 +458,183 @@ public class ReportServiceImpl implements ReportService {
         } catch (Exception e) {
             throw new RuntimeException("Error generando Ficha de Desempeño: " + e.getMessage(), e);
         }
+    }
+
+    // ── Sprint 18: reportes de ranking ────────────────────────────────────
+
+    @Override
+    public ManagersReportResponse buildManagersReport(String period) {
+        String normalized = normalizePeriod(period);
+        List<LeaderboardEntryDTO> managers = gamificationService.getGerencialesLeaderboard(normalized);
+
+        return ManagersReportResponse.builder()
+                .period(normalized)
+                .periodStart(periodStart(normalized))
+                .periodEnd(LocalDate.now(ZoneOffset.UTC))
+                .managers(managers)
+                .totalManagers(managers.size())
+                .generatedAt(Instant.now())
+                .build();
+    }
+
+    @Override
+    public EmployeesReportResponse buildEmployeesReport(String storeId, String period) {
+        String normalized = normalizePeriod(period);
+
+        // El leaderboard de sucursal incluye al gerente junto a sus ejecutadores.
+        // Este reporte es de colaboradores, así que se queda sólo con EJECUTADOR y
+        // renumera: dejar el rank original abriría huecos ("#1, #3, #4").
+        Set<String> ejecutadorIds = userRepository
+                .findByStoreIdAndActivoTrueAndRolesContaining(storeId, Role.EJECUTADOR).stream()
+                .map(User::getId)
+                .collect(Collectors.toSet());
+
+        List<LeaderboardEntryDTO> all = gamificationService.getLeaderboard(storeId, normalized);
+        List<LeaderboardEntryDTO> employees = new ArrayList<>();
+        for (LeaderboardEntryDTO e : all) {
+            if (!ejecutadorIds.contains(e.getUserId())) continue;
+            e.setRank(employees.size() + 1);
+            employees.add(e);
+        }
+
+        String storeName = storeRepository.findById(storeId)
+                .map(Store::getNombre)
+                .orElse(storeId);
+
+        return EmployeesReportResponse.builder()
+                .storeId(storeId)
+                .storeName(storeName)
+                .period(normalized)
+                .periodStart(periodStart(normalized))
+                .periodEnd(LocalDate.now(ZoneOffset.UTC))
+                .employees(employees)
+                .totalEmployees(employees.size())
+                .generatedAt(Instant.now())
+                .build();
+    }
+
+    @Override
+    public byte[] generateManagersPdf(ManagersReportResponse report) {
+        return renderRankingPdf(
+                "METRIX — Ranking Gerencial",
+                "Alcance: toda la cadena",
+                report.getPeriod(), report.getPeriodStart(), report.getPeriodEnd(),
+                "Gerentes evaluados: " + report.getTotalManagers(),
+                new String[]{"#", "Gerente", "Sucursal", "Colab.", "IGEO Equipo", "IGEO Propio", "Insignias"},
+                new float[]{0.5f, 2.2f, 1.8f, 0.8f, 1.2f, 1.2f, 0.9f},
+                report.getManagers(),
+                (table, e, font) -> {
+                    addCell(table, String.valueOf(e.getRank()), font);
+                    addCell(table, nvl(e.getNombre()), font);
+                    addCell(table, nvl(e.getStoreName()), font);
+                    addCell(table, e.getColaboradorCount() != null
+                            ? String.valueOf(e.getColaboradorCount()) : "0", font);
+                    // teamAvgIgeo llega en -1.0 cuando ningún miembro del equipo tiene
+                    // tareas cerradas; imprimirlo crudo mostraría un porcentaje negativo.
+                    addCell(table, e.getTeamAvgIgeo() != null
+                            ? formatKpi(e.getTeamAvgIgeo()) : "S/D", font);
+                    addCell(table, formatKpi(e.getIgeo()), font);
+                    addCell(table, String.valueOf(e.getBadges() != null ? e.getBadges().size() : 0), font);
+                },
+                "Sin gerentes registrados.");
+    }
+
+    @Override
+    public byte[] generateEmployeesPdf(EmployeesReportResponse report) {
+        return renderRankingPdf(
+                "METRIX — Ranking de Colaboradores",
+                "Sucursal: " + nvl(report.getStoreName()),
+                report.getPeriod(), report.getPeriodStart(), report.getPeriodEnd(),
+                "Colaboradores evaluados: " + report.getTotalEmployees(),
+                new String[]{"#", "Colaborador", "Puesto", "Turno", "Total", "Complet.", "On-Time%", "IGEO", "Insignias"},
+                new float[]{0.5f, 2.2f, 1.4f, 1.1f, 0.8f, 0.9f, 1f, 1f, 0.9f},
+                report.getEmployees(),
+                (table, e, font) -> {
+                    addCell(table, String.valueOf(e.getRank()), font);
+                    addCell(table, nvl(e.getNombre()), font);
+                    addCell(table, nvl(e.getPuesto()), font);
+                    addCell(table, nvl(e.getTurno()), font);
+                    addCell(table, String.valueOf(e.getTotalTasks()), font);
+                    addCell(table, String.valueOf(e.getCompletedTasks()), font);
+                    addCell(table, formatKpiPct(e.getOnTimeRate()), font);
+                    addCell(table, formatKpi(e.getIgeo()), font);
+                    addCell(table, String.valueOf(e.getBadges() != null ? e.getBadges().size() : 0), font);
+                },
+                "Sin colaboradores registrados para esta sucursal.");
+    }
+
+    /** Escribe una fila del ranking en la tabla del PDF. */
+    @FunctionalInterface
+    private interface RankingRowWriter {
+        void write(PdfPTable table, LeaderboardEntryDTO entry, Font cellFont);
+    }
+
+    /**
+     * Ambos reportes de ranking son el mismo documento con distintas columnas:
+     * encabezado con la ventana cubierta, tabla y pie. Se comparte el armado para
+     * que no se desincronicen al ajustar estilos.
+     */
+    private byte[] renderRankingPdf(String title, String scopeLine, String period,
+                                    LocalDate periodStart, LocalDate periodEnd,
+                                    String countLine, String[] headers, float[] widths,
+                                    List<LeaderboardEntryDTO> rows, RankingRowWriter writer,
+                                    String emptyMessage) {
+        try (var baos = new ByteArrayOutputStream()) {
+            Document doc = new Document(PageSize.A4.rotate());
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+
+            Font titleFont  = new Font(Font.HELVETICA, 16, Font.BOLD, new Color(234, 88, 12));
+            Font headerFont = new Font(Font.HELVETICA, 9, Font.BOLD, Color.WHITE);
+            Font cellFont   = new Font(Font.HELVETICA, 9, Font.NORMAL, new Color(28, 25, 23));
+            Font metaFont   = new Font(Font.HELVETICA, 9, Font.NORMAL, new Color(90, 85, 80));
+
+            doc.add(new Paragraph(title, titleFont));
+            doc.add(new Paragraph(scopeLine, metaFont));
+            doc.add(new Paragraph(
+                    "Período: " + periodLabel(period) + "   (" + periodStart + " a " + periodEnd + ")",
+                    metaFont));
+            doc.add(new Paragraph(countLine, metaFont));
+            doc.add(Chunk.NEWLINE);
+
+            if (rows != null && !rows.isEmpty()) {
+                PdfPTable table = new PdfPTable(headers.length);
+                table.setWidthPercentage(100);
+                table.setWidths(widths);
+                for (String h : headers) addHeaderCell(table, h, headerFont);
+                for (LeaderboardEntryDTO e : rows) writer.write(table, e, cellFont);
+                doc.add(table);
+            } else {
+                doc.add(new Paragraph(emptyMessage, cellFont));
+            }
+
+            doc.add(Chunk.NEWLINE);
+            doc.add(new Paragraph(
+                    "IGEO = On-Time × 0.5 + (100 − Re-trabajo) × 0.3 + Calidad × 0.2. "
+                    + "S/D indica que no hay tareas cerradas en el período.", metaFont));
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (Exception e) {
+            throw new RuntimeException("Error generando PDF de ranking: " + e.getMessage(), e);
+        }
+    }
+
+    private String normalizePeriod(String period) {
+        return "monthly".equalsIgnoreCase(period) ? "monthly" : "weekly";
+    }
+
+    private LocalDate periodStart(String normalizedPeriod) {
+        int days = "monthly".equals(normalizedPeriod) ? 30 : 7;
+        return LocalDate.now(ZoneOffset.UTC).minusDays(days);
+    }
+
+    private String periodLabel(String normalizedPeriod) {
+        return "monthly".equals(normalizedPeriod) ? "últimos 30 días" : "últimos 7 días";
+    }
+
+    private String nvl(String value) {
+        return value != null && !value.isBlank() ? value : "-";
     }
 
     private void addInfoRow(PdfPTable table, String label, String value, Font labelFont, Font cellFont) {

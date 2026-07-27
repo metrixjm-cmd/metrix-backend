@@ -74,18 +74,23 @@ class GamificationGerentesLeaderboardTest {
 
     /** Tarea cerrada hace 1 día, dentro de la ventana semanal. */
     private static Task task(String userId, String storeId, boolean onTime) {
-        Instant hace1Dia = Instant.now().minus(1, ChronoUnit.DAYS);
+        return taskHaceDias(userId, storeId, onTime, 1);
+    }
+
+    /** Tarea cerrada hace N días, para ejercitar los bordes de la ventana. */
+    private static Task taskHaceDias(String userId, String storeId, boolean onTime, int dias) {
+        Instant cuando = Instant.now().minus(dias, ChronoUnit.DAYS);
         return Task.builder()
-                .id("task-" + userId + "-" + onTime)
+                .id("task-" + userId + "-" + onTime + "-" + dias)
                 .assignedUserId(userId)
                 .storeId(storeId)
-                .createdAt(hace1Dia)
+                .createdAt(cuando)
                 .activo(true)
                 .reworkCount(0)
                 .execution(Execution.builder()
                         .status(TaskStatus.COMPLETED)
-                        .startedAt(hace1Dia)
-                        .finishedAt(hace1Dia.plus(30, ChronoUnit.MINUTES))
+                        .startedAt(cuando)
+                        .finishedAt(cuando.plus(30, ChronoUnit.MINUTES))
                         .onTime(onTime)
                         .build())
                 .build();
@@ -265,6 +270,40 @@ class GamificationGerentesLeaderboardTest {
 
         assertEquals(1, entry.getColaboradorCount());
         assertEquals(-1.0, entry.getTeamAvgIgeo());
+    }
+
+    @Test
+    void promedioDeEquipoIgnoraTareasFueraDelPeriodo() {
+        User g1 = user("g1", "Gerente Uno", STORE_A, Role.GERENTE);
+        User e1 = ejecutador("e1", STORE_A, "g1");
+
+        // Única tarea del equipo: 40 días atrás, fuera de las ventanas de 7 y 30 días.
+        mockChain(
+                List.of(g1),
+                List.of(g1, e1),
+                List.of(taskHaceDias("e1", STORE_A, true, 40)),
+                List.of(store(STORE_A, "Sucursal Centro")));
+
+        assertEquals(-1.0, service.getGerencialesLeaderboard("weekly").get(0).getTeamAvgIgeo(),
+                     "una tarea de hace 40 días no puede puntuar en la ventana semanal");
+        assertEquals(-1.0, service.getGerencialesLeaderboard("monthly").get(0).getTeamAvgIgeo(),
+                     "ni en la mensual");
+    }
+
+    @Test
+    void promedioDeEquipoCambiaEntreSemanalYMensual() {
+        User g1 = user("g1", "Gerente Uno", STORE_A, Role.GERENTE);
+        User e1 = ejecutador("e1", STORE_A, "g1");
+
+        // Fuera de los 7 días pero dentro de los 30: el período debe notarse.
+        mockChain(
+                List.of(g1),
+                List.of(g1, e1),
+                List.of(taskHaceDias("e1", STORE_A, true, 15)),
+                List.of(store(STORE_A, "Sucursal Centro")));
+
+        assertEquals(-1.0, service.getGerencialesLeaderboard("weekly").get(0).getTeamAvgIgeo());
+        assertEquals(90.0, service.getGerencialesLeaderboard("monthly").get(0).getTeamAvgIgeo());
     }
 
     @Test

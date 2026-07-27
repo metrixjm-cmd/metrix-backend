@@ -86,14 +86,33 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Identidad del cliente para el bucket.
+     * <p>
+     * Con {@code X-Forwarded-For} hay que tomar el <b>último</b> elemento, no el
+     * primero. La cabecera es una lista que cada salto va agregando por la derecha:
+     * si el cliente manda la suya, la infraestructura de Cloud Run le añade la IP
+     * real al final, así que la parte de la izquierda es texto que el atacante
+     * controla. Leyendo el primer elemento bastaba con rotarlo en cada petición
+     * para estrenar bucket y saltarse el límite por completo — comprobado contra
+     * {@code /auth/login}: 120 de 120 intentos pasaron.
+     * <p>
+     * Asume el despliegue actual (Cloud Run directo, ver {@code deploy.yml}). Si
+     * algún día se antepone otro proxy de confianza, el último elemento pasaría a
+     * ser la IP de ese proxy y habría que contar saltos desde el final.
+     */
     private String resolveClientId(HttpServletRequest request) {
         String auth = request.getHeader("Authorization");
         if (auth != null && auth.startsWith("Bearer ")) {
             return "u:" + Integer.toHexString(auth.hashCode());
         }
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip != null && !ip.isBlank()) {
-            return "ip:" + ip.split(",")[0].trim();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            String[] hops = forwarded.split(",");
+            String closest = hops[hops.length - 1].trim();
+            if (!closest.isEmpty()) {
+                return "ip:" + closest;
+            }
         }
         return "ip:" + request.getRemoteAddr();
     }

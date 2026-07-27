@@ -1,6 +1,8 @@
 package com.metrix.api.controller;
 
 import com.metrix.api.dto.DailyReportResponse;
+import com.metrix.api.dto.EmployeesReportResponse;
+import com.metrix.api.dto.ManagersReportResponse;
 import com.metrix.api.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,6 +28,10 @@ import java.time.LocalDate;
  *   GET /daily           → ADMIN, GERENTE  (JSON preview)
  *   GET /daily/pdf       → ADMIN, GERENTE  (descarga PDF)
  *   GET /daily/excel     → ADMIN, GERENTE  (descarga XLSX)
+ *   GET /managers        → ADMIN           (ranking gerencial de la cadena)
+ *   GET /managers/pdf    → ADMIN           (descarga PDF)
+ *   GET /employees       → ADMIN, GERENTE  (ranking de colaboradores por sucursal)
+ *   GET /employees/pdf   → ADMIN, GERENTE  (descarga PDF)
  * </pre>
  */
 @RestController
@@ -108,6 +114,74 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"ficha-desempeno-" + userId + ".pdf\"")
+                .body(pdf);
+    }
+
+    // ── Sprint 18: reportes de ranking ────────────────────────────────────
+    // Reciben `period` y no una fecha porque se apoyan en los leaderboards de
+    // gamificación, que se calculan sobre una ventana móvil desde hoy.
+
+    /**
+     * GET /api/v1/reports/managers?period=weekly|monthly
+     * Ranking gerencial de toda la cadena. Sólo ADMIN: es de alcance global.
+     */
+    @Operation(summary = "Ranking gerencial (JSON)", description = "Ranking de gerentes de toda la cadena ordenado por IGEO de equipo. Solo ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Ranking gerencial del período")
+    @GetMapping("/managers")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ManagersReportResponse> getManagersReport(
+            @RequestParam(defaultValue = "weekly") String period) {
+        return ResponseEntity.ok(reportService.buildManagersReport(period));
+    }
+
+    /**
+     * GET /api/v1/reports/managers/pdf?period=weekly|monthly
+     */
+    @Operation(summary = "Ranking gerencial (PDF)", description = "Descarga el ranking gerencial de la cadena en PDF. Solo ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Archivo PDF del ranking gerencial")
+    @GetMapping("/managers/pdf")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<byte[]> getManagersPdf(
+            @RequestParam(defaultValue = "weekly") String period) {
+        ManagersReportResponse report = reportService.buildManagersReport(period);
+        byte[] pdf = reportService.generateManagersPdf(report);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"ranking-gerencial-" + report.getPeriodEnd() + ".pdf\"")
+                .body(pdf);
+    }
+
+    /**
+     * GET /api/v1/reports/employees?storeId=&period=weekly|monthly
+     * Ranking de colaboradores de una sucursal.
+     */
+    @Operation(summary = "Ranking de colaboradores (JSON)", description = "Ranking de colaboradores de una sucursal ordenado por IGEO. ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Ranking de colaboradores del período")
+    @GetMapping("/employees")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<EmployeesReportResponse> getEmployeesReport(
+            @RequestParam String storeId,
+            @RequestParam(defaultValue = "weekly") String period) {
+        return ResponseEntity.ok(reportService.buildEmployeesReport(storeId, period));
+    }
+
+    /**
+     * GET /api/v1/reports/employees/pdf?storeId=&period=weekly|monthly
+     */
+    @Operation(summary = "Ranking de colaboradores (PDF)", description = "Descarga el ranking de colaboradores de una sucursal en PDF. ADMIN/GERENTE.")
+    @ApiResponse(responseCode = "200", description = "Archivo PDF del ranking de colaboradores")
+    @GetMapping("/employees/pdf")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
+    public ResponseEntity<byte[]> getEmployeesPdf(
+            @RequestParam String storeId,
+            @RequestParam(defaultValue = "weekly") String period) {
+        EmployeesReportResponse report = reportService.buildEmployeesReport(storeId, period);
+        byte[] pdf = reportService.generateEmployeesPdf(report);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"ranking-colaboradores-" + report.getPeriodEnd() + ".pdf\"")
                 .body(pdf);
     }
 }

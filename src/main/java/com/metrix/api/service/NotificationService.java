@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -78,8 +79,8 @@ public class NotificationService {
 
     public void sendToUser(String userId, NotificationEvent event) {
         if (userId == null || userId.isBlank()) return;
-        persist(userId, event);
-        deliverToLocalEmitter(userId, event);
+        Notification saved = persist(userId, event);
+        deliverToLocalEmitter(userId, saved);
     }
 
     /**
@@ -133,6 +134,16 @@ public class NotificationService {
                 .toList();
     }
 
+    /**
+     * Número de notificaciones sin leer del usuario.
+     * <p>
+     * Lo cuenta la base y no el cliente: el frontend sólo tiene las últimas 50, así
+     * que a partir de ahí el badge se quedaba corto.
+     */
+    public long countUnread(String userId) {
+        return notificationRepository.countByUserIdAndReadFalse(userId);
+    }
+
     /** Marca una notificación como leída. No-op si no pertenece al usuario. */
     public void markRead(String userId, String notificationId) {
         notificationRepository.findById(notificationId)
@@ -152,12 +163,19 @@ public class NotificationService {
 
     // ── Internal ────────────────────────────────────────────────────────────
 
-    private void persist(String userId, NotificationEvent event) {
-        // Reutiliza el mismo id del evento SSE: así markRead(id) funciona
-        // igual sea que el cliente haya recibido la notificación en vivo o
-        // via GET /notifications, y el merge cliente-side puede deduplicar.
-        notificationRepository.save(Notification.builder()
-                .id(event.getId())
+    /**
+     * Persiste la notificación de un destinatario y devuelve el documento guardado.
+     * <p>
+     * Cada destinatario necesita su propio {@code _id}. Antes se reutilizaba el id
+     * del evento, y como un mismo evento va a varios usuarios (ejecutor + gerente,
+     * o todos los ADMIN), cada {@code save()} pisaba al anterior: sólo el último
+     * destinatario conservaba la notificación. La entrega en vivo sí llegaba a
+     * todos, así que la pérdida sólo se veía en el historial.
+     */
+    private Notification persist(String userId, NotificationEvent event) {
+        return notificationRepository.save(Notification.builder()
+                .id(UUID.randomUUID().toString())
+                .eventId(event.getId())
                 .userId(userId)
                 .type(event.getType())
                 .severity(event.getSeverity())
@@ -188,16 +206,24 @@ public class NotificationService {
                 .build();
     }
 
-    private void deliverToLocalEmitter(String userId, NotificationEvent event) {
+    /**
+     * Entrega el documento ya persistido, no el evento suelto.
+     * <p>
+     * Así el {@code id} que ve el cliente en vivo es el mismo que devolverá
+     * {@code GET /notifications}: el merge del frontend deduplica por ese campo, y
+     * mandar el id del evento haría que la misma notificación apareciera dos veces.
+     * Es además el id que {@code markRead} espera.
+     */
+    private void deliverToLocalEmitter(String userId, Notification saved) {
         SseEmitter emitter = emitters.get(userId);
         if (emitter == null) return;
 
         try {
             emitter.send(SseEmitter.event()
-                    .id(event.getId())
+                    .id(saved.getId())
                     .name("notification")
-                    .data(event));
-            log.debug("Notificación entregada a {}: {}", userId, event.getType());
+                    .data(toResponse(saved)));
+            log.debug("Notificación entregada a {}: {}", userId, saved.getType());
         } catch (IOException e) {
             emitters.remove(userId, emitter);
             log.warn("Error entregando notificación a {}: {}", userId, e.getMessage());

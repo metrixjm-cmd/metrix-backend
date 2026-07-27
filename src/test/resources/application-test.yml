@@ -1,0 +1,13 @@
+# Configuración del perfil `test`.
+#
+# Existe porque application.yml dejó de traer un valor por defecto para la clave
+# JWT: el que había estaba commiteado y servía para firmar tokens con cualquier
+# rol en cualquier despliegue que no exportara la variable. Los tests necesitan
+# una clave para levantar el contexto, y aquí sí es correcto fijarla — es una
+# clave de usar y tirar que nunca sale de la suite.
+metrix:
+  security:
+    jwt:
+      # base64 de una cadena de 64 caracteres; sólo para tests.
+      secret-key: dGVzdC1vbmx5LXNlY3JldC1rZXktbm90LXVzZWQtb3V0c2lkZS10aGUtdGVzdC1zdWl0ZQ==
+      expiration-ms: 3600000

@@ -32,6 +32,22 @@ public class Notification {
     @Id
     private String id;
 
+    /**
+     * Id del {@code NotificationEvent} que originó esta notificación.
+     * <p>
+     * Un mismo evento se entrega a varios destinatarios (al ejecutor y a su gerente,
+     * o a todos los ADMIN), y cada uno necesita su propio documento. Antes el id del
+     * evento se usaba como {@code _id}, así que el segundo destinatario sobrescribía
+     * al primero y sólo el último conservaba la notificación en su historial.
+     * <p>
+     * No lo consume el cliente — deduplica por {@code _id}, que es el mismo en vivo
+     * y en el historial. Se guarda porque es lo único que permite reconstruir a
+     * quiénes alcanzó un evento, que es justo lo que hacía falta para diagnosticar
+     * la pérdida anterior.
+     */
+    @Field("event_id")
+    private String eventId;
+
     @Field("user_id")
     private String userId;
 

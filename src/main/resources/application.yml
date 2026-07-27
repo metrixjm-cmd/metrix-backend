@@ -10,6 +10,12 @@ spring:
   data:
     mongodb:
       uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/metrix_db}
+      # auto-index-creation se queda desactivado (el default de Spring Data 3.x).
+      # Activarlo tumba el arranque: la base ya tiene índices creados a mano con
+      # nombres distintos a los que infieren las anotaciones — p. ej. 'store_id_idx'
+      # en users contra el 'store_id' que genera @Indexed — y Mongo rechaza el
+      # duplicado con IndexOptionsConflict. Los índices que hagan falta se crean
+      # explícitamente; ver MongoIndexInitializer.
 
   # Archivos
   servlet:
@@ -39,11 +45,19 @@ metrix:
 
   security:
     jwt:
-      secret-key: ${METRIX_SECURITY_JWT_SECRET_KEY:bWV0cml4LWRldi1zZWNyZXQta2V5LWZvci1sb2NhbC1kZXZlbG9wbWVudC1vbmx5LTI2Ynl0ZXM=}
+      # Sin valor por defecto a propósito: el que había estaba commiteado y servía
+      # para firmar tokens con cualquier rol en cualquier despliegue que no
+      # exportara la variable. La aplicación no arranca sin ella — es deliberado.
+      # Para desarrollo local, exportar METRIX_SECURITY_JWT_SECRET_KEY (base64, >=256 bits).
+      secret-key: ${METRIX_SECURITY_JWT_SECRET_KEY}
       expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
   analytics:
     url: ${METRIX_ANALYTICS_URL:http://localhost:8001/api/v1/analytics}
+    # TODO(seguridad): este default también está commiteado, pero quitarlo ahora
+    # tumbaría el arranque en producción — METRIX_API_KEY no se define ni en
+    # deploy.yml ni en application-docker.yml. Requiere añadir el secreto y la
+    # variable al workflow antes de dejarlo sin valor por defecto.
     api-key: ${METRIX_API_KEY:dev-internal-key}
 
   cors:

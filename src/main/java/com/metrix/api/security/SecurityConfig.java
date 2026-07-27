@@ -58,7 +58,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                 // ── Rutas públicas ─────────────────────────────────
-                .requestMatchers("/api/v1/auth/**").permitAll()
+                // Sólo el login. Antes esto era /auth/** y dejaba abierto un
+                // /auth/register que aceptaba el rol desde el cuerpo y devolvía
+                // el JWT: cualquiera se fabricaba una cuenta ADMIN sin token.
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/evidence/local/**").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()

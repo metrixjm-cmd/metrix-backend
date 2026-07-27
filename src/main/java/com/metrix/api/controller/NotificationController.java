@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -118,6 +119,15 @@ public class NotificationController {
     public ResponseEntity<List<NotificationResponse>> getRecent(Authentication auth) {
         String userId = resolveUserId(auth.getName());
         return ResponseEntity.ok(notificationService.getRecent(userId));
+    }
+
+    @Operation(summary = "Contador de notificaciones sin leer",
+               description = "Total sin leer del usuario autenticado, contado en base de datos.")
+    @ApiResponse(responseCode = "200", description = "Contador")
+    @GetMapping("/unread-count")
+    public ResponseEntity<Map<String, Long>> getUnreadCount(Authentication auth) {
+        long unread = notificationService.countUnread(resolveUserId(auth.getName()));
+        return ResponseEntity.ok(Map.of("unread", unread));
     }
 
     @Operation(summary = "Marcar notificación como leída")

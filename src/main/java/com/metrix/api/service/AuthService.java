@@ -2,21 +2,27 @@ package com.metrix.api.service;
 
 import com.metrix.api.dto.AuthRequest;
 import com.metrix.api.dto.AuthResponse;
-import com.metrix.api.dto.RegisterRequest;
+import com.metrix.api.exception.TooManyLoginAttemptsException;
 import com.metrix.api.model.User;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.UserRepository;
 import com.metrix.api.security.JwtService;
+import com.metrix.api.security.LoginAttemptLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
 
 /**
- * Servicio de autenticación y registro de usuarios.
+ * Servicio de autenticación.
+ * <p>
+ * El alta de usuarios vive en {@code UserServiceImpl.createUser}, que aplica la
+ * política de roles. Aquí había un {@code register} que tomaba los roles del cuerpo
+ * de la petición y estaba expuesto sin autenticación; se eliminó con el endpoint.
  * <p>
  * Principios SOLID aplicados:
  * - SRP: Solo gestiona flujos de autenticación.
@@ -34,48 +40,39 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-
-    /**
-     * Registra un nuevo usuario en el sistema.
-     *
-     * @throws IllegalArgumentException si el #Usuario ya existe.
-     */
-    public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByNumeroUsuario(request.getNumeroUsuario())) {
-            throw new IllegalArgumentException(
-                    "El número de usuario ya está registrado: " + request.getNumeroUsuario()
-            );
-        }
-
-        User user = User.builder()
-                .nombre(request.getNombre())
-                .puesto(request.getPuesto())
-                .storeId(request.getStoreId())
-                .turno(request.getTurno())
-                .numeroUsuario(request.getNumeroUsuario())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .roles(request.getRoles())
-                .activo(true)
-                .build();
-
-        userRepository.save(user);
-
-        return buildAuthResponse(user);
-    }
+    private final LoginAttemptLimiter loginAttemptLimiter;
 
     /**
      * Autentica un usuario existente y devuelve un JWT.
+     * <p>
+     * Los fallos se cuentan por cuenta ({@link LoginAttemptLimiter}) además del
+     * límite por cliente del {@code RateLimitFilter}: repartir los intentos entre
+     * varias IPs no debe servir para adivinar una contraseña.
      */
     public AuthResponse login(AuthRequest request) {
-        // Spring Security valida credenciales y lanza AuthenticationException si fallan
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getNumeroUsuario(),
-                        request.getPassword()
-                )
-        );
+        String numeroUsuario = request.getNumeroUsuario();
 
-        User user = userRepository.findByNumeroUsuario(request.getNumeroUsuario())
+        if (loginAttemptLimiter.isBlocked(numeroUsuario)) {
+            throw new TooManyLoginAttemptsException(
+                    "Demasiados intentos fallidos. Vuelve a intentarlo en unos minutos.");
+        }
+
+        try {
+            // Spring Security valida credenciales y lanza AuthenticationException si fallan
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            numeroUsuario,
+                            request.getPassword()
+                    )
+            );
+        } catch (AuthenticationException e) {
+            loginAttemptLimiter.recordFailure(numeroUsuario);
+            throw e;
+        }
+
+        loginAttemptLimiter.recordSuccess(numeroUsuario);
+
+        User user = userRepository.findByNumeroUsuario(numeroUsuario)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
         return buildAuthResponse(user);

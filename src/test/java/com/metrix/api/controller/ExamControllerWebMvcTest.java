@@ -238,9 +238,16 @@ class ExamControllerWebMvcTest {
                 .andExpect(jsonPath("$.timeLimitMinutes").value(60));
     }
 
-    /** Test 9: Examen con duración válida de 24 horas (1440 minutos) → 201 */
+    /**
+     * Test 9: 24 horas (1440 min) supera el tope y se rechaza → 400.
+     * <p>
+     * El test esperaba un 201 desde antes de que 9a1122f limitara la duración a 5
+     * horas ({@code @Max(300)} en CreateExamRequest); ese commit cambió la regla y
+     * no actualizó la expectativa, así que la suite quedó en rojo. Se conserva el
+     * caso porque cubre el borde superior, invertido al comportamiento vigente.
+     */
     @Test
-    void exam_with_valid_duration_24_hours() throws Exception {
+    void exam_with_duration_over_5_hours_is_rejected() throws Exception {
         CreateExamRequest request = new CreateExamRequest();
         request.setTitle("24-Hour Exam");
         request.setTimeLimitMinutes(1440);
@@ -249,17 +256,11 @@ class ExamControllerWebMvcTest {
         request.setTargetAudience(ExamAudience.EJECUTADOR);
         request.setQuestions(sampleQuestionDtos());
 
-        ExamResponse response = sampleExam("exam-24h");
-        response.setTimeLimitMinutes(1440);
-
-        when(examService.create(any(CreateExamRequest.class), anyString())).thenReturn(response);
-
         mockMvc.perform(post("/api/v1/exams")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request))
                         .with(user("ADMIN001").roles("ADMIN")))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.timeLimitMinutes").value(1440));
+                .andExpect(status().isBadRequest());
     }
 
     /** Test 10: Examen con duración de 5 horas (300 minutos) → 201 */

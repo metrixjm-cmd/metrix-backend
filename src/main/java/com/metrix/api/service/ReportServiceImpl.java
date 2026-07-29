@@ -134,7 +134,7 @@ public class ReportServiceImpl implements ReportService {
                 kpiTable.setWidthPercentage(60);
                 addHeaderCell(kpiTable, "KPI", headerFont);
                 addHeaderCell(kpiTable, "Valor", headerFont);
-                addKpiRow(kpiTable, "IGEO", formatKpi(kpi.getIgeo()), cellFont);
+                addKpiRow(kpiTable, "Over-all", formatKpi(kpi.getIgeo()), cellFont);
                 addKpiRow(kpiTable, "On-Time Rate", formatKpiPct(kpi.getOnTimeRate()), cellFont);
                 addKpiRow(kpiTable, "Re-trabajo", formatKpiPct(kpi.getReworkRate()), cellFont);
                 addKpiRow(kpiTable, "Críticas Pendientes", String.valueOf(kpi.getCriticalPending()), cellFont);
@@ -172,7 +172,7 @@ public class ReportServiceImpl implements ReportService {
                 PdfPTable usersTable = new PdfPTable(7);
                 usersTable.setWidthPercentage(100);
                 usersTable.setWidths(new float[]{0.5f, 2f, 1.5f, 1f, 1f, 1f, 1f});
-                for (String h : new String[]{"#", "Nombre", "Puesto", "Total", "Complet.", "On-Time%", "IGEO"}) {
+                for (String h : new String[]{"#", "Nombre", "Puesto", "Total", "Complet.", "On-Time%", "Over-all"}) {
                     addHeaderCell(usersTable, h, headerFont);
                 }
                 for (UserResponsibilityResponse u : report.getUserRanking()) {
@@ -230,7 +230,7 @@ public class ReportServiceImpl implements ReportService {
             KpiSummaryResponse kpi = report.getKpiSummary();
             if (kpi != null) {
                 int r = 1;
-                createDataRow(kpiSheet, r++, dataStyle, "IGEO", formatKpi(kpi.getIgeo()));
+                createDataRow(kpiSheet, r++, dataStyle, "Over-all", formatKpi(kpi.getIgeo()));
                 createDataRow(kpiSheet, r++, dataStyle, "On-Time Rate (%)", formatKpiPct(kpi.getOnTimeRate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Re-trabajo (%)", formatKpiPct(kpi.getReworkRate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Críticas Pendientes", String.valueOf(kpi.getCriticalPending()));
@@ -270,7 +270,7 @@ public class ReportServiceImpl implements ReportService {
             // ── Sheet 3: Colaboradores ──
             Sheet usersSheet = wb.createSheet("Colaboradores");
             String[] userHeaders = {"Rank", "Nombre", "Puesto", "Turno", "Total", "Completadas",
-                    "Fallidas", "On-Time%", "Re-trabajo%", "Avg Ejec. (min)", "IGEO"};
+                    "Fallidas", "On-Time%", "Re-trabajo%", "Avg Ejec. (min)", "Over-all"};
             createRow(usersSheet, 0, userHeaders, headerStyle);
             if (report.getUserRanking() != null) {
                 int r = 1;
@@ -419,7 +419,7 @@ public class ReportServiceImpl implements ReportService {
                 kpiTable.setWidthPercentage(70);
                 addHeaderCell(kpiTable, "KPI", headerFont);
                 addHeaderCell(kpiTable, "Valor", headerFont);
-                addKpiRow(kpiTable, "IGEO (Índice Global)",       formatKpi(kpi.getIgeo()), cellFont);
+                addKpiRow(kpiTable, "Over-all (Índice Global)",   formatKpi(kpi.getIgeo()), cellFont);
                 addKpiRow(kpiTable, "On-Time Rate",               formatKpiPct(kpi.getOnTimeRate()), cellFont);
                 addKpiRow(kpiTable, "Tasa de Re-trabajo",         formatKpiPct(kpi.getReworkRate()), cellFont);
                 addKpiRow(kpiTable, "Avg. Ejecución (min)",       formatKpi(kpi.getAvgExecMinutes()), cellFont);
@@ -520,7 +520,7 @@ public class ReportServiceImpl implements ReportService {
                 "Alcance: toda la cadena",
                 report.getPeriod(), report.getPeriodStart(), report.getPeriodEnd(),
                 "Gerentes evaluados: " + report.getTotalManagers(),
-                new String[]{"#", "Gerente", "Sucursal", "Colab.", "IGEO Equipo", "IGEO Propio", "Insignias"},
+                new String[]{"#", "Gerente", "Sucursal", "Colab.", "Over-all Equipo", "Over-all Propio", "Insignias"},
                 new float[]{0.5f, 2.2f, 1.8f, 0.8f, 1.2f, 1.2f, 0.9f},
                 report.getManagers(),
                 (table, e, font) -> {
@@ -546,7 +546,7 @@ public class ReportServiceImpl implements ReportService {
                 "Sucursal: " + nvl(report.getStoreName()),
                 report.getPeriod(), report.getPeriodStart(), report.getPeriodEnd(),
                 "Colaboradores evaluados: " + report.getTotalEmployees(),
-                new String[]{"#", "Colaborador", "Puesto", "Turno", "Total", "Complet.", "On-Time%", "IGEO", "Insignias"},
+                new String[]{"#", "Colaborador", "Puesto", "Turno", "Total", "Complet.", "On-Time%", "Over-all", "Insignias"},
                 new float[]{0.5f, 2.2f, 1.4f, 1.1f, 0.8f, 0.9f, 1f, 1f, 0.9f},
                 report.getEmployees(),
                 (table, e, font) -> {
@@ -610,7 +610,7 @@ public class ReportServiceImpl implements ReportService {
 
             doc.add(Chunk.NEWLINE);
             doc.add(new Paragraph(
-                    "IGEO = On-Time × 0.5 + (100 − Re-trabajo) × 0.3 + Calidad × 0.2. "
+                    "Over-all = On-Time × 0.5 + (100 − Re-trabajo) × 0.3 + Calidad × 0.2. "
                     + "S/D indica que no hay tareas cerradas en el período.", metaFont));
 
             doc.close();

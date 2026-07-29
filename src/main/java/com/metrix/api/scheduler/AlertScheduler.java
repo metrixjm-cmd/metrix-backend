@@ -157,7 +157,7 @@ public class AlertScheduler {
                             .type("DAILY_IGEO_ALERT")
                             .severity("critical")
                             .title("Alerta de desempeno operativo")
-                            .body(String.format("Sucursal \"%s\" inicia con IGEO %.1f%% (minimo: 70%%).",
+                            .body(String.format("Sucursal \"%s\" inicia con Over-all %.1f%% (minimo: 70%%).",
                                     store.getNombre(), igeo))
                             .taskId(null)
                             .incidentId(null)

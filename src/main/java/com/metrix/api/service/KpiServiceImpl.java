@@ -667,6 +667,7 @@ public class KpiServiceImpl implements KpiService {
                 .pipelineFailed(pipelineCount(context, contextId, tasks, "FAILED"))
                 .sparklineOnTime(buildOnTimeSparkline(last10))
                 .sparklineIgeo(buildIgeoSparkline(last10))
+                .sparklineTaskTitles(buildTaskTitles(last10))
                 .build();
     }
 
@@ -856,6 +857,14 @@ public class KpiServiceImpl implements KpiService {
                 .collect(Collectors.toList());
     }
 
+    /** Título de la tarea en cada posición del sparkline, para que el tooltip del
+     *  frontend pueda mostrar "qué tarea es" en vez de solo el número de punto. */
+    private List<String> buildTaskTitles(List<Task> last10) {
+        return last10.stream()
+                .map(t -> t.getTitle() != null ? t.getTitle() : "Tarea sin título")
+                .collect(Collectors.toList());
+    }
+
     private KpiSummaryResponse emptyResponse(String context, String contextId) {
         return KpiSummaryResponse.builder()
                 .context(context)
@@ -872,6 +881,7 @@ public class KpiServiceImpl implements KpiService {
                 .pipelineFailed(0)
                 .sparklineOnTime(Collections.emptyList())
                 .sparklineIgeo(Collections.emptyList())
+                .sparklineTaskTitles(Collections.emptyList())
                 .build();
     }
 

@@ -106,6 +106,11 @@ public class KpiServiceImpl implements KpiService {
         return buildSummary(tasks, "STORE", storeId);
     }
 
+    @Override
+    public KpiSummaryResponse getSummaryForTasks(List<Task> tasks, String context, String contextId) {
+        return buildSummary(tasks != null ? tasks : List.of(), context, contextId);
+    }
+
     @Cacheable(value = "kpiSummary", key = "'global'")
     @Override
     public KpiSummaryResponse getGlobalSummary() {

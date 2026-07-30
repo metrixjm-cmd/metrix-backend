@@ -63,6 +63,12 @@ metrix:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:8080}
 
+  # Zona horaria de la operación. Define qué instantes caen dentro del "día" de un
+  # reporte de cierre diario. Cloud Run corre en UTC, así que sin esto el día del
+  # reporte arrancaba a las 18:00 hora local del día anterior.
+  operational:
+    zone: ${METRIX_OPERATIONAL_ZONE:America/Mexico_City}
+
 # Logging
 logging:
   level:

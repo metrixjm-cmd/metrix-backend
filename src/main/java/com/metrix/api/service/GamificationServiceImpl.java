@@ -54,8 +54,37 @@ public class GamificationServiceImpl implements GamificationService {
 
     @Override
     public List<LeaderboardEntryDTO> getLeaderboard(String storeId, String period) {
-        List<User> users = userRepository.findByStoreIdAndActivoTrue(storeId);
+        return rankUsers(userRepository.findByStoreIdAndActivoTrue(storeId), storeId, period,
+                         "Top Over-all de la sucursal este mes");
+    }
 
+    /**
+     * Ranking de los ejecutadores a cargo de un gerente concreto.
+     * <p>
+     * Una sucursal puede tener más de un gerente, y cada uno responde sólo por su
+     * plantilla: rankear la sucursal entera le mostraría gente que no dirige.
+     * Mismo criterio que {@code KpiServiceImpl.getUsersResponsibilityForManager}.
+     */
+    @Override
+    public List<LeaderboardEntryDTO> getTeamLeaderboard(String storeId, String managerId, String period) {
+        List<User> team = userRepository
+                .findByStoreIdAndManagerOwnerIdAndActivoTrue(storeId, managerId).stream()
+                .filter(u -> u.getRoles() != null && u.getRoles().contains(Role.EJECUTADOR))
+                .collect(Collectors.toList());
+        return rankUsers(team, storeId, period, "Top Over-all del equipo este mes");
+    }
+
+    /**
+     * Núcleo del ranking: calcula la entrada de cada usuario, ordena por Over-all
+     * y numera desde 1.
+     * <p>
+     * El promedio de ejecución de referencia se toma siempre de la sucursal completa,
+     * incluso cuando se rankea un solo equipo: es la línea base con la que se compara
+     * el desempeño, y recortarla al equipo haría que cada gerente se midiera contra
+     * una vara distinta.
+     */
+    private List<LeaderboardEntryDTO> rankUsers(List<User> users, String storeId,
+                                                String period, String badgeDescription) {
         Instant now          = Instant.now();
         int     days         = "monthly".equalsIgnoreCase(period) ? 30 : 7;
         Instant periodStart  = now.minus(days, ChronoUnit.DAYS);
@@ -79,8 +108,7 @@ public class GamificationServiceImpl implements GamificationService {
         }
 
         if (!entries.isEmpty()) {
-            applyColaboradorMesBadge(entries, period, entries.get(0).getIgeo(),
-                                     "Top IGEO de la sucursal este mes");
+            applyColaboradorMesBadge(entries, period, entries.get(0).getIgeo(), badgeDescription);
         }
 
         return entries;

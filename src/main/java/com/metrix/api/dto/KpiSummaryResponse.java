@@ -47,6 +47,7 @@ public class KpiSummaryResponse {
     private long pipelineFailed;
 
     // Sparklines (últimas 10 tareas cerradas, orden ASC por createdAt)
-    private List<Integer> sparklineOnTime;  // 100 = onTime, 0 = no
-    private List<Double>  sparklineIgeo;    // IGEO rolling per task
+    private List<Integer> sparklineOnTime;    // 100 = onTime, 0 = no
+    private List<Double>  sparklineIgeo;      // IGEO rolling per task
+    private List<String>  sparklineTaskTitles; // título de la tarea en cada punto, mismo orden/índice
 }

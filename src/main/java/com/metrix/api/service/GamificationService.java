@@ -24,6 +24,20 @@ public interface GamificationService {
     List<LeaderboardEntryDTO> getLeaderboard(String storeId, String period);
 
     /**
+     * Ranking de los ejecutadores a cargo de un gerente — vista GERENTE.
+     * <p>
+     * Una sucursal puede tener varios gerentes y cada uno responde sólo por su
+     * plantilla, así que el ranking se acota por {@code managerOwnerId} en vez de
+     * por sucursal completa.
+     *
+     * @param storeId    sucursal del gerente
+     * @param managerId  ID del gerente cuyo equipo se rankea
+     * @param period     "weekly" (7 días) o "monthly" (30 días)
+     * @return lista ordenada por Over-all descendente, rank asignado 1-based
+     */
+    List<LeaderboardEntryDTO> getTeamLeaderboard(String storeId, String managerId, String period);
+
+    /**
      * Ranking gerencial de toda la cadena — vista ADMIN.
      * <p>
      * Incluye, además del IGEO propio del gerente, el contexto de su equipo:

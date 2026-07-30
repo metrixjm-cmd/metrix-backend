@@ -25,13 +25,14 @@ import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -52,23 +53,32 @@ public class ReportServiceImpl implements ReportService {
     private final KpiService         kpiService;
     private final GamificationService gamificationService;
 
+    /**
+     * Zona horaria de la operación. Los reportes se calculan sobre días naturales
+     * de esta zona, no de la del servidor (Cloud Run corre en UTC).
+     */
+    @Value("${metrix.operational.zone:America/Mexico_City}")
+    private String operationalZone;
+
     // ── buildDailyReport ─────────────────────────────────────────────────
 
     @Override
     public DailyReportResponse buildDailyReport(String storeId, LocalDate date) {
-        // Ventana UTC del día solicitado
-        var startOfDay = date.atStartOfDay().toInstant(ZoneOffset.UTC);
-        var endOfDay   = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        // Ventana del día solicitado en hora local de la operación. En UTC el
+        // "día" arrancaba a las 18:00 del día anterior y todo lo registrado
+        // después de esa hora caía en el reporte del día siguiente.
+        ZoneId zone = zone();
+        var startOfDay = date.atStartOfDay(zone).toInstant();
+        var endOfDay   = date.plusDays(1).atStartOfDay(zone).toInstant();
 
         List<Task> allForStore = taskRepository.findByStoreIdAndActivoTrue(storeId);
         List<Task> dayTasks = allForStore.stream()
-                .filter(t -> t.getCreatedAt() != null
-                        && !t.getCreatedAt().isBefore(startOfDay)
-                        && t.getCreatedAt().isBefore(endOfDay))
+                .filter(t -> belongsToDay(t, startOfDay, endOfDay))
                 .collect(Collectors.toList());
 
-        // KPIs del día (reutiliza el summary del store completo para simplificar)
-        KpiSummaryResponse kpiSummary = kpiService.getStoreSummary(storeId);
+        // KPIs del mismo día que la tabla de tareas. Antes se usaba el summary
+        // histórico de la sucursal, que no describía la jornada del reporte.
+        KpiSummaryResponse kpiSummary = kpiService.getSummaryForTasks(dayTasks, "STORE", storeId);
 
         // Colaboradores del store
         List<UserResponsibilityResponse> userRanking = kpiService.getUsersResponsibility(storeId);
@@ -126,7 +136,7 @@ public class ReportServiceImpl implements ReportService {
             doc.add(Chunk.NEWLINE);
 
             // ── Tabla KPI Summary ──
-            doc.add(new Paragraph("Resumen de KPIs", sectionFont));
+            doc.add(new Paragraph("Resumen de KPIs del día", sectionFont));
             doc.add(Chunk.NEWLINE);
             KpiSummaryResponse kpi = report.getKpiSummary();
             if (kpi != null) {
@@ -224,7 +234,7 @@ public class ReportServiceImpl implements ReportService {
             CellStyle dataStyle   = createDataStyle(wb);
 
             // ── Sheet 1: Resumen KPIs ──
-            Sheet kpiSheet = wb.createSheet("Resumen KPIs");
+            Sheet kpiSheet = wb.createSheet("Resumen KPIs del día");
             String[] kpiHeaders = {"KPI", "Valor"};
             createRow(kpiSheet, 0, kpiHeaders, headerStyle);
             KpiSummaryResponse kpi = report.getKpiSummary();
@@ -470,7 +480,7 @@ public class ReportServiceImpl implements ReportService {
         return ManagersReportResponse.builder()
                 .period(normalized)
                 .periodStart(periodStart(normalized))
-                .periodEnd(LocalDate.now(ZoneOffset.UTC))
+                .periodEnd(today())
                 .managers(managers)
                 .totalManagers(managers.size())
                 .generatedAt(Instant.now())
@@ -506,7 +516,7 @@ public class ReportServiceImpl implements ReportService {
                 .storeName(storeName)
                 .period(normalized)
                 .periodStart(periodStart(normalized))
-                .periodEnd(LocalDate.now(ZoneOffset.UTC))
+                .periodEnd(today())
                 .employees(employees)
                 .totalEmployees(employees.size())
                 .generatedAt(Instant.now())
@@ -620,13 +630,37 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    private ZoneId zone() {
+        return ZoneId.of(operationalZone);
+    }
+
+    private LocalDate today() {
+        return LocalDate.now(zone());
+    }
+
+    /**
+     * Una tarea pertenece al cierre de un día si se creó ese día o si se cerró
+     * ese día. Sólo con la fecha de creación, una tarea abierta el lunes y
+     * cerrada el martes no aparecía en el cierre del martes; sólo con la de
+     * cierre, las pendientes del día desaparecían del reporte.
+     */
+    private boolean belongsToDay(Task task, Instant startOfDay, Instant endOfDay) {
+        if (withinDay(task.getCreatedAt(), startOfDay, endOfDay)) return true;
+        return task.getExecution() != null
+                && withinDay(task.getExecution().getFinishedAt(), startOfDay, endOfDay);
+    }
+
+    private boolean withinDay(Instant moment, Instant startOfDay, Instant endOfDay) {
+        return moment != null && !moment.isBefore(startOfDay) && moment.isBefore(endOfDay);
+    }
+
     private String normalizePeriod(String period) {
         return "monthly".equalsIgnoreCase(period) ? "monthly" : "weekly";
     }
 
     private LocalDate periodStart(String normalizedPeriod) {
         int days = "monthly".equals(normalizedPeriod) ? 30 : 7;
-        return LocalDate.now(ZoneOffset.UTC).minusDays(days);
+        return today().minusDays(days);
     }
 
     private String periodLabel(String normalizedPeriod) {

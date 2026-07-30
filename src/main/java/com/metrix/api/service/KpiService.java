@@ -8,6 +8,7 @@ import com.metrix.api.dto.KpiSummaryResponse;
 import com.metrix.api.dto.StoreRankingResponse;
 import com.metrix.api.dto.TrainingKpiResponse;
 import com.metrix.api.dto.UserResponsibilityResponse;
+import com.metrix.api.model.Task;
 
 import java.util.List;
 
@@ -26,6 +27,15 @@ public interface KpiService {
      * Acceso: ADMIN, GERENTE.
      */
     KpiSummaryResponse getStoreSummary(String storeId);
+
+    /**
+     * KPIs calculados sobre un conjunto de tareas ya acotado por quien llama.
+     * <p>
+     * Existe para el reporte de cierre diario: ahí los KPIs tienen que describir
+     * el mismo día que la tabla de tareas del reporte, no el histórico completo
+     * de la sucursal. No cachea, porque el alcance lo define el llamador.
+     */
+    KpiSummaryResponse getSummaryForTasks(List<Task> tasks, String context, String contextId);
 
     /**
      * KPIs globales: agrega TODAS las tareas activas del sistema (todas las sucursales).

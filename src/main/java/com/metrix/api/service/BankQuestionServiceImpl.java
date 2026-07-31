@@ -160,6 +160,16 @@ public class BankQuestionServiceImpl implements BankQuestionService {
                     throw new IllegalArgumentException("TRUE_FALSE requiere 2 opciones.");
                 }
             }
+            case SINGLE_SELECT -> {
+                if (req.getOptions() == null || req.getOptions().size() < 2) {
+                    throw new IllegalArgumentException("SINGLE_SELECT requiere al menos 2 opciones.");
+                }
+                if (req.getCorrectOptionIndex() < 0
+                        || req.getCorrectOptionIndex() >= req.getOptions().size()) {
+                    throw new IllegalArgumentException(
+                            "SINGLE_SELECT requiere que correctOptionIndex apunte a una de las opciones.");
+                }
+            }
             case MULTI_SELECT -> {
                 if (req.getOptions() == null || req.getOptions().size() < 2) {
                     throw new IllegalArgumentException("MULTI_SELECT requiere al menos 2 opciones.");

@@ -21,7 +21,7 @@ public interface IncidentService {
 
     List<IncidentResponse> getByStoreAndStatus(String storeId, IncidentStatus status);
 
-    IncidentResponse getById(String incidentId);
+    IncidentResponse getById(String incidentId, String callerNumeroUsuario);
 
     IncidentResponse updateStatus(String incidentId, UpdateIncidentStatusRequest request,
                                    String currentNumeroUsuario);

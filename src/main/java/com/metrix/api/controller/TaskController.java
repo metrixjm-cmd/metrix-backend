@@ -210,8 +210,10 @@ public class TaskController {
             @ApiResponse(responseCode = "404", description = "Tarea no encontrada")
     })
     @GetMapping("/{taskId}")
-    public ResponseEntity<TaskResponse> getById(@Parameter(description = "ID de la tarea") @PathVariable String taskId) {
-        return ResponseEntity.ok(taskService.getById(taskId));
+    public ResponseEntity<TaskResponse> getById(
+            @Parameter(description = "ID de la tarea") @PathVariable String taskId,
+            Authentication auth) {
+        return ResponseEntity.ok(taskService.getById(taskId, auth.getName()));
     }
 
     // ── Actualizar Estatus ───────────────────────────────────────────────
@@ -278,10 +280,11 @@ public class TaskController {
     public ResponseEntity<TaskResponse> updateProcessStep(
             @PathVariable String taskId,
             @PathVariable String stepId,
-            @RequestBody com.metrix.api.dto.UpdateProcessStepRequest request) {
+            @RequestBody com.metrix.api.dto.UpdateProcessStepRequest request,
+            Authentication auth) {
 
         return ResponseEntity.ok(taskService.updateProcessStep(
-                taskId, stepId, request.isCompleted(), request.getNotes()));
+                taskId, stepId, request.isCompleted(), request.getNotes(), auth.getName()));
     }
 
     // ── Admin: Editar paso de proceso ───────────────────────────────────

@@ -86,8 +86,8 @@ public class IncidentController {
     @Operation(summary = "Detalle de incidencia", description = "Obtiene el detalle completo de una incidencia por su ID.")
     @ApiResponse(responseCode = "200", description = "Detalle de la incidencia")
     @GetMapping("/{id}")
-    public IncidentResponse getById(@PathVariable String id) {
-        return incidentService.getById(id);
+    public IncidentResponse getById(@PathVariable String id, Authentication auth) {
+        return incidentService.getById(id, auth.getName());
     }
 
     /** Cambiar estado del ciclo de vida — solo ADMIN/GERENTE. */

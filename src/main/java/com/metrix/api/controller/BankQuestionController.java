@@ -51,6 +51,7 @@ public class BankQuestionController {
     @Operation(summary = "Listar preguntas del banco",
                description = "Paginado. Filtros: type, category, difficulty, tag, storeId.")
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public Page<BankQuestionResponse> list(
             @RequestParam(required = false) QuestionType       type,
             @RequestParam(required = false) String             category,
@@ -64,12 +65,14 @@ public class BankQuestionController {
 
     @Operation(summary = "Detalle de pregunta")
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public BankQuestionResponse getById(@PathVariable String id) {
         return questionService.getById(id);
     }
 
     @Operation(summary = "Tags disponibles para autocompletado", description = "Resultado cacheado.")
     @GetMapping("/tags")
+    @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public List<String> getAllTags() {
         return questionService.getAllTags();
     }

@@ -3,7 +3,11 @@ package com.metrix.api.controller;
 import com.metrix.api.dto.DailyReportResponse;
 import com.metrix.api.dto.EmployeesReportResponse;
 import com.metrix.api.dto.ManagersReportResponse;
+import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.model.User;
+import com.metrix.api.repository.UserRepository;
 import com.metrix.api.service.ReportService;
+import com.metrix.api.service.RolePolicy;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -40,7 +45,30 @@ import java.time.LocalDate;
 @Tag(name = "Reportes", description = "Reportes de cierre diario y fichas de desempeño (Sprint 8)")
 public class ReportController {
 
-    private final ReportService reportService;
+    private final ReportService  reportService;
+    private final UserRepository userRepository;
+    private final RolePolicy     rolePolicy;
+
+    /**
+     * Aislamiento por sucursal para los reportes que reciben {@code storeId}:
+     * ADMIN accede a cualquier sucursal; GERENTE solo a la suya. Sin esto, un
+     * gerente podía pedir el reporte de otra sucursal cambiando el parámetro.
+     */
+    private void assertStoreAccess(String storeId, Authentication auth) {
+        User caller = userRepository.findByNumeroUsuario(auth.getName())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + auth.getName()));
+        rolePolicy.assertGerenteStoreAccess(caller, storeId);
+    }
+
+    /** Igual que {@link #assertStoreAccess} pero resolviendo la sucursal del colaborador objetivo. */
+    private void assertUserStoreAccess(String userId, Authentication auth) {
+        User target = userRepository.findById(userId)
+                .or(() -> userRepository.findByNumeroUsuario(userId))
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + userId));
+        assertStoreAccess(target.getStoreId(), auth);
+    }
 
     /**
      * GET /api/v1/reports/daily?storeId=&date=YYYY-MM-DD
@@ -52,7 +80,9 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<DailyReportResponse> getDailyReport(
             @RequestParam String storeId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            Authentication auth) {
+        assertStoreAccess(storeId, auth);
         return ResponseEntity.ok(reportService.buildDailyReport(storeId, date));
     }
 
@@ -66,7 +96,9 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<byte[]> getDailyPdf(
             @RequestParam String storeId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            Authentication auth) {
+        assertStoreAccess(storeId, auth);
         DailyReportResponse report = reportService.buildDailyReport(storeId, date);
         byte[] pdf = reportService.generatePdf(report);
         return ResponseEntity.ok()
@@ -86,7 +118,9 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<byte[]> getDailyExcel(
             @RequestParam String storeId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            Authentication auth) {
+        assertStoreAccess(storeId, auth);
         DailyReportResponse report = reportService.buildDailyReport(storeId, date);
         byte[] excel = reportService.generateExcel(report);
         return ResponseEntity.ok()
@@ -108,7 +142,8 @@ public class ReportController {
     @ApiResponse(responseCode = "200", description = "Archivo PDF con la ficha de desempeño")
     @GetMapping("/user/{userId}/performance-card")
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
-    public ResponseEntity<byte[]> getPerformanceCard(@PathVariable String userId) {
+    public ResponseEntity<byte[]> getPerformanceCard(@PathVariable String userId, Authentication auth) {
+        assertUserStoreAccess(userId, auth);
         byte[] pdf = reportService.generatePerformanceCard(userId);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
@@ -162,7 +197,9 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<EmployeesReportResponse> getEmployeesReport(
             @RequestParam String storeId,
-            @RequestParam(defaultValue = "weekly") String period) {
+            @RequestParam(defaultValue = "weekly") String period,
+            Authentication auth) {
+        assertStoreAccess(storeId, auth);
         return ResponseEntity.ok(reportService.buildEmployeesReport(storeId, period));
     }
 
@@ -175,7 +212,9 @@ public class ReportController {
     @PreAuthorize("hasAnyRole('ADMIN', 'GERENTE')")
     public ResponseEntity<byte[]> getEmployeesPdf(
             @RequestParam String storeId,
-            @RequestParam(defaultValue = "weekly") String period) {
+            @RequestParam(defaultValue = "weekly") String period,
+            Authentication auth) {
+        assertStoreAccess(storeId, auth);
         EmployeesReportResponse report = reportService.buildEmployeesReport(storeId, period);
         byte[] pdf = reportService.generateEmployeesPdf(report);
         return ResponseEntity.ok()

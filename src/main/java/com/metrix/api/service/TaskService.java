@@ -70,9 +70,10 @@ public interface TaskService {
      * Devuelve el detalle completo de una tarea por su ID.
      *
      * @param taskId MongoDB _id de la tarea
+     * @param callerNumeroUsuario identificador del usuario autenticado (scoping por sucursal/propiedad)
      * @throws com.metrix.api.exception.ResourceNotFoundException si no existe o está inactiva
      */
-    TaskResponse getById(String taskId);
+    TaskResponse getById(String taskId, String callerNumeroUsuario);
 
     /**
      * Actualiza el estatus de una tarea con timestamps automáticos.
@@ -139,7 +140,8 @@ public interface TaskService {
     TaskResponse rateQuality(String taskId, QualityRatingRequest request, String currentUser);
 
     /** Actualiza un paso de proceso (checklist) de una tarea. */
-    TaskResponse updateProcessStep(String taskId, String stepId, boolean completed, String notes);
+    TaskResponse updateProcessStep(String taskId, String stepId, boolean completed, String notes,
+                                   String callerNumeroUsuario);
 
     /** Edita título/descripción de un paso de proceso. Solo ADMIN. */
     TaskResponse editProcessStep(String taskId, String stepId, String title, String description);

@@ -146,11 +146,24 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    public TaskResponse getById(String taskId) {
-        return taskRepository.findById(taskId)
+    public TaskResponse getById(String taskId, String callerNumeroUsuario) {
+        Task task = taskRepository.findById(taskId)
                 .filter(Task::isActivo)
-                .map(t -> toResponse(t, resolveUserName(t.getAssignedUserId())))
                 .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+        assertCanOperateTask(task, callerNumeroUsuario);
+        return toResponse(task, resolveUserName(task.getAssignedUserId()));
+    }
+
+    /**
+     * Valida que el llamante pueda ver/operar la tarea:
+     * ADMIN siempre; GERENTE solo en su sucursal; EJECUTADOR solo las suyas.
+     * Reutiliza la misma política que capacitaciones ({@link RolePolicy#validateOperationScope}).
+     */
+    private void assertCanOperateTask(Task task, String callerNumeroUsuario) {
+        User caller = userRepository.findByNumeroUsuario(callerNumeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + callerNumeroUsuario));
+        rolePolicy.validateOperationScope(caller, task.getAssignedUserId(), task.getStoreId());
     }
 
     // ── Actualizar Estatus ───────────────────────────────────────────────
@@ -515,10 +528,12 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
-    public TaskResponse updateProcessStep(String taskId, String stepId, boolean completed, String notes) {
+    public TaskResponse updateProcessStep(String taskId, String stepId, boolean completed,
+                                          String notes, String callerNumeroUsuario) {
         Task task = taskRepository.findById(taskId)
                 .filter(Task::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException("Tarea no encontrada: " + taskId));
+        assertCanOperateTask(task, callerNumeroUsuario);
 
         boolean found = false;
         for (ProcessStep step : task.getProcesses()) {

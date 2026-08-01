@@ -35,6 +35,7 @@ public class IncidentServiceImpl implements IncidentService {
     private final UserRepository            userRepository;
     private final GcsService                gcsService;
     private final ApplicationEventPublisher eventPublisher;
+    private final RolePolicy                rolePolicy;
 
     // ── Crear ────────────────────────────────────────────────────────────────
 
@@ -136,12 +137,24 @@ public class IncidentServiceImpl implements IncidentService {
     }
 
     @Override
-    public IncidentResponse getById(String incidentId) {
-        return incidentRepository.findById(incidentId)
+    public IncidentResponse getById(String incidentId, String callerNumeroUsuario) {
+        Incident incident = incidentRepository.findById(incidentId)
                 .filter(Incident::isActivo)
-                .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Incidencia no encontrada: " + incidentId));
+        assertIncidentStoreScope(incident, callerNumeroUsuario);
+        return toResponse(incident);
+    }
+
+    /**
+     * Aislamiento por sucursal: ADMIN accede a cualquier incidencia; GERENTE y
+     * EJECUTADOR solo a las de su propia sucursal.
+     */
+    private void assertIncidentStoreScope(Incident incident, String callerNumeroUsuario) {
+        User caller = userRepository.findByNumeroUsuario(callerNumeroUsuario)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Usuario no encontrado: " + callerNumeroUsuario));
+        rolePolicy.assertSameStoreOrAdmin(caller, incident.getStoreId());
     }
 
     // ── Cambio de Estado ─────────────────────────────────────────────────────
@@ -153,6 +166,7 @@ public class IncidentServiceImpl implements IncidentService {
                 .filter(Incident::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Incidencia no encontrada: " + incidentId));
+        assertIncidentStoreScope(incident, currentNumeroUsuario);
 
         IncidentStatus current = incident.getStatus();
         IncidentStatus next    = request.getNewStatus();
@@ -252,6 +266,7 @@ public class IncidentServiceImpl implements IncidentService {
                 .filter(Incident::isActivo)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Incidencia no encontrada: " + incidentId));
+        assertIncidentStoreScope(incident, currentNumeroUsuario);
 
         String rawContentType = file.getContentType();
         String contentType = rawContentType != null ? rawContentType : "";

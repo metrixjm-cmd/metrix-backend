@@ -192,6 +192,22 @@ public class RolePolicy {
     }
 
     /**
+     * Aislamiento por sucursal para recursos de alcance de tienda (incidencias, etc.):
+     * ADMIN accede a todo; <b>cualquier</b> otro rol —GERENTE o EJECUTADOR— solo a su
+     * propia sucursal. A diferencia de {@link #assertGerenteStoreAccess}, esto también
+     * restringe al EJECUTADOR, que si no quedaría sin comprobación.
+     */
+    public void assertSameStoreOrAdmin(User user, String storeId) {
+        if (hasRole(user, Role.ADMIN)) {
+            return;
+        }
+        if (storeId == null || !storeId.equals(user.getStoreId())) {
+            throw new AccessDeniedException(
+                    "No puedes acceder a recursos de otra sucursal.");
+        }
+    }
+
+    /**
      * GERENTE puede operar sobre un ejecutador solo si pertenece a su plantilla y sucursal.
      */
     public void assertGerenteCanManageUser(User manager, User target) {

@@ -51,6 +51,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 /**
  * Implementación de KPIs METRIX — Sprint 7.
@@ -647,8 +648,7 @@ public class KpiServiceImpl implements KpiService {
             return emptyResponse(context, contextId);
         }
 
-        List<Task> closed    = closedTasks(tasks);
-        List<Task> completed = completedTasks(tasks);
+        List<Task> closed = closedTasks(tasks);
 
         double otr  = computeOnTimeRate(closed);
         double rwr  = computeReworkRate(tasks);
@@ -661,7 +661,7 @@ public class KpiServiceImpl implements KpiService {
                 .context(context)
                 .contextId(contextId)
                 .onTimeRate(round2(otr))
-                .delegacionEfectiva(round2(computeDelegacion(completed)))
+                .delegacionEfectiva(round2(computeDelegacion(tasks)))
                 .reworkRate(round2(rwr))
                 .shiftBreakdown(computeShiftBreakdown(tasks))
                 .criticalPending(computeCriticalPending(tasks))
@@ -687,13 +687,23 @@ public class KpiServiceImpl implements KpiService {
         return (double) onTimeCount / closedTasks.size() * 100.0;
     }
 
-    /** KPI #2 — Delegación Efectiva: % de tareas COMPLETED sin re-trabajo. */
-    private double computeDelegacion(List<Task> completedTasks) {
-        if (completedTasks.isEmpty()) return -1.0;
-        long noRework = completedTasks.stream()
-                .filter(t -> t.getReworkCount() == 0)
+    /**
+     * KPI #2 — Delegación Efectiva: % de TODAS las tareas delegadas que se
+     * completaron exitosamente sin re-trabajo.
+     * <p>
+     * El denominador es {@code allTasks}, no solo las COMPLETED: una tarea
+     * pendiente, en curso o fallida es delegación que NO fue efectiva, y debe
+     * penalizar el porcentaje. Antes el denominador era solo lo completado,
+     * lo que podía marcar 100% con decenas de tareas sin hacer (2026-08-01,
+     * reporte del cliente).
+     */
+    private double computeDelegacion(List<Task> allTasks) {
+        if (allTasks.isEmpty()) return -1.0;
+        long effective = allTasks.stream()
+                .filter(t -> t.getExecution().getStatus() == TaskStatus.COMPLETED
+                          && t.getReworkCount() == 0)
                 .count();
-        return (double) noRework / completedTasks.size() * 100.0;
+        return (double) effective / allTasks.size() * 100.0;
     }
 
     /** KPI #3 — Tasa de Re-trabajo: % de tareas con al menos 1 re-trabajo. */
@@ -721,15 +731,28 @@ public class KpiServiceImpl implements KpiService {
         return avg;
     }
 
-    /** KPI #5 — Cumplimiento por Turno: agrupa tareas cerradas por shift. */
+    /** Turnos canónicos del negocio — ver {@link com.metrix.api.model.Store#getTurnos()}. */
+    private static final List<String> TURNOS_CANONICOS =
+            List.of("MATUTINO", "VESPERTINO", "NOCTURNO");
+
+    /**
+     * KPI #5 — Cumplimiento por Turno: agrupa tareas cerradas por shift.
+     * <p>
+     * Emite siempre los tres turnos canónicos, incluso sin tareas: antes un
+     * turno sin ninguna tarea simplemente no aparecía en el array (no un 0%,
+     * directamente ausente), y el frontend no tenía fila que pintar — se leía
+     * como "no se refleja nada" (2026-08-01, reporte del cliente).
+     */
     private List<ShiftBreakdownResponse> computeShiftBreakdown(List<Task> allTasks) {
         Map<String, List<Task>> byShift = allTasks.stream()
                 .filter(t -> t.getShift() != null)
                 .collect(Collectors.groupingBy(Task::getShift));
 
-        return byShift.entrySet().stream()
-                .map(e -> {
-                    List<Task> shiftClosed = closedTasks(e.getValue());
+        return Stream.concat(TURNOS_CANONICOS.stream(), byShift.keySet().stream())
+                .distinct()
+                .map(shift -> {
+                    List<Task> shiftTasks  = byShift.getOrDefault(shift, List.of());
+                    List<Task> shiftClosed = closedTasks(shiftTasks);
                     int onTimeCount = (int) shiftClosed.stream()
                             .filter(t -> Boolean.TRUE.equals(t.getExecution().getOnTime()))
                             .count();
@@ -737,10 +760,11 @@ public class KpiServiceImpl implements KpiService {
                             ? -1.0
                             : (double) onTimeCount / shiftClosed.size() * 100.0;
                     return ShiftBreakdownResponse.builder()
-                            .shift(e.getKey())
+                            .shift(shift)
                             .onTimeRate(round2(otr))
                             .totalClosed(shiftClosed.size())
                             .onTimeCount(onTimeCount)
+                            .totalTasks(shiftTasks.size())
                             .build();
                 })
                 .sorted(Comparator.comparing(ShiftBreakdownResponse::getShift))

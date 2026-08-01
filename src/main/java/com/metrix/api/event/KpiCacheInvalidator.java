@@ -70,6 +70,13 @@ public class KpiCacheInvalidator {
         if (kpiCache != null) {
             kpiCache.evict(storeId);
             kpiCache.evict("users-" + storeId);
+            // El alcance global también cambia con cualquier tarea de cualquier
+            // sucursal. Sin esto, el panel del ADMIN —que consume las claves
+            // globales— quedaba hasta 5 min desactualizado tras cada cambio,
+            // mientras el del gerente se refrescaba al instante
+            // (auditoría 2026-08-01).
+            kpiCache.evict("global");
+            kpiCache.evict("users-global");
         }
         var rankingCache = cacheManager.getCache("storeRanking");
         if (rankingCache != null) {

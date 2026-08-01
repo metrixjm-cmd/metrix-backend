@@ -32,11 +32,16 @@ class KpiCacheInvalidatorTest {
     @BeforeEach
     void setUp() {
         invalidator = new KpiCacheInvalidator(cacheManager, userRepository);
+    }
+
+    /** Solo los tests de incidencias necesitan este stub (Mockito estricto). */
+    private void stubIncidentCache() {
         when(cacheManager.getCache("kpiIncidents")).thenReturn(kpiIncidentsCache);
     }
 
     @Test
     void onIncidentCreated_evictaSucursalYGlobal() {
+        stubIncidentCache();
         invalidator.onIncidentCreated(
                 new IncidentCreatedEvent("inc1", "store-1", "user1", "Fuga", "Rep", "MATUTINO", "ALTA"));
 
@@ -46,11 +51,28 @@ class KpiCacheInvalidatorTest {
 
     @Test
     void onIncidentStatusChanged_evictaSucursalYGlobal() {
+        stubIncidentCache();
         invalidator.onIncidentStatusChanged(new IncidentStatusChangedEvent(
                 "inc1", IncidentStatus.ABIERTA, IncidentStatus.CERRADA, "store-2", "user1", "Fuga", null));
 
         verify(kpiIncidentsCache).evict("store-2");
         verify(kpiIncidentsCache).evict("global");
+    }
+
+    @Test
+    void onTaskCreated_evictaTambienElAlcanceGlobal() {
+        // El panel del ADMIN consume las claves globales: si no se invalidan,
+        // se queda hasta 5 min mostrando datos viejos tras cambiar una tarea.
+        Cache kpiSummary = mock(Cache.class);
+        when(cacheManager.getCache("kpiSummary")).thenReturn(kpiSummary);
+
+        invalidator.onTaskCreated(new DomainEvents.TaskCreatedEvent(
+                "task1", "user1", "store-1", "Titulo", "MATUTINO"));
+
+        verify(kpiSummary).evict("store-1");
+        verify(kpiSummary).evict("users-store-1");
+        verify(kpiSummary).evict("global");
+        verify(kpiSummary).evict("users-global");
     }
 
     @Test

@@ -59,6 +59,14 @@ class KpiServiceImplTest {
                 .build();
     }
 
+    private Task criticalTask(TaskStatus status) {
+        return Task.builder()
+                .shift("MATUTINO")
+                .critical(true)
+                .execution(Execution.builder().status(status).build())
+                .build();
+    }
+
     // ── Delegación Efectiva ──────────────────────────────────────────────
 
     @Test
@@ -97,6 +105,36 @@ class KpiServiceImplTest {
         KpiSummaryResponse summary = kpiService.getSummaryForTasks(tasks, "GLOBAL", "all");
 
         assertEquals(50.0, summary.getDelegacionEfectiva(), 0.01);
+    }
+
+    // ── Críticas pendientes ───────────────────────────────────────────────
+
+    @Test
+    void criticasPendientes_cuentaLasEnCurso() {
+        // El rótulo de la UI dice "críticas que aún no se han completado".
+        // Una crítica IN_PROGRESS tampoco está completada y debe contar.
+        List<Task> tasks = List.of(
+                criticalTask(TaskStatus.PENDING),
+                criticalTask(TaskStatus.IN_PROGRESS),
+                criticalTask(TaskStatus.FAILED),
+                criticalTask(TaskStatus.COMPLETED));
+
+        KpiSummaryResponse summary = kpiService.getSummaryForTasks(tasks, "GLOBAL", "all");
+
+        assertEquals(3, summary.getCriticalPending(),
+                "PENDING + IN_PROGRESS + FAILED; solo COMPLETED queda fuera");
+    }
+
+    @Test
+    void criticasPendientes_ignoraLasNoCriticas() {
+        List<Task> tasks = List.of(
+                criticalTask(TaskStatus.PENDING),
+                task(TaskStatus.PENDING, 0, "MATUTINO"),
+                task(TaskStatus.IN_PROGRESS, 0, "MATUTINO"));
+
+        KpiSummaryResponse summary = kpiService.getSummaryForTasks(tasks, "GLOBAL", "all");
+
+        assertEquals(1, summary.getCriticalPending());
     }
 
     // ── Shift breakdown ───────────────────────────────────────────────────

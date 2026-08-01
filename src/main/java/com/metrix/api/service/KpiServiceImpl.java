@@ -771,12 +771,18 @@ public class KpiServiceImpl implements KpiService {
                 .collect(Collectors.toList());
     }
 
-    /** KPI #8 — Críticas No Ejecutadas: críticas en PENDING o FAILED. */
+    /**
+     * KPI #8 — Críticas No Ejecutadas: críticas que aún no están COMPLETED.
+     * <p>
+     * Incluye IN_PROGRESS además de PENDING y FAILED: una crítica en curso
+     * tampoco está completada, y el rótulo de la UI dice "que aún no se han
+     * completado". Antes se omitía, subcontando el indicador justo cuando
+     * alguien estaba trabajando en ella (auditoría 2026-08-01).
+     */
     private int computeCriticalPending(List<Task> allTasks) {
         return (int) allTasks.stream()
                 .filter(t -> t.isCritical()
-                        && (t.getExecution().getStatus() == TaskStatus.PENDING
-                            || t.getExecution().getStatus() == TaskStatus.FAILED))
+                        && t.getExecution().getStatus() != TaskStatus.COMPLETED)
                 .count();
     }
 

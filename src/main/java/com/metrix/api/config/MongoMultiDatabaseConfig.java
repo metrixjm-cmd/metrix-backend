@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
 import org.springframework.data.mongodb.core.convert.MappingMongoConverter;
 import org.springframework.data.mongodb.core.convert.MongoConverter;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
@@ -18,7 +19,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
  * Configuración dual de MongoDB:
  * <ul>
  *   <li>{@code mongoTemplate} — datos operativos del tenant (ruteado por {@link com.metrix.api.platform.TenantContext})</li>
- *   <li>{@code platformMongoTemplate} — catálogo, órdenes e instancias METRIX</li>
+ *   <li>{@code platformMongoTemplate} — catálogo, órdenes e instancias METRIX (fija en {@code metrix_platform}, sin {@link TenantContext})</li>
  * </ul>
  */
 @Configuration
@@ -53,15 +54,19 @@ public class MongoMultiDatabaseConfig {
         return new MongoTemplate(mongoDatabaseFactory, mongoConverter);
     }
 
+    /**
+     * BD de plataforma siempre fija: si usara {@link TenantAwareMongoDatabaseFactory},
+     * el JWT de Admin 0 (tenant operativo {@code metrix_db}) desviaría las lecturas de
+     * {@code platform_users} a la BD equivocada y la autenticación devolvería 403.
+     */
     @Bean
     public MongoDatabaseFactory platformMongoDatabaseFactory(MongoClient mongoClient) {
-        return new TenantAwareMongoDatabaseFactory(mongoClient, platformDatabaseName);
+        return new SimpleMongoClientDatabaseFactory(mongoClient, platformDatabaseName);
     }
 
     @Bean(name = "platformMongoTemplate")
-    public MongoTemplate platformMongoTemplate(MongoClient mongoClient,
+    public MongoTemplate platformMongoTemplate(MongoDatabaseFactory platformMongoDatabaseFactory,
                                                MappingMongoConverter mongoConverter) {
-        MongoDatabaseFactory factory = new TenantAwareMongoDatabaseFactory(mongoClient, platformDatabaseName);
-        return new MongoTemplate(factory, mongoConverter);
+        return new MongoTemplate(platformMongoDatabaseFactory, mongoConverter);
     }
 }

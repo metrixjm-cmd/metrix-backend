@@ -1,6 +1,7 @@
 package com.metrix.api.security;
 
 import com.metrix.api.platform.TenantContext;
+import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.PlatformUser;
 import com.metrix.api.platform.repository.PlatformUserRepository;
 import jakarta.servlet.FilterChain;
@@ -27,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
     private final PlatformUserRepository platformUserRepository;
+    private final TenantDatabaseNames tenantDatabaseNames;
 
     @Override
     protected void doFilterInternal(
@@ -80,7 +82,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         });
 
         TenantContext.setPlatformAdmin(Boolean.TRUE.equals(platformAdmin));
-        TenantContext.setDatabaseName(databaseName);
+        TenantContext.setDatabaseName(
+                tenantDatabaseNames.resolveOperationalDatabase(databaseName, Boolean.TRUE.equals(platformAdmin)));
         TenantContext.setInstanceId(instanceId);
     }
 

@@ -5,6 +5,7 @@ import com.metrix.api.dto.AuthResponse;
 import com.metrix.api.exception.TooManyLoginAttemptsException;
 import com.metrix.api.model.User;
 import com.metrix.api.platform.TenantContext;
+import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.PlatformUser;
 import com.metrix.api.platform.service.TenantLoginResolver;
 import com.metrix.api.repository.StoreRepository;
@@ -12,7 +13,6 @@ import com.metrix.api.repository.UserRepository;
 import com.metrix.api.security.JwtService;
 import com.metrix.api.security.LoginAttemptLimiter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -33,9 +33,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final LoginAttemptLimiter loginAttemptLimiter;
     private final TenantLoginResolver tenantLoginResolver;
-
-    @Value("${metrix.platform.database-name:metrix_platform}")
-    private String platformDatabaseName;
+    private final TenantDatabaseNames tenantDatabaseNames;
 
     public AuthResponse login(AuthRequest request) {
         String numeroUsuario = request.getNumeroUsuario();
@@ -84,8 +82,9 @@ public class AuthService {
         }
 
         loginAttemptLimiter.recordSuccess(numeroUsuario);
+        String operationalDb = tenantDatabaseNames.getDefaultOperationalDatabase();
         TenantContext.setPlatformAdmin(true);
-        TenantContext.setDatabaseName(platformDatabaseName);
+        TenantContext.setDatabaseName(operationalDb);
 
         Map<String, Object> extraClaims = new java.util.HashMap<>();
         extraClaims.put("roles", platformUser.getRoles());
@@ -93,7 +92,7 @@ public class AuthService {
         extraClaims.put("turno", "");
         extraClaims.put("nombre", platformUser.getNombre() != null ? platformUser.getNombre() : "");
         extraClaims.put("platformAdmin", true);
-        extraClaims.put("databaseName", platformDatabaseName);
+        extraClaims.put("databaseName", operationalDb);
         extraClaims.put("instanceId", "");
 
         org.springframework.security.core.userdetails.User userDetails =
@@ -114,7 +113,7 @@ public class AuthService {
                 .turno(null)
                 .roles(platformUser.getRoles())
                 .platformAdmin(true)
-                .databaseName(platformDatabaseName)
+                .databaseName(operationalDb)
                 .instanceId(null)
                 .build();
     }

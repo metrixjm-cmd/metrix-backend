@@ -62,12 +62,16 @@ public class SecurityConfig {
                 // /auth/register que aceptaba el rol desde el cuerpo y devolvía
                 // el JWT: cualquiera se fabricaba una cuenta ADMIN sin token.
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/productos/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/evidence/local/**").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
                 // ── SSE: token viaja como query param, validación manual en el controller ──
                 .requestMatchers("/api/v1/notifications/stream").permitAll()
+
+                // ── Admin 0 — plataforma ─────────────────────────────
+                .requestMatchers("/api/v1/platform/**").hasRole("ADMIN")
 
                 // ── Rutas protegidas por rol ───────────────────────
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

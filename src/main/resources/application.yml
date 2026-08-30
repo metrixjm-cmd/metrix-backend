@@ -69,6 +69,12 @@ metrix:
   operational:
     zone: ${METRIX_OPERATIONAL_ZONE:America/Mexico_City}
 
+  platform:
+    database-name: ${METRIX_PLATFORM_DATABASE:metrix_platform}
+    admin:
+      numero-usuario: ${METRIX_PLATFORM_ADMIN_USER:ADMIN001}
+      password: ${METRIX_PLATFORM_ADMIN_PASSWORD:Admin123456}
+
 # Logging
 logging:
   level:

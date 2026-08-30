@@ -30,4 +30,10 @@ public class AuthResponse {
     private String storeName;
     private String turno;
     private Set<Role> roles;
+    /** Admin 0 de la plataforma (supervisión multi-cliente). */
+    private boolean platformAdmin;
+    /** BD MongoDB del tenant (null para Admin 0). */
+    private String databaseName;
+    /** ID de instancia METRIX del restaurante cliente. */
+    private String instanceId;
 }

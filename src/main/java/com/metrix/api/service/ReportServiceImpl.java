@@ -97,8 +97,11 @@ public class ReportServiceImpl implements ReportService {
         long pending   = dayTasks.stream()
                 .filter(t -> t.getExecution().getStatus() == TaskStatus.PENDING).count();
 
+        String storeName = resolveStoreName(storeId);
+
         return DailyReportResponse.builder()
                 .storeId(storeId)
+                .storeName(storeName)
                 .reportDate(date)
                 .kpiSummary(kpiSummary)
                 .tasks(taskResponses)
@@ -127,7 +130,7 @@ public class ReportServiceImpl implements ReportService {
             Font sectionFont = new Font(Font.HELVETICA, 12, Font.BOLD, new Color(28, 25, 23));
 
             doc.add(new Paragraph("METRIX — Reporte de Cierre Diario", titleFont));
-            doc.add(new Paragraph("Sucursal: " + report.getStoreId()
+            doc.add(new Paragraph("Sucursal: " + displayStoreName(report)
                     + "   |   Fecha: " + report.getReportDate(), cellFont));
             doc.add(new Paragraph("Tareas del día: " + report.getTotalAssigned()
                     + "  Completadas: " + report.getTotalCompleted()
@@ -244,7 +247,7 @@ public class ReportServiceImpl implements ReportService {
                 createDataRow(kpiSheet, r++, dataStyle, "On-Time Rate (%)", formatKpiPct(kpi.getOnTimeRate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Re-trabajo (%)", formatKpiPct(kpi.getReworkRate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Críticas Pendientes", String.valueOf(kpi.getCriticalPending()));
-                createDataRow(kpiSheet, r++, dataStyle, "Sucursal", report.getStoreId());
+                createDataRow(kpiSheet, r++, dataStyle, "Sucursal", displayStoreName(report));
                 createDataRow(kpiSheet, r++, dataStyle, "Fecha", report.getReportDate().toString());
                 createDataRow(kpiSheet, r++, dataStyle, "Total Asignadas", String.valueOf(report.getTotalAssigned()));
                 createDataRow(kpiSheet, r++, dataStyle, "Completadas", String.valueOf(report.getTotalCompleted()));
@@ -507,9 +510,7 @@ public class ReportServiceImpl implements ReportService {
             employees.add(e);
         }
 
-        String storeName = storeRepository.findById(storeId)
-                .map(Store::getNombre)
-                .orElse(storeId);
+        String storeName = resolveStoreName(storeId);
 
         return EmployeesReportResponse.builder()
                 .storeId(storeId)
@@ -669,6 +670,19 @@ public class ReportServiceImpl implements ReportService {
 
     private String nvl(String value) {
         return value != null && !value.isBlank() ? value : "-";
+    }
+
+    private String resolveStoreName(String storeId) {
+        return storeRepository.findById(storeId)
+                .map(Store::getNombre)
+                .orElse(storeId);
+    }
+
+    private String displayStoreName(DailyReportResponse report) {
+        if (report.getStoreName() != null && !report.getStoreName().isBlank()) {
+            return report.getStoreName();
+        }
+        return report.getStoreId();
     }
 
     private void addInfoRow(PdfPTable table, String label, String value, Font labelFont, Font cellFont) {

@@ -22,6 +22,7 @@ import java.util.List;
 public class DailyReportResponse {
 
     private String storeId;
+    private String storeName;
     private LocalDate reportDate;
 
     /** KPIs calculados solo con las tareas del día solicitado. */

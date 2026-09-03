@@ -26,6 +26,7 @@ public class MetrixProvisioningService {
 
     private final MetrixInstanceRepository instanceRepository;
     private final TenantUserIndexService tenantUserIndexService;
+    private final TenantCatalogBootstrap tenantCatalogBootstrap;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -72,6 +73,8 @@ public class MetrixProvisioningService {
         try {
             TenantContext.setPlatformAdmin(false);
             TenantContext.setDatabaseName(databaseName);
+
+            tenantCatalogBootstrap.seedDefaultsIfEmpty();
 
             User admin = User.builder()
                     .numeroUsuario(numeroUsuario)

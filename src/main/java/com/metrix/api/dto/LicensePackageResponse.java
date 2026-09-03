@@ -33,6 +33,7 @@ public class LicensePackageResponse {
     private String soporte;
     private List<LicenseFeatureDto> funciones;
     private List<String> featureCodes;
+    private int diasPrueba;
     private LicenseAccent accent;
     private boolean destacado;
     private boolean activo;

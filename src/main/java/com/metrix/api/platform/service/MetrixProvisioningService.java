@@ -53,6 +53,8 @@ public class MetrixProvisioningService {
                 .adminNombre(nombreAdmin)
                 .contactoEmail(order.getContactoEmail())
                 .status(MetrixInstanceStatus.ACTIVE)
+                .onTrial(order.isOnTrial())
+                .trialEndsAt(order.getTrialEndsAt())
                 .build();
         instance = instanceRepository.save(instance);
 

@@ -4,13 +4,16 @@ import com.metrix.api.dto.productos.*;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.LicensePackage;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
+import com.metrix.api.platform.license.LicenseTrialDays;
 import com.metrix.api.platform.model.*;
 import com.metrix.api.platform.repository.LicensePackageRepository;
+import com.metrix.api.platform.repository.MetrixInstanceRepository;
 import com.metrix.api.platform.repository.ProductOrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 
@@ -20,6 +23,7 @@ public class ProductOrderService {
 
     private final ProductOrderRepository orderRepository;
     private final LicensePackageRepository licensePackageRepository;
+    private final MetrixInstanceRepository instanceRepository;
     private final ProductPricingCalculator pricingCalculator;
     private final PaymentGateway paymentGateway;
     private final MetrixProvisioningService provisioningService;
@@ -60,13 +64,48 @@ public class ProductOrderService {
         return toResponse(findOrder(orderId));
     }
 
-    public ProductOrderResponse payOrder(String orderId, SimulatedPaymentRequest paymentRequest) {
+    /**
+     * Activa la prueba del paquete (sin cobro). El pago simulado queda para
+     * convertir el plan o reactivar cuando venza.
+     */
+    public ProductOrderResponse startTrial(String orderId) {
         ProductOrder order = findOrder(orderId);
-        if (order.getStatus() == ProductOrderStatus.PROVISIONED) {
-            throw new IllegalStateException("La orden ya fue provisionada.");
+        if (order.getStatus() == ProductOrderStatus.PROVISIONED && order.isOnTrial()) {
+            return toResponse(order);
+        }
+        if (order.getStatus() == ProductOrderStatus.PROVISIONED
+                || order.getStatus() == ProductOrderStatus.PAID) {
+            throw new IllegalStateException("La orden ya fue pagada o provisionada.");
         }
         if (order.getStatus() == ProductOrderStatus.CANCELLED) {
             throw new IllegalStateException("La orden está cancelada.");
+        }
+        if (order.getStatus() == ProductOrderStatus.TRIAL) {
+            return toResponse(order);
+        }
+
+        int days = snapshotDiasPrueba(order);
+        if (days == 0) {
+            throw new IllegalStateException("Este plan no incluye periodo de prueba. Completa el pago.");
+        }
+
+        Instant now = Instant.now();
+        order.setStatus(ProductOrderStatus.TRIAL);
+        order.setOnTrial(true);
+        order.setTrialEndsAt(now.plus(days, ChronoUnit.DAYS));
+        return toResponse(orderRepository.save(order));
+    }
+
+    public ProductOrderResponse payOrder(String orderId, SimulatedPaymentRequest paymentRequest) {
+        ProductOrder order = findOrder(orderId);
+        if (order.getStatus() == ProductOrderStatus.CANCELLED) {
+            throw new IllegalStateException("La orden está cancelada.");
+        }
+        boolean alreadyConverted = order.getPaidAt() != null
+                && !order.isOnTrial()
+                && order.getStatus() == ProductOrderStatus.PROVISIONED;
+        if (alreadyConverted) {
+            throw new IllegalStateException("La orden ya fue provisionada.");
         }
 
         PaymentGateway.PaymentResult result = paymentGateway.charge(
@@ -76,16 +115,27 @@ public class ProductOrderService {
             throw new IllegalStateException(result.message());
         }
 
-        order.setStatus(ProductOrderStatus.PAID);
+        Instant now = Instant.now();
         order.setPaymentReference(result.reference());
-        order.setPaidAt(Instant.now());
+        order.setPaidAt(now);
+        order.setOnTrial(false);
+        order.setTrialEndsAt(null);
+
+        if (order.getInstanceId() != null && !order.getInstanceId().isBlank()) {
+            convertInstanceToPaid(order.getInstanceId());
+            order.setStatus(ProductOrderStatus.PROVISIONED);
+        } else {
+            order.setStatus(ProductOrderStatus.PAID);
+        }
         return toResponse(orderRepository.save(order));
     }
 
     public ProvisionMetrixResponse provisionOrder(String orderId, ProvisionMetrixRequest request) {
         ProductOrder order = findOrder(orderId);
-        if (order.getStatus() != ProductOrderStatus.PAID) {
-            throw new IllegalStateException("La orden debe estar pagada antes de crear el administrador.");
+        if (order.getStatus() != ProductOrderStatus.PAID
+                && order.getStatus() != ProductOrderStatus.TRIAL) {
+            throw new IllegalStateException(
+                    "La orden debe estar en prueba o pagada antes de crear el administrador.");
         }
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Las contraseñas no coinciden.");
@@ -110,8 +160,20 @@ public class ProductOrderService {
                 .databaseName(instance.getDatabaseName())
                 .adminNumeroUsuario(instance.getAdminNumeroUsuario())
                 .loginUrl("/auth/login")
-                .message("METRIX creado correctamente. Inicia sesión con tus credenciales.")
+                .message(order.isOnTrial()
+                        ? "METRIX en periodo de prueba. Inicia sesión con tus credenciales."
+                        : "METRIX creado correctamente. Inicia sesión con tus credenciales.")
                 .build();
+    }
+
+    private void convertInstanceToPaid(String instanceId) {
+        instanceRepository.findById(instanceId).ifPresent(instance -> {
+            instance.setOnTrial(false);
+            instance.setTrialEndsAt(null);
+            instance.setSuspensionReason(null);
+            instance.setStatus(MetrixInstanceStatus.ACTIVE);
+            instanceRepository.save(instance);
+        });
     }
 
     private void validateUsernameAvailable(String numeroUsuario) {
@@ -134,11 +196,20 @@ public class ProductOrderService {
                 .moneda(pkg.getMoneda())
                 .maxUsuarios(pkg.getMaxUsuarios())
                 .maxSucursales(pkg.getMaxSucursales())
+                .diasPrueba(LicenseTrialDays.resolve(pkg.getDiasPrueba()))
                 .featureCodes(pkg.getFeatureCodes() != null && !pkg.getFeatureCodes().isEmpty()
                         ? List.copyOf(pkg.getFeatureCodes())
                         : LicenseFeatureCodes.defaultsForPackageId(pkg.getId()))
                 .accent(pkg.getAccent())
                 .build();
+    }
+
+    private static int snapshotDiasPrueba(ProductOrder order) {
+        ProductOrderPackageSnapshot snap = order.getPackageSnapshot();
+        if (snap == null) {
+            return LicenseTrialDays.DEFAULT;
+        }
+        return LicenseTrialDays.resolve(snap.getDiasPrueba());
     }
 
     private ProductOrderResponse toResponse(ProductOrder order) {
@@ -156,6 +227,7 @@ public class ProductOrderService {
                         .moneda(snap.getMoneda())
                         .maxUsuarios(snap.getMaxUsuarios())
                         .maxSucursales(snap.getMaxSucursales())
+                        .diasPrueba(LicenseTrialDays.resolve(snap.getDiasPrueba()))
                         .accent(snap.getAccent())
                         .build())
                 .empresaNombre(order.getEmpresaNombre())
@@ -169,6 +241,8 @@ public class ProductOrderService {
                 .moneda(order.getMoneda())
                 .paymentReference(order.getPaymentReference())
                 .paidAt(order.getPaidAt())
+                .onTrial(order.isOnTrial())
+                .trialEndsAt(order.getTrialEndsAt())
                 .instanceId(order.getInstanceId())
                 .createdAt(order.getCreatedAt())
                 .build();

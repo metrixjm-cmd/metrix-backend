@@ -59,6 +59,16 @@ public class MetrixInstance {
     @Field("status")
     private MetrixInstanceStatus status = MetrixInstanceStatus.ACTIVE;
 
+    @Builder.Default
+    @Field("on_trial")
+    private boolean onTrial = false;
+
+    @Field("trial_ends_at")
+    private Instant trialEndsAt;
+
+    @Field("suspension_reason")
+    private MetrixInstanceSuspensionReason suspensionReason;
+
     @CreatedDate
     @Field("created_at")
     private Instant createdAt;

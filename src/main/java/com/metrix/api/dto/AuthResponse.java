@@ -41,4 +41,7 @@ public class AuthResponse {
      * {@code null} = sin restricción (demo legacy / Admin 0).
      */
     private java.util.List<String> licensedFeatures;
+    private boolean onTrial;
+    private java.time.Instant trialEndsAt;
+    private String orderId;
 }

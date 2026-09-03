@@ -6,6 +6,7 @@ import com.metrix.api.dto.UpdateLicensePackageRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.LicenseFeature;
 import com.metrix.api.model.LicensePackage;
+import com.metrix.api.platform.license.LicenseTrialDays;
 import com.metrix.api.platform.repository.LicensePackageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -108,6 +109,9 @@ public class LicensePackageServiceImpl implements LicensePackageService {
         if (request.getFeatureCodes() != null) {
             entity.setFeatureCodes(request.getFeatureCodes());
         }
+        if (request.getDiasPrueba() != null) {
+            entity.setDiasPrueba(LicenseTrialDays.resolve(request.getDiasPrueba()));
+        }
         entity.setAccent(request.getAccent());
         entity.setDestacado(request.isDestacado());
         entity.setActivo(request.isActivo());
@@ -133,6 +137,7 @@ public class LicensePackageServiceImpl implements LicensePackageService {
                 .map(f -> LicenseFeature.builder().label(f.getLabel()).incluido(f.isIncluido()).build())
                 .toList());
         entity.setFeatureCodes(seed.getFeatureCodes());
+        entity.setDiasPrueba(LicenseTrialDays.resolve(seed.getDiasPrueba()));
         entity.setAccent(seed.getAccent());
         entity.setDestacado(seed.isDestacado());
         entity.setActivo(seed.isActivo());
@@ -169,6 +174,7 @@ public class LicensePackageServiceImpl implements LicensePackageService {
                                 .build())
                         .toList())
                 .featureCodes(entity.getFeatureCodes() == null ? List.of() : entity.getFeatureCodes())
+                .diasPrueba(LicenseTrialDays.resolve(entity.getDiasPrueba()))
                 .accent(entity.getAccent())
                 .destacado(entity.isDestacado())
                 .activo(entity.isActivo())

@@ -47,6 +47,7 @@ public final class LicensePackageSeed {
                         feature("Notificación en tiempo real - tareas realizadas y pendientes", true)
                 ))
                 .featureCodes(List.of())
+                .diasPrueba(7)
                 .accent(LicenseAccent.slate)
                 .destacado(false)
                 .activo(true)
@@ -82,6 +83,7 @@ public final class LicensePackageSeed {
                         LicenseFeatureCodes.GAMIFICATION
                 ))
                 .accent(LicenseAccent.cyan)
+                .diasPrueba(7)
                 .destacado(true)
                 .activo(true)
                 .build();
@@ -117,6 +119,7 @@ public final class LicensePackageSeed {
                         LicenseFeatureCodes.GAMIFICATION
                 ))
                 .accent(LicenseAccent.violet)
+                .diasPrueba(7)
                 .destacado(false)
                 .activo(true)
                 .build();
@@ -155,6 +158,7 @@ public final class LicensePackageSeed {
                         LicenseFeatureCodes.API
                 ))
                 .accent(LicenseAccent.amber)
+                .diasPrueba(7)
                 .destacado(false)
                 .activo(true)
                 .build();

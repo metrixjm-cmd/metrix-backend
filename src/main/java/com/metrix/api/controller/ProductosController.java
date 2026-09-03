@@ -48,6 +48,12 @@ public class ProductosController {
         return ResponseEntity.ok(orderService.getOrder(orderId));
     }
 
+    @PostMapping("/orders/{orderId}/trial")
+    @Operation(summary = "Iniciar periodo de prueba del plan (sin cobro)")
+    public ResponseEntity<ProductOrderResponse> startTrial(@PathVariable String orderId) {
+        return ResponseEntity.ok(orderService.startTrial(orderId));
+    }
+
     @PostMapping("/orders/{orderId}/pay")
     @Operation(summary = "Simular pago de la orden")
     public ResponseEntity<ProductOrderResponse> payOrder(

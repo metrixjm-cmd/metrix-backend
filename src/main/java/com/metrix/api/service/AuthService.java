@@ -61,8 +61,7 @@ public class AuthService {
 
             if (resolution.type() == TenantLoginResolver.LoginType.TENANT
                     && platformAdminService.isSuspended(resolution.instanceId())) {
-                throw new IllegalStateException(
-                        "Esta instancia METRIX está suspendida. Contacta a soporte para reactivarla.");
+                throw new IllegalStateException(platformAdminService.suspensionMessage(resolution.instanceId()));
             }
 
             TenantContext.setPlatformAdmin(false);
@@ -140,6 +139,7 @@ public class AuthService {
         }
 
         List<String> licensedFeatures = tenantLicenseGuard.resolveLicensedFeaturesOrUnrestricted();
+        PlatformAdminService.TenantBillingView billing = platformAdminService.billingView(instanceId);
 
         Map<String, Object> extraClaims = new java.util.HashMap<>();
         extraClaims.put("roles", user.getRoles());
@@ -171,6 +171,9 @@ public class AuthService {
                 .databaseName(databaseName)
                 .instanceId(instanceId)
                 .licensedFeatures(licensedFeatures)
+                .onTrial(billing.onTrial())
+                .trialEndsAt(billing.trialEndsAt())
+                .orderId(billing.orderId())
                 .build();
     }
 }

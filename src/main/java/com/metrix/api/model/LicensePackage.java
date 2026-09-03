@@ -88,6 +88,11 @@ public class LicensePackage {
     @Field("feature_codes")
     private List<String> featureCodes;
 
+    /** Días de prueba al contratar. {@code null} = 7; {@code 0} = sin prueba. */
+    @Builder.Default
+    @Field("dias_prueba")
+    private Integer diasPrueba = 7;
+
     @Field("accent")
     private LicenseAccent accent;
 

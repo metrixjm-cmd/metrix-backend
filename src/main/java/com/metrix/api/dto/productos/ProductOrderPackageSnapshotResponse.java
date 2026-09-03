@@ -20,5 +20,6 @@ public class ProductOrderPackageSnapshotResponse {
     private String moneda;
     private Integer maxUsuarios;
     private Integer maxSucursales;
+    private Integer diasPrueba;
     private LicenseAccent accent;
 }

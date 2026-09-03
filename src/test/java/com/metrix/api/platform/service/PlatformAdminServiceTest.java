@@ -72,6 +72,21 @@ class PlatformAdminServiceTest {
     }
 
     @Test
+    void isSuspended_expiresTrialAndReturnsTrue() {
+        MetrixInstance trial = MetrixInstance.builder()
+                .id("inst-1")
+                .status(MetrixInstanceStatus.ACTIVE)
+                .onTrial(true)
+                .trialEndsAt(java.time.Instant.now().minusSeconds(60))
+                .build();
+        when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(trial));
+        when(instanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertTrue(service.isSuspended("inst-1"));
+        assertEquals(MetrixInstanceStatus.SUSPENDED, trial.getStatus());
+    }
+
+    @Test
     void isSuspended_falseWhenActiveOrMissing() {
         when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(
                 MetrixInstance.builder().id("inst-1").status(MetrixInstanceStatus.ACTIVE).build()));

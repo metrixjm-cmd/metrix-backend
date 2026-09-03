@@ -30,6 +30,7 @@ public class LicensePackageInitializer {
             return;
         }
         syncFeatureCodes();
+        syncDiasPrueba();
     }
 
     /** Rellena featureCodes en paquetes sembrados antes de este campo. */
@@ -51,6 +52,22 @@ public class LicensePackageInitializer {
         }
         if (updated > 0) {
             log.info("[LicensePackage] featureCodes sincronizados en {} paquetes", updated);
+        }
+    }
+
+    /** Rellena diasPrueba en paquetes sembrados antes de este campo. */
+    private void syncDiasPrueba() {
+        int updated = 0;
+        for (LicensePackage existing : repository.findAll()) {
+            if (existing.getDiasPrueba() != null) {
+                continue;
+            }
+            existing.setDiasPrueba(7);
+            repository.save(existing);
+            updated++;
+        }
+        if (updated > 0) {
+            log.info("[LicensePackage] diasPrueba=7 sincronizado en {} paquetes", updated);
         }
     }
 }

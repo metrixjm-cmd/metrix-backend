@@ -35,11 +35,18 @@ public class SuspendedInstanceFilter extends OncePerRequestFilter {
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.setCharacterEncoding(StandardCharsets.UTF_8.name());
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                response.getWriter().write(
-                        "{\"error\":\"Esta instancia METRIX está suspendida. Contacta a soporte.\"}");
+                String message = platformAdminService.suspensionMessage(instanceId);
+                response.getWriter().write("{\"error\":\"" + jsonEscape(message) + "\"}");
                 return;
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private static String jsonEscape(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

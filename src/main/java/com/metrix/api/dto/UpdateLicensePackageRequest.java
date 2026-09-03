@@ -3,6 +3,8 @@ package com.metrix.api.dto;
 import com.metrix.api.model.LicenseAccent;
 import com.metrix.api.model.LicensePricingModel;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -57,6 +59,11 @@ public class UpdateLicensePackageRequest {
 
     /** Módulos licenciables; si null no se modifica en update. */
     private List<String> featureCodes;
+
+    /** Días de prueba; {@code null} no modifica. */
+    @Min(0)
+    @Max(90)
+    private Integer diasPrueba;
 
     @NotNull
     private LicenseAccent accent;

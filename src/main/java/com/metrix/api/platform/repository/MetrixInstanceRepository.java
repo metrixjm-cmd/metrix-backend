@@ -4,6 +4,7 @@ import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface MetrixInstanceRepository extends MongoRepository<MetrixInstance, String> {
@@ -11,4 +12,7 @@ public interface MetrixInstanceRepository extends MongoRepository<MetrixInstance
     List<MetrixInstance> findAllByOrderByCreatedAtDesc();
 
     List<MetrixInstance> findByStatusOrderByCreatedAtDesc(MetrixInstanceStatus status);
+
+    List<MetrixInstance> findByOnTrialTrueAndStatusAndTrialEndsAtBefore(
+            MetrixInstanceStatus status, Instant cutoff);
 }

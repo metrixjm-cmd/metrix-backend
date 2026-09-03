@@ -26,6 +26,8 @@ public class ProductOrderResponse {
     private String moneda;
     private String paymentReference;
     private Instant paidAt;
+    private boolean onTrial;
+    private Instant trialEndsAt;
     private String instanceId;
     private Instant createdAt;
 }

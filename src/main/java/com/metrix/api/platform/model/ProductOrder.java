@@ -66,6 +66,13 @@ public class ProductOrder {
     @Field("paid_at")
     private Instant paidAt;
 
+    @Builder.Default
+    @Field("on_trial")
+    private boolean onTrial = false;
+
+    @Field("trial_ends_at")
+    private Instant trialEndsAt;
+
     @Field("instance_id")
     private String instanceId;
 

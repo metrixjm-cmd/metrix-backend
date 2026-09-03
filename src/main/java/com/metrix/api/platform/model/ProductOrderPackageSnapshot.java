@@ -44,6 +44,10 @@ public class ProductOrderPackageSnapshot {
     @Field("max_sucursales")
     private Integer maxSucursales;
 
+    /** Códigos de módulo congelados al comprar (TRAININGS, EXAMS, …). */
+    @Field("feature_codes")
+    private java.util.List<String> featureCodes;
+
     @Field("accent")
     private LicenseAccent accent;
 }

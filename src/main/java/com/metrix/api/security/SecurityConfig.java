@@ -43,6 +43,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final LicenseFeatureFilter licenseFeatureFilter;
     private final UserDetailsServiceImpl userDetailsService;
 
     @Value("${metrix.cors.allowed-origins}")
@@ -159,7 +160,8 @@ public class SecurityConfig {
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(licenseFeatureFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

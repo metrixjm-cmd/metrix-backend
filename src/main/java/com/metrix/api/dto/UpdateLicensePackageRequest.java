@@ -55,6 +55,9 @@ public class UpdateLicensePackageRequest {
     @Size(min = 1)
     private List<LicenseFeatureDto> funciones;
 
+    /** Módulos licenciables; si null no se modifica en update. */
+    private List<String> featureCodes;
+
     @NotNull
     private LicenseAccent accent;
 

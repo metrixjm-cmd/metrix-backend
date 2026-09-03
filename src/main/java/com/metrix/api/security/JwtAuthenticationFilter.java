@@ -95,7 +95,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             var authorities = platformUser.getRoles().stream()
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
-                    .collect(Collectors.toSet());
+                    .collect(Collectors.toCollection(java.util.HashSet::new));
+            authorities.add(new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"));
 
             return org.springframework.security.core.userdetails.User.builder()
                     .username(platformUser.getNumeroUsuario())

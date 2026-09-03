@@ -29,12 +29,12 @@ public class TenantLoginResolver {
             return LoginResolution.platform(platformUser.get());
         }
 
-        Optional<TenantAdminIndex> tenantAdmin = tenantAdminIndexRepository.findByNumeroUsuario(numeroUsuario);
-        if (tenantAdmin.isPresent()) {
+        Optional<TenantAdminIndex> tenantUser = tenantAdminIndexRepository.findByNumeroUsuario(numeroUsuario);
+        if (tenantUser.isPresent()) {
             return LoginResolution.tenant(
-                    tenantAdmin.get().getDatabaseName(),
-                    tenantAdmin.get().getInstanceId(),
-                    tenantAdmin.get().getEmpresaNombre()
+                    tenantUser.get().getDatabaseName(),
+                    tenantUser.get().getInstanceId(),
+                    tenantUser.get().getEmpresaNombre()
             );
         }
 

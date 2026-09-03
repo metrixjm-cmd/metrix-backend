@@ -5,6 +5,7 @@ import com.metrix.api.dto.UserResponse;
 import com.metrix.api.model.Catalog;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.platform.service.TenantUserIndexService;
 import com.metrix.api.repository.CatalogRepository;
 import com.metrix.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,12 +40,16 @@ class UserServiceImplCreatePolicyTest {
     private SequenceService sequenceService;
     @Mock
     private CatalogRepository catalogRepository;
+    @Mock
+    private TenantUserIndexService tenantUserIndexService;
 
     private UserServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new UserServiceImpl(userRepository, catalogRepository, passwordEncoder, sequenceService);
+        service = new UserServiceImpl(
+                userRepository, catalogRepository, passwordEncoder, sequenceService, tenantUserIndexService);
+        lenient().when(tenantUserIndexService.isTaken(any())).thenReturn(false);
     }
 
     @Test
@@ -54,7 +60,6 @@ class UserServiceImplCreatePolicyTest {
         when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
                 .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ001");
-        when(userRepository.existsByNumeroUsuario("CAJ001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -80,7 +85,6 @@ class UserServiceImplCreatePolicyTest {
         when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
                 .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ001");
-        when(userRepository.existsByNumeroUsuario("CAJ001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -103,7 +107,6 @@ class UserServiceImplCreatePolicyTest {
         when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
                 .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ002");
-        when(userRepository.existsByNumeroUsuario("CAJ002")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -126,7 +129,6 @@ class UserServiceImplCreatePolicyTest {
         when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
                 .thenReturn(java.util.List.of(puesto("Gerente de sucursal", Role.GERENTE)));
         when(sequenceService.generateUserFolio("GERENTE", "Gerente de sucursal")).thenReturn("GER999");
-        when(userRepository.existsByNumeroUsuario("GER999")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -184,7 +186,6 @@ class UserServiceImplCreatePolicyTest {
         when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
                 .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
         when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ003");
-        when(userRepository.existsByNumeroUsuario("CAJ003")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -208,7 +209,6 @@ class UserServiceImplCreatePolicyTest {
                 .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
         when(sequenceService.generateUserFolio("ADMIN", "Administrador")).thenReturn("ADM001");
-        when(userRepository.existsByNumeroUsuario("ADM001")).thenReturn(false);
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);
@@ -241,6 +241,45 @@ class UserServiceImplCreatePolicyTest {
                 () -> service.createUser(req, "ADM001"));
 
         assertEquals("El puesto seleccionado no corresponde al perfil GERENTE.", ex.getMessage());
+    }
+
+    @Test
+    void create_indexes_user_so_tenant_login_can_resolve_them() {
+        when(userRepository.findByNumeroUsuario("GER001"))
+                .thenReturn(Optional.of(user("GER001", "store-1", Set.of(Role.GERENTE))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
+        when(sequenceService.generateUserFolio("EJECUTADOR", "Cajero")).thenReturn("CAJ010");
+        when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId("u-indexed");
+            return u;
+        });
+
+        service.createUser(createReq("store-1", Set.of(Role.EJECUTADOR)), "GER001");
+
+        verify(tenantUserIndexService).indexCurrentTenantUser("CAJ010");
+    }
+
+    @Test
+    void create_rejects_numero_already_indexed_in_another_tenant() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+        when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(catalogRepository.findByTypeAndActivoTrue("PUESTO"))
+                .thenReturn(java.util.List.of(puesto("Cajero", Role.EJECUTADOR)));
+        when(tenantUserIndexService.isTaken("EJE-OTRO")).thenReturn(true);
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.EJECUTADOR));
+        req.setNumeroUsuario("EJE-OTRO");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createUser(req, "ADM001"));
+
+        assertEquals("El #Usuario ya está en uso. Elige otro.", ex.getMessage());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     private User user(String numeroUsuario, String storeId, Set<Role> roles) {

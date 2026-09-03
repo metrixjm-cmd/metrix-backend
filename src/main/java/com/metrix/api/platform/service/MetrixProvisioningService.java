@@ -6,9 +6,7 @@ import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
 import com.metrix.api.platform.model.ProductOrder;
-import com.metrix.api.platform.model.TenantAdminIndex;
 import com.metrix.api.platform.repository.MetrixInstanceRepository;
-import com.metrix.api.platform.repository.TenantAdminIndexRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +25,7 @@ import java.util.UUID;
 public class MetrixProvisioningService {
 
     private final MetrixInstanceRepository instanceRepository;
-    private final TenantAdminIndexRepository tenantAdminIndexRepository;
+    private final TenantUserIndexService tenantUserIndexService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -59,12 +57,7 @@ public class MetrixProvisioningService {
 
         createTenantAdmin(databaseName, numeroUsuario, rawPassword, nombreAdmin, order.getContactoEmail());
 
-        tenantAdminIndexRepository.save(TenantAdminIndex.builder()
-                .numeroUsuario(numeroUsuario)
-                .instanceId(instanceId)
-                .databaseName(databaseName)
-                .empresaNombre(order.getEmpresaNombre())
-                .build());
+        tenantUserIndexService.index(numeroUsuario, databaseName, instanceId, order.getEmpresaNombre());
 
         log.info("[Provision] METRIX '{}' → BD {} (admin {})",
                 order.getEmpresaNombre(), databaseName, numeroUsuario);

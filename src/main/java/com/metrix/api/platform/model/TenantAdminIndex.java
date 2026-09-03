@@ -14,6 +14,7 @@ import java.time.Instant;
 
 /**
  * Índice global de login: resuelve {@code numeroUsuario} → BD del tenant.
+ * Incluye al ADMIN de provision y a cualquier colaborador dado de alta después.
  */
 @Data
 @Builder

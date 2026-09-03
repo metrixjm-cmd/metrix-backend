@@ -8,6 +8,7 @@ import com.metrix.api.dto.VerifyAdminPasswordRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.platform.service.TenantUserIndexService;
 import com.metrix.api.repository.CatalogRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class UserServiceImpl implements UserService {
     private final CatalogRepository catalogRepository;
     private final PasswordEncoder passwordEncoder;
     private final SequenceService sequenceService;
+    private final TenantUserIndexService tenantUserIndexService;
 
     // ── Listar colaboradores ─────────────────────────────────────────────
 
@@ -155,16 +157,13 @@ public class UserServiceImpl implements UserService {
         // Auto-generar folio si no se envía numeroUsuario
         // Prefijo: rol ADMIN/GERENTE tienen prefijo fijo; EJECUTADOR usa el puesto
         String numeroUsuario = request.getNumeroUsuario();
-        if (numeroUsuario == null || numeroUsuario.isBlank()) {
-            numeroUsuario = sequenceService.generateUserFolio(
+        boolean generated = numeroUsuario == null || numeroUsuario.isBlank();
+        if (generated) {
+            numeroUsuario = allocateGeneratedFolio(
                     principalRole != null ? principalRole.name() : null,
-                    effectivePuesto
-            );
-        }
-
-        if (userRepository.existsByNumeroUsuario(numeroUsuario)) {
-            throw new IllegalArgumentException(
-                    "El número de usuario ya está registrado: " + numeroUsuario);
+                    effectivePuesto);
+        } else if (tenantUserIndexService.isTaken(numeroUsuario)) {
+            throw new IllegalArgumentException("El #Usuario ya está en uso. Elige otro.");
         }
 
         User user = User.builder()
@@ -182,7 +181,9 @@ public class UserServiceImpl implements UserService {
                 .activo(true)
                 .build();
 
-        return toResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        tenantUserIndexService.indexCurrentTenantUser(saved.getNumeroUsuario());
+        return toResponse(saved);
     }
 
     // ── Editar colaborador ───────────────────────────────────────────────
@@ -279,9 +280,20 @@ public class UserServiceImpl implements UserService {
             validateProfileScope(target, requestor);
         }
         userRepository.deleteById(id);
+        tenantUserIndexService.remove(target.getNumeroUsuario());
     }
 
     // ── Mapper ────────────────────────────────────────────────────────────
+
+    private String allocateGeneratedFolio(String roleName, String puesto) {
+        for (int attempt = 0; attempt < 8; attempt++) {
+            String folio = sequenceService.generateUserFolio(roleName, puesto);
+            if (!tenantUserIndexService.isTaken(folio)) {
+                return folio;
+            }
+        }
+        throw new IllegalStateException("No se pudo generar un #Usuario libre. Inténtalo de nuevo.");
+    }
 
     private UserResponse toResponse(User user) {
         return UserResponse.builder()

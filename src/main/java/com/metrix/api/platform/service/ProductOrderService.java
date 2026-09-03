@@ -6,9 +6,6 @@ import com.metrix.api.model.LicensePackage;
 import com.metrix.api.platform.model.*;
 import com.metrix.api.platform.repository.LicensePackageRepository;
 import com.metrix.api.platform.repository.ProductOrderRepository;
-import com.metrix.api.platform.repository.TenantAdminIndexRepository;
-import com.metrix.api.platform.repository.PlatformUserRepository;
-import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,9 +21,7 @@ public class ProductOrderService {
     private final ProductPricingCalculator pricingCalculator;
     private final PaymentGateway paymentGateway;
     private final MetrixProvisioningService provisioningService;
-    private final TenantAdminIndexRepository tenantAdminIndexRepository;
-    private final PlatformUserRepository platformUserRepository;
-    private final UserRepository userRepository;
+    private final TenantUserIndexService tenantUserIndexService;
 
     public ProductOrderResponse createOrder(CreateProductOrderRequest request) {
         LicensePackage pkg = licensePackageRepository.findById(request.getPackageId())
@@ -118,11 +113,7 @@ public class ProductOrderService {
     }
 
     private void validateUsernameAvailable(String numeroUsuario) {
-        if (platformUserRepository.existsByNumeroUsuario(numeroUsuario)
-                || tenantAdminIndexRepository.existsByNumeroUsuario(numeroUsuario)
-                || userRepository.findByNumeroUsuario(numeroUsuario).isPresent()) {
-            throw new IllegalArgumentException("El #Usuario ya está en uso. Elige otro.");
-        }
+        tenantUserIndexService.assertNumeroUsuarioAvailable(numeroUsuario);
     }
 
     private ProductOrder findOrder(String orderId) {

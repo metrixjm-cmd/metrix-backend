@@ -70,8 +70,9 @@ public class SecurityConfig {
                 // ── SSE: token viaja como query param, validación manual en el controller ──
                 .requestMatchers("/api/v1/notifications/stream").permitAll()
 
-                // ── Admin 0 — plataforma ─────────────────────────────
-                .requestMatchers("/api/v1/platform/**").hasRole("ADMIN")
+                // ── Admin 0 — plataforma (no el ADMIN de un restaurante) ──
+                .requestMatchers("/api/v1/platform/**").hasRole("PLATFORM_ADMIN")
+                .requestMatchers("/api/v1/license-packages/**").hasRole("PLATFORM_ADMIN")
 
                 // ── Rutas protegidas por rol ───────────────────────
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

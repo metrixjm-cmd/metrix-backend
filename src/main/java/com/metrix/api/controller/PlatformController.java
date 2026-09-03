@@ -17,7 +17,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/platform")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("hasRole('PLATFORM_ADMIN')")
 @Tag(name = "Plataforma", description = "Admin 0 — supervisión de instancias METRIX")
 public class PlatformController {
 

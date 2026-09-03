@@ -2,11 +2,8 @@ package com.metrix.api.controller;
 
 import com.metrix.api.dto.LicensePackageResponse;
 import com.metrix.api.platform.TenantContext;
-import com.metrix.api.platform.TenantDatabaseNames;
-import com.metrix.api.platform.repository.PlatformUserRepository;
 import com.metrix.api.platform.service.PlatformAdminService;
-import com.metrix.api.security.JwtService;
-import com.metrix.api.security.UserDetailsServiceImpl;
+import com.metrix.api.security.JwtAuthenticationFilter;
 import com.metrix.api.service.LicensePackageService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +12,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.http.HttpMethod;
@@ -35,7 +34,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * El ADMIN de un restaurante tiene ROLE_ADMIN pero no ROLE_PLATFORM_ADMIN.
  * Solo Admin 0 puede tocar catálogo comercial e instancias.
  */
-@WebMvcTest(controllers = {LicensePackageController.class, PlatformController.class})
+@WebMvcTest(
+        controllers = {LicensePackageController.class, PlatformController.class},
+        excludeFilters = @ComponentScan.Filter(
+                type = FilterType.ASSIGNABLE_TYPE,
+                classes = JwtAuthenticationFilter.class
+        )
+)
 @Import(PlatformAdminAccessWebMvcTest.TestSecurityConfig.class)
 class PlatformAdminAccessWebMvcTest {
 
@@ -74,18 +79,6 @@ class PlatformAdminAccessWebMvcTest {
 
     @MockBean
     private PlatformAdminService platformAdminService;
-
-    @MockBean
-    private JwtService jwtService;
-
-    @MockBean
-    private UserDetailsServiceImpl userDetailsService;
-
-    @MockBean
-    private PlatformUserRepository platformUserRepository;
-
-    @MockBean
-    private TenantDatabaseNames tenantDatabaseNames;
 
     @AfterEach
     void clearTenant() {

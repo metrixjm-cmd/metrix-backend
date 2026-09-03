@@ -21,4 +21,7 @@ public interface StoreRepository extends MongoRepository<Store, String> {
 
     /** Verifica si ya existe una sucursal con ese código antes de crear. */
     boolean existsByCodigo(String codigo);
+
+    /** Cupo de licencia: sucursales activas en el tenant. */
+    long countByActivoTrue();
 }

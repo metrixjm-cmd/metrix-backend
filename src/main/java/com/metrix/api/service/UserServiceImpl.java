@@ -8,6 +8,7 @@ import com.metrix.api.dto.VerifyAdminPasswordRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.platform.service.TenantLicenseGuard;
 import com.metrix.api.platform.service.TenantUserIndexService;
 import com.metrix.api.repository.CatalogRepository;
 import com.metrix.api.repository.UserRepository;
@@ -40,6 +41,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final SequenceService sequenceService;
     private final TenantUserIndexService tenantUserIndexService;
+    private final TenantLicenseGuard tenantLicenseGuard;
 
     // ── Listar colaboradores ─────────────────────────────────────────────
 
@@ -123,6 +125,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse createUser(CreateUserRequest request, String requestorNumeroUsuario) {
+        tenantLicenseGuard.assertCanCreateUser();
+
         User requestor = resolveRequestor(requestorNumeroUsuario);
         boolean isAdmin = hasRole(requestor, Role.ADMIN);
         boolean isGerente = hasRole(requestor, Role.GERENTE);

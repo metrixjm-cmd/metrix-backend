@@ -78,6 +78,9 @@ public interface UserRepository extends MongoRepository<User, String> {
      */
     long countByStoreIdAndActivoTrue(String storeId);
 
+    /** Cupo de licencia: usuarios activos en el tenant. */
+    long countByActivoTrue();
+
     /** All active users — used for batch count operations. */
     List<User> findByActivoTrue();
 }

@@ -5,6 +5,7 @@ import com.metrix.api.dto.StoreResponse;
 import com.metrix.api.dto.UpdateStoreRequest;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.Store;
+import com.metrix.api.platform.service.TenantLicenseGuard;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.TaskRepository;
 import com.metrix.api.repository.TrainingRepository;
@@ -32,11 +33,14 @@ public class StoreServiceImpl implements StoreService {
     private final TaskRepository     taskRepository;
     private final TrainingRepository trainingRepository;
     private final SequenceService    sequenceService;
+    private final TenantLicenseGuard tenantLicenseGuard;
 
     // ── Crear ────────────────────────────────────────────────────────────────
 
     @Override
     public StoreResponse create(CreateStoreRequest request, String createdBy) {
+        tenantLicenseGuard.assertCanCreateStore();
+
         // Auto-generar código si no se envía
         String codigo = request.getCodigo();
         if (codigo == null || codigo.isBlank()) {

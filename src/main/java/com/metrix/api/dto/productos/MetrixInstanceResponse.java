@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 @Builder
@@ -21,4 +22,9 @@ public class MetrixInstanceResponse {
     private String contactoEmail;
     private MetrixInstanceStatus status;
     private Instant createdAt;
+    private Integer maxUsuarios;
+    private Integer maxSucursales;
+    private Integer sucursalesContratadas;
+    private List<String> featureCodes;
+    private Instant paidAt;
 }

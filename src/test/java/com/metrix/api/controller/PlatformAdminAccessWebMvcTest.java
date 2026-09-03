@@ -4,6 +4,8 @@ import com.metrix.api.dto.LicensePackageResponse;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.service.PlatformAdminService;
 import com.metrix.api.security.JwtAuthenticationFilter;
+import com.metrix.api.security.LicenseFeatureFilter;
+import com.metrix.api.security.SuspendedInstanceFilter;
 import com.metrix.api.service.LicensePackageService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         controllers = {LicensePackageController.class, PlatformController.class},
         excludeFilters = @ComponentScan.Filter(
                 type = FilterType.ASSIGNABLE_TYPE,
-                classes = JwtAuthenticationFilter.class
+                classes = {
+                        JwtAuthenticationFilter.class,
+                        LicenseFeatureFilter.class,
+                        SuspendedInstanceFilter.class
+                }
         )
 )
 @Import(PlatformAdminAccessWebMvcTest.TestSecurityConfig.class)

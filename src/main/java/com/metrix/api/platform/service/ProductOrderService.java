@@ -3,6 +3,7 @@ package com.metrix.api.platform.service;
 import com.metrix.api.dto.productos.*;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.LicensePackage;
+import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.model.*;
 import com.metrix.api.platform.repository.LicensePackageRepository;
 import com.metrix.api.platform.repository.ProductOrderRepository;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -132,6 +134,9 @@ public class ProductOrderService {
                 .moneda(pkg.getMoneda())
                 .maxUsuarios(pkg.getMaxUsuarios())
                 .maxSucursales(pkg.getMaxSucursales())
+                .featureCodes(pkg.getFeatureCodes() != null && !pkg.getFeatureCodes().isEmpty()
+                        ? List.copyOf(pkg.getFeatureCodes())
+                        : LicenseFeatureCodes.defaultsForPackageId(pkg.getId()))
                 .accent(pkg.getAccent())
                 .build();
     }

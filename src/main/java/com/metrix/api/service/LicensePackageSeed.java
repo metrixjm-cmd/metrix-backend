@@ -4,6 +4,7 @@ import com.metrix.api.model.LicenseAccent;
 import com.metrix.api.model.LicenseFeature;
 import com.metrix.api.model.LicensePackage;
 import com.metrix.api.model.LicensePricingModel;
+import com.metrix.api.platform.license.LicenseFeatureCodes;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -45,6 +46,7 @@ public final class LicensePackageSeed {
                         feature("Incidencias con evidencia fotográfica", true),
                         feature("Notificación en tiempo real - tareas realizadas y pendientes", true)
                 ))
+                .featureCodes(List.of())
                 .accent(LicenseAccent.slate)
                 .destacado(false)
                 .activo(true)
@@ -73,6 +75,11 @@ public final class LicensePackageSeed {
                         feature("Capacitaciones y exámenes", true),
                         feature("Gamificación y ranking", true),
                         feature("Notificaciones en tiempo Real - Tareas realizadas y pendientes", true)
+                ))
+                .featureCodes(List.of(
+                        LicenseFeatureCodes.TRAININGS,
+                        LicenseFeatureCodes.EXAMS,
+                        LicenseFeatureCodes.GAMIFICATION
                 ))
                 .accent(LicenseAccent.cyan)
                 .destacado(true)
@@ -103,6 +110,11 @@ public final class LicensePackageSeed {
                         feature("Gamificación y Ranking", true),
                         feature("Reportes PDF automáticos", true),
                         feature("Notificaciones en tiempo real - todas -", true)
+                ))
+                .featureCodes(List.of(
+                        LicenseFeatureCodes.TRAININGS,
+                        LicenseFeatureCodes.EXAMS,
+                        LicenseFeatureCodes.GAMIFICATION
                 ))
                 .accent(LicenseAccent.violet)
                 .destacado(false)
@@ -135,6 +147,12 @@ public final class LicensePackageSeed {
                         feature("Notificaciones en tiempo real - todas -", true),
                         feature("API de integración", true),
                         feature("Gerente de cuenta dedicado", true)
+                ))
+                .featureCodes(List.of(
+                        LicenseFeatureCodes.TRAININGS,
+                        LicenseFeatureCodes.EXAMS,
+                        LicenseFeatureCodes.GAMIFICATION,
+                        LicenseFeatureCodes.API
                 ))
                 .accent(LicenseAccent.amber)
                 .destacado(false)

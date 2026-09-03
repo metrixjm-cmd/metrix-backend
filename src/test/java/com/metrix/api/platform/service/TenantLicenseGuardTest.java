@@ -1,6 +1,7 @@
 package com.metrix.api.platform.service;
 
 import com.metrix.api.platform.TenantContext;
+import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.ProductOrder;
 import com.metrix.api.platform.model.ProductOrderPackageSnapshot;
@@ -15,7 +16,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -100,6 +103,42 @@ class TenantLicenseGuardTest {
         stubOrder(snapshot(null, 3), 1);
         assertDoesNotThrow(guard::assertCanCreateUser);
         verify(userRepository, never()).countByActivoTrue();
+    }
+
+    @Test
+    void assertFeature_blocksWhenMissing() {
+        stubOrder(snapshot(15, 3), 2);
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> guard.assertFeature(LicenseFeatureCodes.EXAMS));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("EXAMS"));
+    }
+
+    @Test
+    void assertFeature_allowsWhenInSnapshot() {
+        ProductOrderPackageSnapshot snap = snapshot(50, 5);
+        snap.setFeatureCodes(List.of(LicenseFeatureCodes.EXAMS, LicenseFeatureCodes.TRAININGS));
+        stubOrder(snap, 2);
+        assertDoesNotThrow(() -> guard.assertFeature(LicenseFeatureCodes.EXAMS));
+    }
+
+    @Test
+    void resolveFeatures_fallsBackToPackageId() {
+        stubOrder(snapshot(15, 2), 1); // base packageId in snapshot helper
+        when(metrixInstanceRepository.findById("inst-1")).thenReturn(Optional.of(
+                MetrixInstance.builder().id("inst-1").orderId("ord-1").build()));
+        // re-stub with packageId base
+        when(productOrderRepository.findById("ord-1")).thenReturn(Optional.of(
+                ProductOrder.builder()
+                        .id("ord-1")
+                        .packageSnapshot(ProductOrderPackageSnapshot.builder()
+                                .packageId("base")
+                                .maxUsuarios(15)
+                                .build())
+                        .sucursalesContratadas(1)
+                        .build()));
+        List<String> features = guard.resolveLicensedFeaturesOrUnrestricted();
+        org.junit.jupiter.api.Assertions.assertNotNull(features);
+        org.junit.jupiter.api.Assertions.assertTrue(features.isEmpty());
     }
 
     private void stubOrder(ProductOrderPackageSnapshot snap, int sucursalesContratadas) {

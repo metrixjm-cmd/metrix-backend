@@ -105,6 +105,9 @@ public class LicensePackageServiceImpl implements LicensePackageService {
         entity.setMaxSucursales(request.getMaxSucursales());
         entity.setSoporte(trimOrEmpty(request.getSoporte()));
         entity.setFunciones(request.getFunciones().stream().map(this::toFeature).toList());
+        if (request.getFeatureCodes() != null) {
+            entity.setFeatureCodes(request.getFeatureCodes());
+        }
         entity.setAccent(request.getAccent());
         entity.setDestacado(request.isDestacado());
         entity.setActivo(request.isActivo());
@@ -129,6 +132,7 @@ public class LicensePackageServiceImpl implements LicensePackageService {
         entity.setFunciones(seed.getFunciones().stream()
                 .map(f -> LicenseFeature.builder().label(f.getLabel()).incluido(f.isIncluido()).build())
                 .toList());
+        entity.setFeatureCodes(seed.getFeatureCodes());
         entity.setAccent(seed.getAccent());
         entity.setDestacado(seed.isDestacado());
         entity.setActivo(seed.isActivo());
@@ -164,6 +168,7 @@ public class LicensePackageServiceImpl implements LicensePackageService {
                                 .incluido(f.isIncluido())
                                 .build())
                         .toList())
+                .featureCodes(entity.getFeatureCodes() == null ? List.of() : entity.getFeatureCodes())
                 .accent(entity.getAccent())
                 .destacado(entity.isDestacado())
                 .activo(entity.isActivo())

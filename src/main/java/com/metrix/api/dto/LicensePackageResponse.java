@@ -32,6 +32,7 @@ public class LicensePackageResponse {
     private Integer maxSucursales;
     private String soporte;
     private List<LicenseFeatureDto> funciones;
+    private List<String> featureCodes;
     private LicenseAccent accent;
     private boolean destacado;
     private boolean activo;

@@ -36,4 +36,9 @@ public class AuthResponse {
     private String databaseName;
     /** ID de instancia METRIX del restaurante cliente. */
     private String instanceId;
+    /**
+     * Módulos del plan ({@code TRAININGS}, {@code EXAMS}, …).
+     * {@code null} = sin restricción (demo legacy / Admin 0).
+     */
+    private java.util.List<String> licensedFeatures;
 }

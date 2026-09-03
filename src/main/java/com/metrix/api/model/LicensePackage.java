@@ -81,6 +81,13 @@ public class LicensePackage {
     @Field("funciones")
     private List<LicenseFeature> funciones;
 
+    /**
+     * Módulos licenciables: {@code TRAININGS}, {@code EXAMS}, {@code GAMIFICATION}, {@code API}.
+     * Independiente de las etiquetas de marketing en {@link #funciones}.
+     */
+    @Field("feature_codes")
+    private List<String> featureCodes;
+
     @Field("accent")
     private LicenseAccent accent;
 

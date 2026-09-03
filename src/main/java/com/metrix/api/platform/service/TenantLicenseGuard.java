@@ -1,6 +1,7 @@
 package com.metrix.api.platform.service;
 
 import com.metrix.api.platform.TenantContext;
+import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.ProductOrder;
 import com.metrix.api.platform.model.ProductOrderPackageSnapshot;
@@ -9,13 +10,15 @@ import com.metrix.api.platform.repository.ProductOrderRepository;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
- * Aplica los cupos del paquete contratado (snapshot de la orden) al crear
- * usuarios o sucursales en un tenant provisionado.
+ * Cupos y módulos del paquete contratado (snapshot de la orden).
  * <p>
- * Sin {@code instanceId} (demo legacy / Admin 0 en {@code metrix_db}) no aplica límites.
+ * Sin {@code instanceId} (demo legacy / Admin 0) no aplica restricciones.
  */
 @Service
 @RequiredArgsConstructor
@@ -60,6 +63,40 @@ public class TenantLicenseGuard {
         }
     }
 
+    /**
+     * Features del tenant actual para hidratar el login.
+     * {@code null} = sin restricción (legacy / Admin 0).
+     */
+    public List<String> resolveLicensedFeaturesOrUnrestricted() {
+        if (TenantContext.isPlatformAdmin()) {
+            return null;
+        }
+        String instanceId = TenantContext.getInstanceId();
+        if (instanceId == null || instanceId.isBlank()) {
+            return null;
+        }
+        ProductOrder order = resolveOrderOrNull();
+        if (order == null) {
+            return List.of();
+        }
+        return resolveFeatureCodes(order);
+    }
+
+    public void assertFeature(String featureCode) {
+        List<String> features = resolveLicensedFeaturesOrUnrestricted();
+        if (features == null) {
+            return;
+        }
+        if (!LicenseFeatureCodes.includes(features, featureCode)) {
+            throw new AccessDeniedException(
+                    "Tu plan no incluye el módulo " + featureCode + ". Actualiza tu licencia.");
+        }
+    }
+
+    public boolean isFeatureEnforcementActive() {
+        return resolveLicensedFeaturesOrUnrestricted() != null;
+    }
+
     private ProductOrder resolveOrderOrNull() {
         if (TenantContext.isPlatformAdmin()) {
             return null;
@@ -73,6 +110,15 @@ public class TenantLicenseGuard {
             return null;
         }
         return productOrderRepository.findById(instance.getOrderId()).orElse(null);
+    }
+
+    static List<String> resolveFeatureCodes(ProductOrder order) {
+        ProductOrderPackageSnapshot snap = order.getPackageSnapshot();
+        if (snap != null && snap.getFeatureCodes() != null && !snap.getFeatureCodes().isEmpty()) {
+            return List.copyOf(LicenseFeatureCodes.asSet(snap.getFeatureCodes()).stream().toList());
+        }
+        String packageId = snap != null ? snap.getPackageId() : null;
+        return LicenseFeatureCodes.defaultsForPackageId(packageId);
     }
 
     private static Integer snapshotMaxUsuarios(ProductOrder order) {

@@ -7,6 +7,7 @@ import com.metrix.api.model.User;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.PlatformUser;
+import com.metrix.api.platform.service.TenantLicenseGuard;
 import com.metrix.api.platform.service.TenantLoginResolver;
 import com.metrix.api.repository.StoreRepository;
 import com.metrix.api.repository.UserRepository;
@@ -20,6 +21,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -34,6 +36,7 @@ public class AuthService {
     private final LoginAttemptLimiter loginAttemptLimiter;
     private final TenantLoginResolver tenantLoginResolver;
     private final TenantDatabaseNames tenantDatabaseNames;
+    private final TenantLicenseGuard tenantLicenseGuard;
 
     public AuthResponse login(AuthRequest request) {
         String numeroUsuario = request.getNumeroUsuario();
@@ -115,6 +118,7 @@ public class AuthService {
                 .platformAdmin(true)
                 .databaseName(operationalDb)
                 .instanceId(null)
+                .licensedFeatures(null)
                 .build();
     }
 
@@ -126,6 +130,8 @@ public class AuthService {
                     .map(s -> s.getNombre() != null ? s.getNombre() : s.getCodigo())
                     .orElse("");
         }
+
+        List<String> licensedFeatures = tenantLicenseGuard.resolveLicensedFeaturesOrUnrestricted();
 
         Map<String, Object> extraClaims = new java.util.HashMap<>();
         extraClaims.put("roles", user.getRoles());
@@ -156,6 +162,7 @@ public class AuthService {
                 .platformAdmin(platformAdmin)
                 .databaseName(databaseName)
                 .instanceId(instanceId)
+                .licensedFeatures(licensedFeatures)
                 .build();
     }
 }

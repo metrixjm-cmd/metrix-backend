@@ -5,6 +5,7 @@ import com.metrix.api.dto.UserResponse;
 import com.metrix.api.model.Catalog;
 import com.metrix.api.model.Role;
 import com.metrix.api.model.User;
+import com.metrix.api.platform.service.TenantLicenseGuard;
 import com.metrix.api.platform.service.TenantUserIndexService;
 import com.metrix.api.repository.CatalogRepository;
 import com.metrix.api.repository.UserRepository;
@@ -42,13 +43,16 @@ class UserServiceImplCreatePolicyTest {
     private CatalogRepository catalogRepository;
     @Mock
     private TenantUserIndexService tenantUserIndexService;
+    @Mock
+    private TenantLicenseGuard tenantLicenseGuard;
 
     private UserServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new UserServiceImpl(
-                userRepository, catalogRepository, passwordEncoder, sequenceService, tenantUserIndexService);
+                userRepository, catalogRepository, passwordEncoder, sequenceService,
+                tenantUserIndexService, tenantLicenseGuard);
         lenient().when(tenantUserIndexService.isTaken(any())).thenReturn(false);
     }
 
@@ -279,6 +283,18 @@ class UserServiceImplCreatePolicyTest {
                 () -> service.createUser(req, "ADM001"));
 
         assertEquals("El #Usuario ya está en uso. Elige otro.", ex.getMessage());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void createUser_propagatesLicenseLimit() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("Límite de usuarios del plan alcanzado (15)."))
+                .when(tenantLicenseGuard).assertCanCreateUser();
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> service.createUser(createReq("store-1", Set.of(Role.EJECUTADOR)), "ADM001"));
+
+        assertTrue(ex.getMessage().contains("Límite de usuarios"));
         verify(userRepository, never()).save(any(User.class));
     }
 

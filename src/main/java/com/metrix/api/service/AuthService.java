@@ -7,6 +7,7 @@ import com.metrix.api.model.User;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.PlatformUser;
+import com.metrix.api.platform.service.PlatformAdminService;
 import com.metrix.api.platform.service.TenantLicenseGuard;
 import com.metrix.api.platform.service.TenantLoginResolver;
 import com.metrix.api.repository.StoreRepository;
@@ -37,6 +38,7 @@ public class AuthService {
     private final TenantLoginResolver tenantLoginResolver;
     private final TenantDatabaseNames tenantDatabaseNames;
     private final TenantLicenseGuard tenantLicenseGuard;
+    private final PlatformAdminService platformAdminService;
 
     public AuthResponse login(AuthRequest request) {
         String numeroUsuario = request.getNumeroUsuario();
@@ -55,6 +57,12 @@ public class AuthService {
         try {
             if (resolution.type() == TenantLoginResolver.LoginType.PLATFORM) {
                 return loginPlatformAdmin(resolution.platformUser(), request.getPassword(), numeroUsuario);
+            }
+
+            if (resolution.type() == TenantLoginResolver.LoginType.TENANT
+                    && platformAdminService.isSuspended(resolution.instanceId())) {
+                throw new IllegalStateException(
+                        "Esta instancia METRIX está suspendida. Contacta a soporte para reactivarla.");
             }
 
             TenantContext.setPlatformAdmin(false);

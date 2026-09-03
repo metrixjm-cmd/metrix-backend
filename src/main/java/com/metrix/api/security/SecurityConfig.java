@@ -43,6 +43,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final SuspendedInstanceFilter suspendedInstanceFilter;
     private final LicenseFeatureFilter licenseFeatureFilter;
     private final UserDetailsServiceImpl userDetailsService;
 
@@ -161,7 +162,8 @@ public class SecurityConfig {
             )
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterAfter(licenseFeatureFilter, JwtAuthenticationFilter.class);
+            .addFilterAfter(suspendedInstanceFilter, JwtAuthenticationFilter.class)
+            .addFilterAfter(licenseFeatureFilter, SuspendedInstanceFilter.class);
 
         return http.build();
     }

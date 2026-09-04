@@ -2,26 +2,38 @@ package com.metrix.api.platform.service;
 
 import com.metrix.api.dto.productos.MetrixInstanceResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
+import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
 import com.metrix.api.platform.model.MetrixInstanceSuspensionReason;
 import com.metrix.api.platform.model.ProductOrder;
 import com.metrix.api.platform.model.ProductOrderPackageSnapshot;
+import com.metrix.api.platform.model.ProductOrderStatus;
+import com.metrix.api.platform.model.TenantAdminIndex;
 import com.metrix.api.platform.repository.MetrixInstanceRepository;
 import com.metrix.api.platform.repository.ProductOrderRepository;
+import com.metrix.api.platform.repository.TenantAdminIndexRepository;
+import com.mongodb.client.MongoClient;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PlatformAdminService {
 
+    private static final String TENANT_DB_PREFIX = "metrix_tenant_";
+
     private final MetrixInstanceRepository instanceRepository;
     private final ProductOrderRepository productOrderRepository;
+    private final TenantAdminIndexRepository tenantAdminIndexRepository;
+    private final TenantDatabaseNames tenantDatabaseNames;
+    private final MongoClient mongoClient;
 
     public List<MetrixInstanceResponse> listInstances() {
         return instanceRepository.findAllByOrderByCreatedAtDesc().stream()
@@ -44,6 +56,62 @@ public class PlatformAdminService {
             instance.setSuspensionReason(MetrixInstanceSuspensionReason.MANUAL);
         }
         return toResponse(instanceRepository.save(instance));
+    }
+
+    /**
+     * Elimina el registro de instancia, el índice de login, marca la orden como cancelada
+     * y elimina la BD Mongo del tenant (solo {@code metrix_tenant_*}).
+     */
+    public void deleteInstance(String instanceId) {
+        MetrixInstance instance = instanceRepository.findById(instanceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Instancia no encontrada: " + instanceId));
+
+        String databaseName = instance.getDatabaseName();
+        assertTenantDatabaseDroppable(databaseName);
+
+        String orderId = instance.getOrderId();
+
+        List<TenantAdminIndex> indexRows = tenantAdminIndexRepository.findByInstanceId(instanceId);
+        if (!indexRows.isEmpty()) {
+            tenantAdminIndexRepository.deleteAll(indexRows);
+        }
+
+        if (orderId != null && !orderId.isBlank()) {
+            productOrderRepository.findById(orderId).ifPresent(order -> {
+                order.setStatus(ProductOrderStatus.CANCELLED);
+                order.setInstanceId(null);
+                productOrderRepository.save(order);
+            });
+        }
+
+        instanceRepository.delete(instance);
+        dropTenantDatabaseIfSafe(databaseName);
+
+        log.info("[Platform] Instancia {} eliminada (empresa={}, db={})",
+                instanceId, instance.getEmpresaNombre(), databaseName);
+    }
+
+    private void assertTenantDatabaseDroppable(String databaseName) {
+        if (databaseName == null || databaseName.isBlank()) {
+            return;
+        }
+        if (databaseName.equals(tenantDatabaseNames.getPlatformDatabase())
+                || databaseName.equals(tenantDatabaseNames.getDefaultOperationalDatabase())) {
+            throw new IllegalStateException("No se puede eliminar la base de datos de plataforma u operativa.");
+        }
+    }
+
+    private void dropTenantDatabaseIfSafe(String databaseName) {
+        if (databaseName == null || databaseName.isBlank()) {
+            return;
+        }
+        if (!databaseName.startsWith(TENANT_DB_PREFIX)) {
+            log.warn("[Platform] No se elimina BD '{}': no es tenant", databaseName);
+            return;
+        }
+        assertTenantDatabaseDroppable(databaseName);
+        mongoClient.getDatabase(databaseName).drop();
+        log.info("[Platform] BD tenant eliminada: {}", databaseName);
     }
 
     public boolean isSuspended(String instanceId) {

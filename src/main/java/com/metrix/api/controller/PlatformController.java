@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -42,6 +43,14 @@ public class PlatformController {
             @Valid @RequestBody UpdateInstanceStatusRequest request) {
         assertPlatformAdmin();
         return ResponseEntity.ok(platformAdminService.updateStatus(id, request.getStatus()));
+    }
+
+    @DeleteMapping("/instances/{id}")
+    @Operation(summary = "Eliminar una instancia METRIX y su base de datos tenant")
+    public ResponseEntity<Void> deleteInstance(@PathVariable String id) {
+        assertPlatformAdmin();
+        platformAdminService.deleteInstance(id);
+        return ResponseEntity.noContent().build();
     }
 
     private void assertPlatformAdmin() {

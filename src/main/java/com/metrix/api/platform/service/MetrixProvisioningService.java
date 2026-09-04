@@ -94,8 +94,15 @@ public class MetrixProvisioningService {
         }
     }
 
-    private String buildDatabaseName(String empresaNombre, String instanceId) {
-        String slug = Normalizer.normalize(empresaNombre, Normalizer.Form.NFD)
+    /**
+     * Atlas M0/shared limita el nombre de BD a 38 bytes.
+     * {@code metrix_tenant_} (14) + slug + {@code _} + 8 hex = 38 → slug máx. 15.
+     */
+    static final int ATLAS_DB_NAME_MAX_BYTES = 38;
+    static final String TENANT_DB_PREFIX = "metrix_tenant_";
+
+    static String buildDatabaseName(String empresaNombre, String instanceId) {
+        String slug = Normalizer.normalize(empresaNombre == null ? "" : empresaNombre, Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "_")
@@ -103,10 +110,24 @@ public class MetrixProvisioningService {
         if (slug.isBlank()) {
             slug = "cliente";
         }
-        if (slug.length() > 24) {
-            slug = slug.substring(0, 24);
+        String suffix = instanceId.replace("-", "");
+        if (suffix.length() > 8) {
+            suffix = suffix.substring(0, 8);
         }
-        String suffix = instanceId.replace("-", "").substring(0, 8);
-        return "metrix_tenant_" + slug + "_" + suffix;
+        int maxSlug = ATLAS_DB_NAME_MAX_BYTES - TENANT_DB_PREFIX.length() - 1 - suffix.length();
+        if (maxSlug < 1) {
+            maxSlug = 1;
+        }
+        if (slug.length() > maxSlug) {
+            slug = slug.substring(0, maxSlug).replaceAll("_+$", "");
+            if (slug.isBlank()) {
+                slug = "t";
+            }
+        }
+        String name = TENANT_DB_PREFIX + slug + "_" + suffix;
+        if (name.length() > ATLAS_DB_NAME_MAX_BYTES) {
+            name = name.substring(0, ATLAS_DB_NAME_MAX_BYTES);
+        }
+        return name;
     }
 }

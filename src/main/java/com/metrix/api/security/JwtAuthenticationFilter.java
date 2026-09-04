@@ -45,23 +45,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         final String jwt = authHeader.substring(7);
-        final String numeroUsuario = jwtService.extractUsername(jwt);
 
-        if (numeroUsuario != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            applyTenantContextFromJwt(jwt);
+        // Token inválido/expirado no debe tumbar rutas permitAll (p. ej. /productos/catalog):
+        // el interceptor del frontend puede adjuntar un JWT viejo al visitar el catálogo público.
+        try {
+            final String numeroUsuario = jwtService.extractUsername(jwt);
 
-            UserDetails userDetails = loadUserDetails(jwt, numeroUsuario);
+            if (numeroUsuario != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                applyTenantContextFromJwt(jwt);
 
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                UserDetails userDetails = loadUserDetails(jwt, numeroUsuario);
+
+                if (jwtService.isTokenValid(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
             }
+        } catch (Exception ignored) {
+            SecurityContextHolder.clearContext();
+            TenantContext.clear();
         }
 
         filterChain.doFilter(request, response);

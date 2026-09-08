@@ -60,6 +60,14 @@ public class ProductosController {
         return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createCheckout(orderId));
     }
 
+    @PostMapping("/orders/{orderId}/sync-payment")
+    @Operation(summary = "Reconciliar pago MP (si webhook no aplicó)")
+    public ResponseEntity<ProductOrderResponse> syncPayment(
+            @PathVariable String orderId,
+            @RequestParam(value = "paymentId", required = false) String paymentId) {
+        return ResponseEntity.ok(orderService.syncMercadoPagoPayment(orderId, paymentId));
+    }
+
     @PostMapping("/orders/{orderId}/pay")
     @Operation(summary = "Pago simulado (solo provider=simulated / local)")
     public ResponseEntity<ProductOrderResponse> payOrder(

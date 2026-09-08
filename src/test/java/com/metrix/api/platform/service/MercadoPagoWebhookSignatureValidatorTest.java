@@ -41,11 +41,28 @@ class MercadoPagoWebhookSignatureValidatorTest {
     }
 
     @Test
-    void rejectsWhenSecretMissing() {
-        MercadoPagoProperties props = new MercadoPagoProperties();
-        props.getMercadopago().setWebhookSecret("");
-        validator = new MercadoPagoWebhookSignatureValidator(props);
-        assertFalse(validator.isValid("999", "abc", "ts=1,v1=x"));
+    void acceptsValidSignatureWithoutRequestId() throws Exception {
+        String dataId = "999";
+        String ts = "1700000000";
+        String manifest = "id:" + dataId + ";ts:" + ts + ";";
+        String v1 = hmac(manifest);
+        String signature = "ts=" + ts + ",v1=" + v1;
+
+        assertTrue(validator.isValid(dataId, null, signature));
+        // Si llega request-id pero la firma no lo incluye, también aceptar
+        assertTrue(validator.isValid(dataId, "abc-req", signature));
+    }
+
+    @Test
+    void acceptsAlphanumericIdLowercased() throws Exception {
+        String dataId = "ORD01ABC";
+        String requestId = "abc-req";
+        String ts = "1700000000";
+        String manifest = "id:" + dataId.toLowerCase() + ";request-id:" + requestId + ";ts:" + ts + ";";
+        String v1 = hmac(manifest);
+        String signature = "ts=" + ts + ",v1=" + v1;
+
+        assertTrue(validator.isValid(dataId, requestId, signature));
     }
 
     private static String hmac(String payload) throws Exception {

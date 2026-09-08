@@ -27,6 +27,7 @@ public class MercadoPagoWebhookSignatureValidator {
             // Sin secreto configurado no aceptamos webhooks (evita open relay en misconfig).
             return false;
         }
+        secret = secret.trim();
         if (xSignature == null || xSignature.isBlank() || dataId == null || dataId.isBlank()) {
             return false;
         }
@@ -38,6 +39,28 @@ public class MercadoPagoWebhookSignatureValidator {
             return false;
         }
 
+        // MP: ids alfanuméricos van en minúsculas; numéricos quedan igual.
+        String normalizedId = dataId.trim().toLowerCase(Locale.ROOT);
+
+        // Probar variantes: docs indican omitir request-id si no viene.
+        // Algunos envíos traen el header pero firman sin él (o al revés).
+        if (matches(secret, normalizedId, xRequestId, ts, v1)) {
+            return true;
+        }
+        if (xRequestId != null && !xRequestId.isBlank() && matches(secret, normalizedId, null, ts, v1)) {
+            return true;
+        }
+        // Fallback: id sin normalizar (por si el id numérico se alteró)
+        if (!normalizedId.equals(dataId.trim()) && matches(secret, dataId.trim(), xRequestId, ts, v1)) {
+            return true;
+        }
+        return xRequestId != null && !xRequestId.isBlank()
+                && !normalizedId.equals(dataId.trim())
+                && matches(secret, dataId.trim(), null, ts, v1);
+    }
+
+    private static boolean matches(
+            String secret, String dataId, String xRequestId, String ts, String v1) {
         StringBuilder manifest = new StringBuilder();
         manifest.append("id:").append(dataId).append(";");
         if (xRequestId != null && !xRequestId.isBlank()) {

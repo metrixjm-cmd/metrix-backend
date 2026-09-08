@@ -65,6 +65,7 @@ public class SecurityConfig {
                 // el JWT: cualquiera se fabricaba una cuenta ADMIN sin token.
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                 .requestMatchers("/api/v1/productos/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/mercadopago").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/evidence/local/**").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()

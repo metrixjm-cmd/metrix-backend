@@ -1,6 +1,7 @@
 package com.metrix.api.dto.productos;
 
-import com.metrix.api.dto.LicensePackageResponse;
+import com.metrix.api.platform.model.OrderPaymentStatus;
+import com.metrix.api.platform.model.PaymentProvider;
 import com.metrix.api.platform.model.ProductOrderStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -25,6 +26,10 @@ public class ProductOrderResponse {
     private BigDecimal totalCobrado;
     private String moneda;
     private String paymentReference;
+    private String preferenceId;
+    private String mpPaymentId;
+    private PaymentProvider paymentProvider;
+    private OrderPaymentStatus paymentStatus;
     private Instant paidAt;
     private boolean onTrial;
     private Instant trialEndsAt;

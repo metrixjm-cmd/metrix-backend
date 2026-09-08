@@ -54,8 +54,14 @@ public class ProductosController {
         return ResponseEntity.ok(orderService.startTrial(orderId));
     }
 
+    @PostMapping("/orders/{orderId}/checkout")
+    @Operation(summary = "Crear preferencia Checkout Pro (no marca PAID)")
+    public ResponseEntity<CheckoutSessionResponse> checkout(@PathVariable String orderId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createCheckout(orderId));
+    }
+
     @PostMapping("/orders/{orderId}/pay")
-    @Operation(summary = "Simular pago de la orden")
+    @Operation(summary = "Pago simulado (solo provider=simulated / local)")
     public ResponseEntity<ProductOrderResponse> payOrder(
             @PathVariable String orderId,
             @Valid @RequestBody SimulatedPaymentRequest request) {

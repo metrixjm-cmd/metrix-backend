@@ -21,6 +21,16 @@ metrix:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
+  payments:
+    # Mantener simulated hasta tener secretos MP en Cloud Run; luego mercadopago.
+    provider: ${METRIX_PAYMENTS_PROVIDER:simulated}
+    public-api-url: ${METRIX_PUBLIC_API_URL:}
+    frontend-base-url: ${METRIX_FRONTEND_BASE_URL:https://metrix-app.web.app}
+    mercadopago:
+      access-token: ${MP_ACCESS_TOKEN:}
+      webhook-secret: ${MP_WEBHOOK_SECRET:}
+      api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}
+
 # En producción la documentación OpenAPI/Swagger se desactiva para no exponer
 # la superficie completa de la API públicamente (defensa en profundidad).
 springdoc:

@@ -253,6 +253,53 @@ public class ProductOrderService {
                 .build();
     }
 
+    /**
+     * Reconcilia un cobro MP ya aprobado cuando el webhook no aplicó (firma, retraso, etc.).
+     * Consulta la API de MP por external_reference (o paymentId opcional) y marca PAID.
+     */
+    public ProductOrderResponse syncMercadoPagoPayment(String orderId, String paymentIdHint) {
+        ProductOrder order = findOrder(orderId);
+
+        boolean alreadyPaid = order.getPaymentStatus() == OrderPaymentStatus.APPROVED
+                && order.getPaidAt() != null
+                && !order.isOnTrial();
+        if (alreadyPaid) {
+            return toResponse(order);
+        }
+
+        MercadoPagoPaymentGateway mp = mercadoPagoGateway.getIfAvailable();
+        if (mp == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Mercado Pago no está activo en este entorno.");
+        }
+
+        MercadoPagoPaymentGateway.MpPayment payment = null;
+        if (paymentIdHint != null && !paymentIdHint.isBlank()) {
+            payment = mp.fetchPayment(paymentIdHint.trim());
+            if (payment != null
+                    && payment.externalReference() != null
+                    && !payment.externalReference().equals(orderId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "El pago no corresponde a esta orden.");
+            }
+        }
+        if (payment == null || !payment.isApproved()) {
+            payment = mp.findApprovedByExternalReference(orderId);
+        }
+        if (payment == null || !payment.isApproved()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "No hay un pago approved en Mercado Pago para esta orden todavía.");
+        }
+        if (!payment.matchesAmount(order.getTotalCobrado(), order.getMoneda())) {
+            log.error("[MP] sync: monto/moneda no coinciden orden {} pago {}", orderId, payment.id());
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "El monto cobrado no coincide con la orden.");
+        }
+
+        return toResponse(applyApprovedPayment(
+                order, "MP-" + payment.id(), payment.id(), PaymentProvider.MERCADOPAGO));
+    }
+
     public ProvisionMetrixResponse provisionOrder(String orderId, ProvisionMetrixRequest request) {
         ProductOrder order = findOrder(orderId);
         if (order.getStatus() != ProductOrderStatus.PAID

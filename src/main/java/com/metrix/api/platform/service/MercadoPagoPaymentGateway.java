@@ -57,7 +57,8 @@ public class MercadoPagoPaymentGateway implements PaymentGateway {
         item.put("title", title);
         item.put("quantity", 1);
         item.put("currency_id", order.getMoneda() != null ? order.getMoneda() : "MXN");
-        item.put("unit_price", order.getTotalCobrado().doubleValue());
+        // Evitar double: MP compara montos exactos en el webhook/sync.
+        item.put("unit_price", order.getTotalCobrado());
 
         if (order.getContactoEmail() != null) {
             ObjectNode payer = body.putObject("payer");
@@ -101,21 +102,67 @@ public class MercadoPagoPaymentGateway implements PaymentGateway {
                     .uri("/v1/payments/{id}", paymentId)
                     .retrieve()
                     .body(JsonNode.class);
-            if (response == null) {
-                return null;
-            }
-            String status = textOrNull(response, "status");
-            String externalRef = textOrNull(response, "external_reference");
-            String currency = textOrNull(response, "currency_id");
-            BigDecimal amount = null;
-            if (response.has("transaction_amount") && !response.get("transaction_amount").isNull()) {
-                amount = response.get("transaction_amount").decimalValue();
-            }
-            return new MpPayment(paymentId, status, externalRef, amount, currency);
+            return toMpPayment(response, paymentId);
         } catch (RestClientException ex) {
             log.warn("[MP] No se pudo consultar pago {}: {}", paymentId, ex.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Busca el pago approved más reciente por {@code external_reference} (orderId).
+     * Usado para reconciliar cuando el webhook falló (p. ej. firma) pero el cobro sí ocurrió.
+     */
+    public MpPayment findApprovedByExternalReference(String externalReference) {
+        if (externalReference == null || externalReference.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode response = client().get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1/payments/search")
+                            .queryParam("external_reference", externalReference)
+                            .queryParam("sort", "date_created")
+                            .queryParam("criteria", "desc")
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+            if (response == null || !response.has("results") || !response.get("results").isArray()) {
+                return null;
+            }
+            for (JsonNode row : response.get("results")) {
+                MpPayment payment = toMpPayment(row, textOrNull(row, "id"));
+                if (payment != null && payment.isApproved()) {
+                    return payment;
+                }
+            }
+            return null;
+        } catch (RestClientException ex) {
+            log.warn("[MP] No se pudo buscar pagos por external_reference {}: {}",
+                    externalReference, ex.getMessage());
+            return null;
+        }
+    }
+
+    private static MpPayment toMpPayment(JsonNode response, String fallbackId) {
+        if (response == null) {
+            return null;
+        }
+        String id = textOrNull(response, "id");
+        if (id == null || id.isBlank()) {
+            id = fallbackId;
+        }
+        if (id == null || id.isBlank()) {
+            return null;
+        }
+        String status = textOrNull(response, "status");
+        String externalRef = textOrNull(response, "external_reference");
+        String currency = textOrNull(response, "currency_id");
+        BigDecimal amount = null;
+        if (response.has("transaction_amount") && !response.get("transaction_amount").isNull()) {
+            amount = response.get("transaction_amount").decimalValue();
+        }
+        return new MpPayment(id, status, externalRef, amount, currency);
     }
 
     private RestClient client() {

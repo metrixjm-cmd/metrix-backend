@@ -122,6 +122,24 @@ class TenantLicenseGuardTest {
     }
 
     @Test
+    void resolveFeatures_basePlan_isEmptyListNotNull() {
+        stubOrder(snapshot(15, 2), 1);
+        List<String> features = guard.resolveLicensedFeaturesOrUnrestricted();
+        org.junit.jupiter.api.Assertions.assertNotNull(features);
+        org.junit.jupiter.api.Assertions.assertTrue(features.isEmpty());
+        AccessDeniedException ex = assertThrows(AccessDeniedException.class,
+                () -> guard.assertFeature(LicenseFeatureCodes.TRAININGS));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("TRAININGS"));
+    }
+
+    @Test
+    void resolveFeatures_platformAdmin_isUnrestrictedNull() {
+        TenantContext.setPlatformAdmin(true);
+        org.junit.jupiter.api.Assertions.assertNull(guard.resolveLicensedFeaturesOrUnrestricted());
+        assertDoesNotThrow(() -> guard.assertFeature(LicenseFeatureCodes.EXAMS));
+    }
+
+    @Test
     void resolveFeatures_fallsBackToPackageId() {
         stubOrder(snapshot(15, 2), 1); // base packageId in snapshot helper
         when(metrixInstanceRepository.findById("inst-1")).thenReturn(Optional.of(

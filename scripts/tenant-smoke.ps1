@@ -100,6 +100,54 @@ if ((Test-JsonError -Resp $tenantLogin) -or -not $tenantLogin.token) { Bad "TF-0
 elseif ($tenantLogin.platformAdmin -eq $true) { Bad "TF-06" "platformAdmin deberia ser false" }
 else { Ok "TF-06" "tenant token ok" }
 
+# ── Banco de Datos / licencia (Fase 1): núcleo 200, premium 403 en Base ────
+$feats = @()
+if ($null -ne $tenantLogin.licensedFeatures) { $feats = @($tenantLogin.licensedFeatures) }
+if ($feats -contains "TRAININGS" -or $feats -contains "EXAMS") {
+  Bad "TF-BD-01" "Base no debe tener TRAININGS/EXAMS: [$($feats -join ',')]"
+} else {
+  Ok "TF-BD-01" "licensedFeatures sin premium ($($feats.Count) codes)"
+}
+
+$usersBd = Invoke-Json GET "$Base/users" $null $tenantLogin.token
+if (Test-JsonError -Resp $usersBd) { Bad "TF-BD-02" "users status $($usersBd.status)" }
+else { Ok "TF-BD-02" "GET /users 200" }
+
+$storesBd = Invoke-Json GET "$Base/stores" $null $tenantLogin.token
+if (Test-JsonError -Resp $storesBd) { Bad "TF-BD-03" "stores status $($storesBd.status)" }
+else { Ok "TF-BD-03" "GET /stores 200" }
+
+$puestosBd = Invoke-Json GET "$Base/catalogs/PUESTO" $null $tenantLogin.token
+if (Test-JsonError -Resp $puestosBd) { Bad "TF-BD-04" "catalogs/PUESTO $($puestosBd.status)" }
+elseif (@($puestosBd).Count -lt 1) { Bad "TF-BD-04" "seed PUESTO vacio" }
+else { Ok "TF-BD-04" "GET /catalogs/PUESTO seed ok" }
+
+$taskTplBd = Invoke-Json GET "$Base/task-templates" $null $tenantLogin.token
+if (Test-JsonError -Resp $taskTplBd) { Bad "TF-BD-05" "task-templates $($taskTplBd.status)" }
+else { Ok "TF-BD-05" "GET /task-templates 200" }
+
+$qbankBd = Invoke-Json GET "$Base/question-bank" $null $tenantLogin.token
+if ((Test-JsonError -Resp $qbankBd) -and $qbankBd.status -eq 403) {
+  if ($qbankBd.body -match '"error"') { Ok "TF-BD-10" "question-bank 403+error" }
+  else { Ok "TF-BD-10" "question-bank 403" }
+} elseif (Test-JsonError -Resp $qbankBd) { Bad "TF-BD-10" "status $($qbankBd.status)" }
+else { Bad "TF-BD-10" "Base no debe listar question-bank" }
+
+$ttBd = Invoke-Json GET "$Base/training-templates" $null $tenantLogin.token
+if ((Test-JsonError -Resp $ttBd) -and $ttBd.status -eq 403) { Ok "TF-BD-11" "training-templates 403" }
+elseif (Test-JsonError -Resp $ttBd) { Bad "TF-BD-11" "status $($ttBd.status)" }
+else { Bad "TF-BD-11" "Base no debe listar training-templates" }
+
+$tmBd = Invoke-Json GET "$Base/training-materials" $null $tenantLogin.token
+if ((Test-JsonError -Resp $tmBd) -and $tmBd.status -eq 403) { Ok "TF-BD-12" "training-materials 403" }
+elseif (Test-JsonError -Resp $tmBd) { Bad "TF-BD-12" "status $($tmBd.status)" }
+else { Bad "TF-BD-12" "Base no debe listar training-materials" }
+
+$examsBd = Invoke-Json GET "$Base/exams" $null $tenantLogin.token
+if ((Test-JsonError -Resp $examsBd) -and $examsBd.status -eq 403) { Ok "TF-BD-13" "exams 403" }
+elseif (Test-JsonError -Resp $examsBd) { Bad "TF-BD-13" "status $($examsBd.status)" }
+else { Bad "TF-BD-13" "Base no debe listar exams" }
+
 $forbidden = Invoke-Json GET "$Base/platform/instances" $null $tenantLogin.token
 if ((Test-JsonError -Resp $forbidden) -and $forbidden.status -in 401, 403) { Ok "TF-07" "tenant blocked from /platform" }
 elseif (Test-JsonError -Resp $forbidden) { Bad "TF-07" "status $($forbidden.status)" }

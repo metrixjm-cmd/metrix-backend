@@ -3,8 +3,11 @@ package com.metrix.api.platform.service;
 import com.metrix.api.dto.productos.CreateProductOrderRequest;
 import com.metrix.api.dto.productos.SimulatedPaymentRequest;
 import com.metrix.api.model.LicensePackage;
+import com.metrix.api.platform.config.MercadoPagoProperties;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
+import com.metrix.api.platform.model.OrderPaymentStatus;
+import com.metrix.api.platform.model.PaymentProvider;
 import com.metrix.api.platform.model.ProductOrder;
 import com.metrix.api.platform.model.ProductOrderStatus;
 import com.metrix.api.platform.repository.LicensePackageRepository;
@@ -16,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -43,6 +48,9 @@ class ProductOrderServiceTest {
     @Mock private PaymentGateway paymentGateway;
     @Mock private MetrixProvisioningService provisioningService;
     @Mock private TenantUserIndexService tenantUserIndexService;
+    @Mock private MercadoPagoProperties paymentsProperties;
+    @Mock private ObjectProvider<MercadoPagoPaymentGateway> mercadoPagoGateway;
+    @Mock private MercadoPagoWebhookSignatureValidator webhookSignatureValidator;
 
     @InjectMocks private ProductOrderService service;
 
@@ -124,6 +132,7 @@ class ProductOrderServiceTest {
         pay.setExpiryYear("2029");
         pay.setCvv("123");
 
+        when(paymentGateway.supportsSimulatedCardCharge()).thenReturn(true);
         when(orderRepository.findById("ord-1")).thenReturn(Optional.of(order));
         when(paymentGateway.charge(any(), eq("MXN"), any()))
                 .thenReturn(new PaymentGateway.PaymentResult(true, "SIM-1", "ok"));
@@ -140,7 +149,85 @@ class ProductOrderServiceTest {
 
         assertFalse(response.isOnTrial());
         assertEquals(ProductOrderStatus.PROVISIONED, response.getStatus());
+        assertEquals(OrderPaymentStatus.APPROVED, response.getPaymentStatus());
         verify(instanceRepository).save(any(MetrixInstance.class));
+    }
+
+    @Test
+    void payOrder_goneWhenMercadoPagoProvider() {
+        when(paymentGateway.supportsSimulatedCardCharge()).thenReturn(false);
+        SimulatedPaymentRequest pay = new SimulatedPaymentRequest();
+        pay.setCardholderName("Ana");
+        pay.setCardNumber("4242424242424242");
+        pay.setExpiryMonth("12");
+        pay.setExpiryYear("2029");
+        pay.setCvv("123");
+
+        assertThrows(ResponseStatusException.class, () -> service.payOrder("ord-1", pay));
+    }
+
+    @Test
+    void createCheckout_setsPreferencePending() {
+        ProductOrder order = ProductOrder.builder()
+                .id("ord-1")
+                .status(ProductOrderStatus.PENDING_PAYMENT)
+                .totalCobrado(BigDecimal.valueOf(1999))
+                .moneda("MXN")
+                .packageSnapshot(com.metrix.api.platform.model.ProductOrderPackageSnapshot.builder()
+                        .packageId("base")
+                        .nombre("Base")
+                        .build())
+                .build();
+        when(orderRepository.findById("ord-1")).thenReturn(Optional.of(order));
+        when(paymentsProperties.getFrontendBaseUrl()).thenReturn("http://localhost:4200");
+        when(paymentsProperties.getPublicApiUrl()).thenReturn("http://localhost:8080");
+        when(paymentGateway.provider()).thenReturn(PaymentProvider.SIMULATED);
+        when(paymentGateway.createCheckout(any(), any())).thenReturn(
+                new PaymentGateway.CheckoutSession("SIM-PREF-1",
+                        "http://localhost:4200/productos/pago-retorno/ord-1?status=success",
+                        "http://localhost:4200/productos/pago-retorno/ord-1?status=success"));
+        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var session = service.createCheckout("ord-1");
+
+        assertEquals("SIM-PREF-1", session.getPreferenceId());
+        assertEquals(OrderPaymentStatus.PENDING, session.getPaymentStatus());
+        assertNotNull(session.getInitPoint());
+    }
+
+    @Test
+    void webhook_rejectsInvalidSignature() {
+        when(webhookSignatureValidator.isValid(any(), any(), any())).thenReturn(false);
+        assertThrows(ResponseStatusException.class,
+                () -> service.handleMercadoPagoWebhook("pay-1", "req-1", "bad", "payment"));
+    }
+
+    @Test
+    void webhook_appliesApprovedPaymentIdempotent() {
+        when(webhookSignatureValidator.isValid(eq("pay-1"), eq("req-1"), eq("ok"))).thenReturn(true);
+        when(orderRepository.findByMpPaymentId("pay-1")).thenReturn(Optional.empty());
+
+        MercadoPagoPaymentGateway mp = org.mockito.Mockito.mock(MercadoPagoPaymentGateway.class);
+        when(mercadoPagoGateway.getIfAvailable()).thenReturn(mp);
+        when(mp.fetchPayment("pay-1")).thenReturn(new MercadoPagoPaymentGateway.MpPayment(
+                "pay-1", "approved", "ord-1", BigDecimal.valueOf(1999), "MXN"));
+
+        ProductOrder order = ProductOrder.builder()
+                .id("ord-1")
+                .status(ProductOrderStatus.PENDING_PAYMENT)
+                .totalCobrado(BigDecimal.valueOf(1999))
+                .moneda("MXN")
+                .build();
+        when(orderRepository.findById("ord-1")).thenReturn(Optional.of(order));
+        when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var ack = service.handleMercadoPagoWebhook("pay-1", "req-1", "ok", "payment");
+        assertTrue(ack.isApplied());
+        assertEquals("ord-1", ack.getOrderId());
+
+        when(orderRepository.findByMpPaymentId("pay-1")).thenReturn(Optional.of(order));
+        var again = service.handleMercadoPagoWebhook("pay-1", "req-1", "ok", "payment");
+        assertFalse(again.isApplied());
     }
 
     @Test

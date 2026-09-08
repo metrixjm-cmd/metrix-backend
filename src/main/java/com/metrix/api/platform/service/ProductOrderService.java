@@ -3,6 +3,7 @@ package com.metrix.api.platform.service;
 import com.metrix.api.dto.productos.*;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.LicensePackage;
+import com.metrix.api.platform.config.MercadoPagoProperties;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.license.LicenseTrialDays;
 import com.metrix.api.platform.model.*;
@@ -10,13 +11,20 @@ import com.metrix.api.platform.repository.LicensePackageRepository;
 import com.metrix.api.platform.repository.MetrixInstanceRepository;
 import com.metrix.api.platform.repository.ProductOrderRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductOrderService {
@@ -28,6 +36,9 @@ public class ProductOrderService {
     private final PaymentGateway paymentGateway;
     private final MetrixProvisioningService provisioningService;
     private final TenantUserIndexService tenantUserIndexService;
+    private final MercadoPagoProperties paymentsProperties;
+    private final ObjectProvider<MercadoPagoPaymentGateway> mercadoPagoGateway;
+    private final MercadoPagoWebhookSignatureValidator webhookSignatureValidator;
 
     public ProductOrderResponse createOrder(CreateProductOrderRequest request) {
         LicensePackage pkg = licensePackageRepository.findById(request.getPackageId())
@@ -54,6 +65,7 @@ public class ProductOrderService {
                 .cargoImplementacion(pricing.cargoImplementacion())
                 .totalCobrado(pricing.totalCobrado())
                 .moneda(pricing.moneda())
+                .paymentStatus(OrderPaymentStatus.NONE)
                 .build();
 
         order.setStatus(ProductOrderStatus.PENDING_PAYMENT);
@@ -65,7 +77,7 @@ public class ProductOrderService {
     }
 
     /**
-     * Activa la prueba del paquete (sin cobro). El pago simulado queda para
+     * Activa la prueba del paquete (sin cobro). El pago queda para
      * convertir el plan o reactivar cuando venza.
      */
     public ProductOrderResponse startTrial(String orderId) {
@@ -96,7 +108,46 @@ public class ProductOrderService {
         return toResponse(orderRepository.save(order));
     }
 
+    /**
+     * Crea preferencia Checkout Pro. No marca PAID.
+     */
+    public CheckoutSessionResponse createCheckout(String orderId) {
+        ProductOrder order = findOrder(orderId);
+        assertCheckoutable(order);
+
+        if (order.getTotalCobrado() == null || order.getTotalCobrado().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("El monto de la orden no es válido para cobro.");
+        }
+
+        if (order.getPreferenceId() != null && !order.getPreferenceId().isBlank()
+                && order.getPaymentStatus() == OrderPaymentStatus.PENDING
+                && order.getPaymentProvider() == paymentGateway.provider()) {
+            // Reuso superficial: el cliente puede volver a pedir init_point vía nueva preferencia.
+            // Para simulated devolvemos la misma; para MP creamos de nuevo (preferencias son baratas).
+            if (paymentGateway.provider() == PaymentProvider.SIMULATED) {
+                PaymentGateway.CheckoutUrls urls = buildCheckoutUrls(orderId);
+                PaymentGateway.CheckoutSession session = paymentGateway.createCheckout(order, urls);
+                return toCheckoutResponse(order, session);
+            }
+        }
+
+        PaymentGateway.CheckoutUrls urls = buildCheckoutUrls(orderId);
+        PaymentGateway.CheckoutSession session = paymentGateway.createCheckout(order, urls);
+
+        order.setPreferenceId(session.preferenceId());
+        order.setPaymentProvider(paymentGateway.provider());
+        order.setPaymentStatus(OrderPaymentStatus.PENDING);
+        orderRepository.save(order);
+
+        return toCheckoutResponse(order, session);
+    }
+
     public ProductOrderResponse payOrder(String orderId, SimulatedPaymentRequest paymentRequest) {
+        if (!paymentGateway.supportsSimulatedCardCharge()) {
+            throw new ResponseStatusException(HttpStatus.GONE,
+                    "El pago con tarjeta simulado no está disponible. Usa Checkout Pro.");
+        }
+
         ProductOrder order = findOrder(orderId);
         if (order.getStatus() == ProductOrderStatus.CANCELLED) {
             throw new IllegalStateException("La orden está cancelada.");
@@ -112,22 +163,94 @@ public class ProductOrderService {
                 order.getTotalCobrado(), order.getMoneda(), paymentRequest);
 
         if (!result.success()) {
+            order.setPaymentStatus(OrderPaymentStatus.REJECTED);
+            order.setPaymentProvider(PaymentProvider.SIMULATED);
+            orderRepository.save(order);
             throw new IllegalStateException(result.message());
         }
 
-        Instant now = Instant.now();
-        order.setPaymentReference(result.reference());
-        order.setPaidAt(now);
-        order.setOnTrial(false);
-        order.setTrialEndsAt(null);
+        return toResponse(applyApprovedPayment(order, result.reference(), null, PaymentProvider.SIMULATED));
+    }
 
-        if (order.getInstanceId() != null && !order.getInstanceId().isBlank()) {
-            convertInstanceToPaid(order.getInstanceId());
-            order.setStatus(ProductOrderStatus.PROVISIONED);
-        } else {
-            order.setStatus(ProductOrderStatus.PAID);
+    /**
+     * Webhook MP: valida firma, consulta pago, aplica si approved y monto OK.
+     */
+    public WebhookAckResponse handleMercadoPagoWebhook(
+            String dataId,
+            String xRequestId,
+            String xSignature,
+            String payloadType
+    ) {
+        if (!webhookSignatureValidator.isValid(dataId, xRequestId, xSignature)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Firma de webhook inválida.");
         }
-        return toResponse(orderRepository.save(order));
+
+        if (payloadType != null && !payloadType.isBlank()
+                && !"payment".equalsIgnoreCase(payloadType)) {
+            return WebhookAckResponse.builder().received(true).applied(false).build();
+        }
+
+        Optional<ProductOrder> byPayment = orderRepository.findByMpPaymentId(dataId);
+        if (byPayment.isPresent()) {
+            ProductOrder existing = byPayment.get();
+            return WebhookAckResponse.builder()
+                    .received(true)
+                    .orderId(existing.getId())
+                    .applied(false)
+                    .build();
+        }
+
+        MercadoPagoPaymentGateway mp = mercadoPagoGateway.getIfAvailable();
+        if (mp == null) {
+            log.warn("[MP] Webhook recibido pero provider no es mercadopago");
+            return WebhookAckResponse.builder().received(true).applied(false).build();
+        }
+
+        MercadoPagoPaymentGateway.MpPayment payment = mp.fetchPayment(dataId);
+        if (payment == null) {
+            return WebhookAckResponse.builder().received(true).applied(false).build();
+        }
+
+        if (!payment.isApproved()) {
+            if (payment.externalReference() != null) {
+                orderRepository.findById(payment.externalReference()).ifPresent(order -> {
+                    if (order.getPaymentStatus() != OrderPaymentStatus.APPROVED) {
+                        order.setPaymentStatus(OrderPaymentStatus.REJECTED);
+                        order.setMpPaymentId(payment.id());
+                        order.setPaymentProvider(PaymentProvider.MERCADOPAGO);
+                        orderRepository.save(order);
+                    }
+                });
+            }
+            return WebhookAckResponse.builder()
+                    .received(true)
+                    .orderId(payment.externalReference())
+                    .applied(false)
+                    .build();
+        }
+
+        if (payment.externalReference() == null || payment.externalReference().isBlank()) {
+            log.warn("[MP] Pago {} approved sin external_reference", payment.id());
+            return WebhookAckResponse.builder().received(true).applied(false).build();
+        }
+
+        ProductOrder order = findOrder(payment.externalReference());
+        if (!payment.matchesAmount(order.getTotalCobrado(), order.getMoneda())) {
+            log.error("[MP] Monto/moneda no coinciden para orden {} pago {}", order.getId(), payment.id());
+            return WebhookAckResponse.builder()
+                    .received(true)
+                    .orderId(order.getId())
+                    .applied(false)
+                    .build();
+        }
+
+        ProductOrder updated = applyApprovedPayment(
+                order, "MP-" + payment.id(), payment.id(), PaymentProvider.MERCADOPAGO);
+        return WebhookAckResponse.builder()
+                .received(true)
+                .orderId(updated.getId())
+                .applied(true)
+                .build();
     }
 
     public ProvisionMetrixResponse provisionOrder(String orderId, ProvisionMetrixRequest request) {
@@ -163,6 +286,83 @@ public class ProductOrderService {
                 .message(order.isOnTrial()
                         ? "METRIX en periodo de prueba. Inicia sesión con tus credenciales."
                         : "METRIX creado correctamente. Inicia sesión con tus credenciales.")
+                .build();
+    }
+
+    ProductOrder applyApprovedPayment(
+            ProductOrder order,
+            String paymentReference,
+            String mpPaymentId,
+            PaymentProvider provider
+    ) {
+        boolean alreadyConverted = order.getPaidAt() != null
+                && !order.isOnTrial()
+                && order.getStatus() == ProductOrderStatus.PROVISIONED
+                && order.getPaymentStatus() == OrderPaymentStatus.APPROVED;
+        if (alreadyConverted) {
+            return order;
+        }
+
+        Instant now = Instant.now();
+        order.setPaymentReference(paymentReference);
+        if (mpPaymentId != null) {
+            order.setMpPaymentId(mpPaymentId);
+        }
+        order.setPaymentProvider(provider);
+        order.setPaymentStatus(OrderPaymentStatus.APPROVED);
+        order.setPaidAt(now);
+        order.setOnTrial(false);
+        order.setTrialEndsAt(null);
+
+        if (order.getInstanceId() != null && !order.getInstanceId().isBlank()) {
+            convertInstanceToPaid(order.getInstanceId());
+            order.setStatus(ProductOrderStatus.PROVISIONED);
+        } else {
+            order.setStatus(ProductOrderStatus.PAID);
+        }
+        return orderRepository.save(order);
+    }
+
+    private void assertCheckoutable(ProductOrder order) {
+        if (order.getStatus() == ProductOrderStatus.CANCELLED) {
+            throw new IllegalStateException("La orden está cancelada.");
+        }
+        boolean paidDone = order.getPaidAt() != null
+                && order.getPaymentStatus() == OrderPaymentStatus.APPROVED
+                && !order.isOnTrial();
+        if (paidDone && order.getStatus() == ProductOrderStatus.PROVISIONED) {
+            throw new IllegalStateException("La orden ya fue pagada.");
+        }
+        if (order.getStatus() == ProductOrderStatus.PAID
+                && order.getPaymentStatus() == OrderPaymentStatus.APPROVED) {
+            throw new IllegalStateException("La orden ya fue pagada.");
+        }
+    }
+
+    private PaymentGateway.CheckoutUrls buildCheckoutUrls(String orderId) {
+        String front = trimTrailingSlash(paymentsProperties.getFrontendBaseUrl());
+        String api = trimTrailingSlash(paymentsProperties.getPublicApiUrl());
+        String returnBase = front + "/productos/pago-retorno/" + orderId;
+        return new PaymentGateway.CheckoutUrls(
+                returnBase + "?status=success",
+                returnBase + "?status=failure",
+                returnBase + "?status=pending",
+                api + "/api/v1/webhooks/mercadopago"
+        );
+    }
+
+    private CheckoutSessionResponse toCheckoutResponse(
+            ProductOrder order, PaymentGateway.CheckoutSession session) {
+        return CheckoutSessionResponse.builder()
+                .orderId(order.getId())
+                .preferenceId(session.preferenceId())
+                .initPoint(session.initPoint())
+                .sandboxInitPoint(session.sandboxInitPoint())
+                .status(order.getStatus().name())
+                .totalCobrado(order.getTotalCobrado())
+                .moneda(order.getMoneda())
+                .paymentProvider(order.getPaymentProvider())
+                .paymentStatus(order.getPaymentStatus())
                 .build();
     }
 
@@ -240,6 +440,11 @@ public class ProductOrderService {
                 .totalCobrado(order.getTotalCobrado())
                 .moneda(order.getMoneda())
                 .paymentReference(order.getPaymentReference())
+                .preferenceId(order.getPreferenceId())
+                .mpPaymentId(order.getMpPaymentId())
+                .paymentProvider(order.getPaymentProvider())
+                .paymentStatus(order.getPaymentStatus() != null
+                        ? order.getPaymentStatus() : OrderPaymentStatus.NONE)
                 .paidAt(order.getPaidAt())
                 .onTrial(order.isOnTrial())
                 .trialEndsAt(order.getTrialEndsAt())
@@ -252,5 +457,12 @@ public class ProductOrderService {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String trimTrailingSlash(String url) {
+        if (url == null || url.isBlank()) {
+            return "";
+        }
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 }

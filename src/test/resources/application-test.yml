@@ -11,3 +11,7 @@ metrix:
       # base64 de una cadena de 64 caracteres; sólo para tests.
       secret-key: dGVzdC1vbmx5LXNlY3JldC1rZXktbm90LXVzZWQtb3V0c2lkZS10aGUtdGVzdC1zdWl0ZQ==
       expiration-ms: 3600000
+  payments:
+    provider: simulated
+    public-api-url: http://localhost:8080
+    frontend-base-url: http://localhost:4200

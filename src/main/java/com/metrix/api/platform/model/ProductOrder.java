@@ -63,6 +63,19 @@ public class ProductOrder {
     @Field("payment_reference")
     private String paymentReference;
 
+    @Field("preference_id")
+    private String preferenceId;
+
+    @Field("mp_payment_id")
+    private String mpPaymentId;
+
+    @Field("payment_provider")
+    private PaymentProvider paymentProvider;
+
+    @Builder.Default
+    @Field("payment_status")
+    private OrderPaymentStatus paymentStatus = OrderPaymentStatus.NONE;
+
     @Field("paid_at")
     private Instant paidAt;
 

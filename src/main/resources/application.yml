@@ -75,6 +75,16 @@ metrix:
       numero-usuario: ${METRIX_PLATFORM_ADMIN_USER:ADMIN001}
       password: ${METRIX_PLATFORM_ADMIN_PASSWORD:Admin123456}
 
+  payments:
+    # simulated (default local) | mercadopago
+    provider: ${METRIX_PAYMENTS_PROVIDER:simulated}
+    public-api-url: ${METRIX_PUBLIC_API_URL:http://localhost:8080}
+    frontend-base-url: ${METRIX_FRONTEND_BASE_URL:http://localhost:4200}
+    mercadopago:
+      access-token: ${MP_ACCESS_TOKEN:}
+      webhook-secret: ${MP_WEBHOOK_SECRET:}
+      api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}
+
 # Logging
 logging:
   level:

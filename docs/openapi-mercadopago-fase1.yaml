@@ -1,0 +1,609 @@
+openapi: 3.0.3
+info:
+  title: METRIX — Productos + Mercado Pago (Fase 1)
+  version: 1.0.0-draft
+  description: |
+    Contrato objetivo para Checkout Pro. Verificar en Swagger local
+    (`/swagger-ui/index.html`) cuando los endpoints estén implementados.
+    Baseline de catálogo/órdenes/trial/provision ya existe; checkout y webhook son nuevos.
+    Wiki: Contratos Swagger - Mercado Pago · Casos de Uso - Mercado Pago · Plan - Mercado Pago.
+servers:
+  - url: http://localhost:8080
+    description: Local (Swagger habilitado)
+tags:
+  - name: Productos
+  - name: Webhooks
+  - name: Autenticación
+
+paths:
+  /api/v1/productos/catalog:
+    get:
+      tags: [Productos]
+      summary: Catálogo público de planes activos
+      security: []
+      responses:
+        "200":
+          description: Lista de planes activo=true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LicensePackageResponse"
+
+  /api/v1/productos/catalog/{packageId}:
+    get:
+      tags: [Productos]
+      summary: Detalle de un plan activo
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/PackageId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicensePackageResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/productos/orders:
+    post:
+      tags: [Productos]
+      summary: Crear orden de compra
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductOrderRequest"
+            example:
+              packageId: base
+              empresaNombre: Restaurante Demo SA
+              contactoNombre: Ana Pérez
+              contactoEmail: ana@demo.test
+              contactoTelefono: "+525512345678"
+              sucursalesContratadas: 1
+      responses:
+        "201":
+          description: Orden en PENDING_PAYMENT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductOrderResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/productos/orders/{orderId}:
+    get:
+      tags: [Productos]
+      summary: Consultar estado de una orden
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductOrderResponse"
+        "404":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/productos/orders/{orderId}/trial:
+    post:
+      tags: [Productos]
+      summary: Iniciar periodo de prueba (sin cobro)
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: status TRIAL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductOrderResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/productos/orders/{orderId}/checkout:
+    post:
+      tags: [Productos]
+      summary: Crear preferencia Checkout Pro (Mercado Pago)
+      description: |
+        No marca la orden como PAID. El SPA debe redirigir a initPoint
+        (o sandboxInitPoint en non-prod). La confirmación llega por webhook.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        "201":
+          description: Preferencia creada; orden sigue sin paidAt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSessionResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "502":
+          description: Fallo al hablar con Mercado Pago
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /api/v1/productos/orders/{orderId}/pay:
+    post:
+      tags: [Productos]
+      summary: Pago simulado (solo local/test)
+      description: |
+        En profile docker/prod debe responder 410 Gone.
+        Tarjeta terminada en 0000 = rechazo simulado.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SimulatedPaymentRequest"
+            example:
+              cardholderName: ANA PEREZ
+              cardNumber: "4242424242424242"
+              expiryMonth: "12"
+              expiryYear: "2030"
+              cvv: "123"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductOrderResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+        "410":
+          description: Deshabilitado en producción
+
+  /api/v1/productos/orders/{orderId}/provision:
+    post:
+      tags: [Productos]
+      summary: Crear BD tenant + ADMIN
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProvisionMetrixRequest"
+            example:
+              numeroUsuario: ADMINREST01
+              password: Secret123
+              confirmPassword: Secret123
+              adminNombre: Ana Pérez
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisionMetrixResponse"
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /api/v1/webhooks/mercadopago:
+    post:
+      tags: [Webhooks]
+      summary: Notificación Mercado Pago (fuente de verdad del pago)
+      description: |
+        Validar x-signature. Idempotente por mpPaymentId.
+        No confiar en query params del return URL del SPA.
+      security: []
+      parameters:
+        - in: header
+          name: x-signature
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: x-request-id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MercadoPagoWebhookPayload"
+            example:
+              id: 123456789
+              live_mode: false
+              type: payment
+              action: payment.updated
+              data:
+                id: "999888777"
+      responses:
+        "200":
+          description: Procesado o idempotente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
+        "401":
+          description: Firma inválida o ausente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "403":
+          description: Firma rechazada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Login (verificar ADMIN tras provision)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [numeroUsuario, password]
+              properties:
+                numeroUsuario:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Incluye platformAdmin false para tenant
+
+components:
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+    PackageId:
+      name: packageId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error:
+      description: Error de negocio o validación
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties:
+            type: string
+        status:
+          type: integer
+
+    CreateProductOrderRequest:
+      type: object
+      required:
+        - packageId
+        - empresaNombre
+        - contactoNombre
+        - contactoEmail
+        - sucursalesContratadas
+      properties:
+        packageId:
+          type: string
+        empresaNombre:
+          type: string
+        contactoNombre:
+          type: string
+        contactoEmail:
+          type: string
+          format: email
+        contactoTelefono:
+          type: string
+        sucursalesContratadas:
+          type: integer
+          minimum: 1
+
+    SimulatedPaymentRequest:
+      type: object
+      required:
+        - cardholderName
+        - cardNumber
+        - expiryMonth
+        - expiryYear
+        - cvv
+      properties:
+        paymentReference:
+          type: string
+        cardholderName:
+          type: string
+        cardNumber:
+          type: string
+          minLength: 13
+          maxLength: 19
+        expiryMonth:
+          type: string
+        expiryYear:
+          type: string
+        cvv:
+          type: string
+          minLength: 3
+          maxLength: 4
+
+    ProvisionMetrixRequest:
+      type: object
+      required: [numeroUsuario, password, confirmPassword]
+      properties:
+        numeroUsuario:
+          type: string
+          minLength: 3
+          maxLength: 32
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        confirmPassword:
+          type: string
+        adminNombre:
+          type: string
+
+    ProvisionMetrixResponse:
+      type: object
+      properties:
+        instanceId:
+          type: string
+        databaseName:
+          type: string
+        adminNumeroUsuario:
+          type: string
+        loginUrl:
+          type: string
+          example: /auth/login
+        message:
+          type: string
+
+    CheckoutSessionResponse:
+      type: object
+      required: [orderId, preferenceId, initPoint, status, totalCobrado, moneda]
+      properties:
+        orderId:
+          type: string
+        preferenceId:
+          type: string
+        initPoint:
+          type: string
+          format: uri
+        sandboxInitPoint:
+          type: string
+          format: uri
+        status:
+          $ref: "#/components/schemas/ProductOrderStatus"
+        totalCobrado:
+          type: number
+        moneda:
+          type: string
+          example: MXN
+
+    ProductOrderStatus:
+      type: string
+      enum: [DRAFT, PENDING_PAYMENT, TRIAL, PAID, PROVISIONED, CANCELLED]
+
+    PaymentProvider:
+      type: string
+      enum: [SIMULATED, MERCADOPAGO]
+
+    PaymentStatus:
+      type: string
+      enum: [NONE, PENDING, APPROVED, REJECTED]
+
+    ProductOrderPackageSnapshotResponse:
+      type: object
+      properties:
+        packageId:
+          type: string
+        nombre:
+          type: string
+        etiqueta:
+          type: string
+        pricingModel:
+          type: string
+          enum: [PER_BRANCH, FLAT_MONTHLY, PER_USER]
+        precioMensual:
+          type: number
+        precioImplementacion:
+          type: number
+        moneda:
+          type: string
+        maxUsuarios:
+          type: integer
+        maxSucursales:
+          type: integer
+        diasPrueba:
+          type: integer
+        accent:
+          type: string
+
+    ProductOrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/ProductOrderStatus"
+        packageSnapshot:
+          $ref: "#/components/schemas/ProductOrderPackageSnapshotResponse"
+        empresaNombre:
+          type: string
+        contactoNombre:
+          type: string
+        contactoEmail:
+          type: string
+        contactoTelefono:
+          type: string
+        sucursalesContratadas:
+          type: integer
+        subtotalMensual:
+          type: number
+        cargoImplementacion:
+          type: number
+        totalCobrado:
+          type: number
+        moneda:
+          type: string
+        paymentReference:
+          type: string
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        onTrial:
+          type: boolean
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        instanceId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        preferenceId:
+          type: string
+          nullable: true
+          description: Nuevo Fase 1
+        mpPaymentId:
+          type: string
+          nullable: true
+          description: Nuevo Fase 1
+        paymentProvider:
+          allOf:
+            - $ref: "#/components/schemas/PaymentProvider"
+          nullable: true
+        paymentStatus:
+          allOf:
+            - $ref: "#/components/schemas/PaymentStatus"
+          nullable: true
+
+    LicensePackageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        nombre:
+          type: string
+        etiqueta:
+          type: string
+        descripcion:
+          type: string
+        moneda:
+          type: string
+        pricingModel:
+          type: string
+        precioMensual:
+          type: number
+        precioAnual:
+          type: number
+        precioImplementacion:
+          type: number
+        precioPersonalizado:
+          type: boolean
+        minUsuarios:
+          type: integer
+        maxUsuarios:
+          type: integer
+        minSucursales:
+          type: integer
+        maxSucursales:
+          type: integer
+        soporte:
+          type: string
+        featureCodes:
+          type: array
+          items:
+            type: string
+        diasPrueba:
+          type: integer
+        accent:
+          type: string
+        destacado:
+          type: boolean
+        activo:
+          type: boolean
+
+    MercadoPagoWebhookPayload:
+      type: object
+      properties:
+        id:
+          type: integer
+        live_mode:
+          type: boolean
+        type:
+          type: string
+          example: payment
+        date_created:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        api_version:
+          type: string
+        action:
+          type: string
+          example: payment.updated
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: ID del pago en Mercado Pago
+
+    WebhookAck:
+      type: object
+      properties:
+        received:
+          type: boolean
+          example: true
+        orderId:
+          type: string
+          nullable: true
+        applied:
+          type: boolean
+          description: true si se marcó PAID en esta llamada

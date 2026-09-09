@@ -3,6 +3,7 @@ package com.metrix.api.platform.service;
 import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
+import com.metrix.api.platform.model.MetrixInstanceSuspensionReason;
 import com.metrix.api.platform.model.ProductOrder;
 import com.metrix.api.platform.model.ProductOrderPackageSnapshot;
 import com.metrix.api.platform.model.ProductOrderStatus;
@@ -18,6 +19,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -169,5 +172,98 @@ class PlatformAdminServiceTest {
         assertThrows(IllegalStateException.class, () -> service.deleteInstance("inst-1"));
         verify(instanceRepository, never()).delete(any());
         verify(mongoClient, never()).getDatabase(any());
+    }
+
+    @Test
+    void adjustTrial_extendsActiveTrialFromCurrentEnd() {
+        Instant end = Instant.now().plus(3, ChronoUnit.DAYS);
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .orderId("ord-1")
+                .status(MetrixInstanceStatus.ACTIVE)
+                .onTrial(true)
+                .trialEndsAt(end)
+                .build();
+        when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+        when(instanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(productOrderRepository.findById("ord-1")).thenReturn(Optional.of(
+                ProductOrder.builder().id("ord-1").onTrial(true).trialEndsAt(end).build()));
+        when(productOrderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.adjustTrial("inst-1", 2);
+
+        assertEquals(MetrixInstanceStatus.ACTIVE, response.getStatus());
+        assertTrue(response.isOnTrial());
+        assertEquals(2, ChronoUnit.DAYS.between(end, response.getTrialEndsAt()));
+        verify(productOrderRepository).save(any(ProductOrder.class));
+    }
+
+    @Test
+    void adjustTrial_reopensExpiredFromNow() {
+        Instant past = Instant.now().minus(2, ChronoUnit.DAYS);
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .status(MetrixInstanceStatus.SUSPENDED)
+                .onTrial(true)
+                .trialEndsAt(past)
+                .suspensionReason(MetrixInstanceSuspensionReason.TRIAL_EXPIRED)
+                .build();
+        when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+        when(instanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.adjustTrial("inst-1", 7);
+
+        assertEquals(MetrixInstanceStatus.ACTIVE, response.getStatus());
+        assertTrue(response.isOnTrial());
+        Instant ends = response.getTrialEndsAt();
+        assertTrue(ends.isAfter(Instant.now().plus(6, ChronoUnit.DAYS)));
+        assertTrue(ends.isBefore(Instant.now().plus(8, ChronoUnit.DAYS)));
+    }
+
+    @Test
+    void adjustTrial_subtractExpiresWhenNewEndIsPast() {
+        Instant end = Instant.now().plus(2, ChronoUnit.HOURS);
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .status(MetrixInstanceStatus.ACTIVE)
+                .onTrial(true)
+                .trialEndsAt(end)
+                .build();
+        when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+        when(instanceRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = service.adjustTrial("inst-1", -1);
+
+        assertEquals(MetrixInstanceStatus.SUSPENDED, response.getStatus());
+        assertEquals(MetrixInstanceSuspensionReason.TRIAL_EXPIRED, response.getSuspensionReason());
+        assertTrue(response.isOnTrial());
+    }
+
+    @Test
+    void adjustTrial_rejectsSubtractWithoutActiveTrial() {
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .status(MetrixInstanceStatus.SUSPENDED)
+                .onTrial(true)
+                .trialEndsAt(Instant.now().minus(1, ChronoUnit.DAYS))
+                .suspensionReason(MetrixInstanceSuspensionReason.TRIAL_EXPIRED)
+                .build();
+        when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+
+        assertThrows(IllegalStateException.class, () -> service.adjustTrial("inst-1", -1));
+        verify(instanceRepository, never()).save(any());
+    }
+
+    @Test
+    void adjustTrial_rejectsPaidInstanceWithoutTrial() {
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .status(MetrixInstanceStatus.ACTIVE)
+                .onTrial(false)
+                .build();
+        when(instanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+
+        assertThrows(IllegalStateException.class, () -> service.adjustTrial("inst-1", 7));
+        verify(instanceRepository, never()).save(any());
     }
 }

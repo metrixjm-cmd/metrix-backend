@@ -35,7 +35,7 @@ public class MetrixProvisioningService {
     private String platformDatabaseName;
 
     public MetrixInstance provision(ProductOrder order, String numeroUsuario,
-                                    String rawPassword, String adminNombre) {
+                                    String rawPassword, String adminNombre, String adminEmail) {
         String instanceId = UUID.randomUUID().toString();
         String databaseName = buildDatabaseName(order.getEmpresaNombre(), instanceId);
         String codigoEmpresa = empresaCodigoAllocator.allocate(order.getEmpresaNombre(), instanceId);
@@ -43,6 +43,9 @@ public class MetrixProvisioningService {
         String nombreAdmin = adminNombre != null && !adminNombre.isBlank()
                 ? adminNombre.trim()
                 : order.getContactoNombre();
+        String emailAdmin = adminEmail != null && !adminEmail.isBlank()
+                ? adminEmail.trim().toLowerCase(Locale.ROOT)
+                : (order.getContactoEmail() == null ? null : order.getContactoEmail().trim().toLowerCase(Locale.ROOT));
 
         MetrixInstance instance = MetrixInstance.builder()
                 .id(instanceId)
@@ -61,7 +64,7 @@ public class MetrixProvisioningService {
                 .build();
         instance = instanceRepository.save(instance);
 
-        createTenantAdmin(databaseName, numeroUsuario, rawPassword, nombreAdmin, order.getContactoEmail());
+        createTenantAdmin(databaseName, numeroUsuario, rawPassword, nombreAdmin, emailAdmin);
 
         tenantUserIndexService.index(numeroUsuario, databaseName, instanceId,
                 order.getEmpresaNombre(), codigoEmpresa);
@@ -85,7 +88,7 @@ public class MetrixProvisioningService {
             User admin = User.builder()
                     .numeroUsuario(numeroUsuario)
                     .nombre(nombre)
-                    .email(email)
+                    .email(email == null ? null : email.trim().toLowerCase(Locale.ROOT))
                     .puesto("Administrador")
                     .password(passwordEncoder.encode(rawPassword))
                     .roles(Set.of(Role.ADMIN))

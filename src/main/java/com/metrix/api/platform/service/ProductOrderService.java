@@ -311,12 +311,14 @@ public class ProductOrderService {
         }
 
         String numeroUsuario = request.getNumeroUsuario().trim().toUpperCase(Locale.ROOT);
+        String adminEmail = request.getAdminEmail().trim().toLowerCase(Locale.ROOT);
 
         MetrixInstance instance = provisioningService.provision(
                 order,
                 numeroUsuario,
                 request.getPassword(),
-                trimOrNull(request.getAdminNombre())
+                trimOrNull(request.getAdminNombre()),
+                adminEmail
         );
 
         order.setStatus(ProductOrderStatus.PROVISIONED);

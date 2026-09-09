@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Slf4j
@@ -58,6 +59,74 @@ public class PlatformAdminService {
             instance.setSuspensionReason(MetrixInstanceSuspensionReason.MANUAL);
         }
         return toResponse(instanceRepository.save(instance));
+    }
+
+    /**
+     * Suma o resta días al fin de prueba. Si la prueba ya venció, un delta
+     * positivo la reabre desde ahora. Si el nuevo fin queda en el pasado, se vence.
+     */
+    public MetrixInstanceResponse adjustTrial(String instanceId, Integer deltaDays) {
+        if (deltaDays == null || deltaDays == 0) {
+            throw new IllegalArgumentException("Indica cuántos días sumar o restar (distinto de 0).");
+        }
+        MetrixInstance instance = instanceRepository.findById(instanceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Instancia no encontrada: " + instanceId));
+
+        boolean trialEligible = instance.isOnTrial()
+                || instance.getSuspensionReason() == MetrixInstanceSuspensionReason.TRIAL_EXPIRED;
+        if (!trialEligible) {
+            throw new IllegalStateException("Esta instancia no está en periodo de prueba.");
+        }
+        if (instance.getStatus() == MetrixInstanceStatus.SUSPENDED
+                && instance.getSuspensionReason() != MetrixInstanceSuspensionReason.TRIAL_EXPIRED) {
+            throw new IllegalStateException(
+                    "Esta instancia está suspendida. Reactívala antes de ajustar la prueba.");
+        }
+
+        Instant now = Instant.now();
+        Instant currentEnd = instance.getTrialEndsAt();
+        boolean activeTrial = instance.isOnTrial()
+                && instance.getStatus() == MetrixInstanceStatus.ACTIVE
+                && currentEnd != null
+                && currentEnd.isAfter(now);
+
+        Instant base;
+        if (activeTrial) {
+            base = currentEnd;
+        } else if (deltaDays < 0) {
+            throw new IllegalStateException("No hay días de prueba vigentes para restar.");
+        } else {
+            base = now;
+        }
+
+        Instant newEnd = base.plus(deltaDays, ChronoUnit.DAYS);
+        if (!newEnd.isAfter(now)) {
+            instance.setOnTrial(true);
+            instance.setTrialEndsAt(newEnd);
+            instance.setStatus(MetrixInstanceStatus.SUSPENDED);
+            instance.setSuspensionReason(MetrixInstanceSuspensionReason.TRIAL_EXPIRED);
+        } else {
+            instance.setOnTrial(true);
+            instance.setTrialEndsAt(newEnd);
+            instance.setStatus(MetrixInstanceStatus.ACTIVE);
+            instance.setSuspensionReason(null);
+        }
+        MetrixInstance saved = instanceRepository.save(instance);
+        syncOrderTrial(saved);
+        log.info("[Platform] prueba instancia {} → {} (delta {} días)",
+                instanceId, saved.getTrialEndsAt(), deltaDays);
+        return toResponse(saved);
+    }
+
+    private void syncOrderTrial(MetrixInstance instance) {
+        if (instance.getOrderId() == null || instance.getOrderId().isBlank()) {
+            return;
+        }
+        productOrderRepository.findById(instance.getOrderId()).ifPresent(order -> {
+            order.setOnTrial(instance.isOnTrial());
+            order.setTrialEndsAt(instance.getTrialEndsAt());
+            productOrderRepository.save(order);
+        });
     }
 
     /**

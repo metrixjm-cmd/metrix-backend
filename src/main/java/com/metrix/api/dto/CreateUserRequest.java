@@ -45,7 +45,7 @@ public class CreateUserRequest {
     @NotEmpty(message = "Debe asignar al menos un rol")
     private Set<Role> roles;
 
-    /** Correo electronico (opcional). */
+    /** Correo electronico. Obligatorio para rol ADMIN. Se guarda en minusculas. */
     @Email(message = "El email no tiene un formato valido")
     private String email;
 

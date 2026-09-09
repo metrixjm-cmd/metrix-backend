@@ -150,6 +150,9 @@ public class UserServiceImpl implements UserService {
         if (effectiveRoles == null || effectiveRoles.isEmpty()) {
             throw new IllegalArgumentException("Debe asignar al menos un rol.");
         }
+        if (effectiveRoles.contains(Role.ADMIN) && (normalizedEmail == null || normalizedEmail.isBlank())) {
+            throw new IllegalArgumentException("El correo electrónico es obligatorio para un administrador.");
+        }
 
         assertUniqueUserFieldsForCreate(normalizedNombre, normalizedEmail);
 

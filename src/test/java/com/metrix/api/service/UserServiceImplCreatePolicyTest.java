@@ -212,6 +212,7 @@ class UserServiceImplCreatePolicyTest {
         when(userRepository.findByNumeroUsuario("ADM001"))
                 .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
         when(userRepository.existsByNombreIgnoreCase("Persona Demo")).thenReturn(false);
+        when(userRepository.existsByEmailIgnoreCase("admin.nuevo@demo.com")).thenReturn(false);
         when(sequenceService.generateUserFolio("ADMIN", "Administrador")).thenReturn("ADM001");
         when(passwordEncoder.encode("Operador123")).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
@@ -222,12 +223,28 @@ class UserServiceImplCreatePolicyTest {
 
         CreateUserRequest req = createReq("store-1", Set.of(Role.ADMIN));
         req.setPuesto("Cajero");
+        req.setEmail("admin.nuevo@demo.com");
 
         service.createUser(req, "ADM001");
 
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         assertEquals("Administrador", captor.getValue().getPuesto());
+    }
+
+    @Test
+    void admin_role_requires_email() {
+        when(userRepository.findByNumeroUsuario("ADM001"))
+                .thenReturn(Optional.of(user("ADM001", "store-1", Set.of(Role.ADMIN))));
+
+        CreateUserRequest req = createReq("store-1", Set.of(Role.ADMIN));
+        req.setPuesto("Administrador");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createUser(req, "ADM001"));
+
+        assertEquals("El correo electrónico es obligatorio para un administrador.", ex.getMessage());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test

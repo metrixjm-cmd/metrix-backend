@@ -87,6 +87,7 @@ $prov = Invoke-Json POST "$Base/productos/orders/$($order.id)/provision" @{
   password        = "TenantPass123"
   confirmPassword = "TenantPass123"
   adminNombre     = "QA Admin"
+  adminEmail      = "qa$suffix@metrix.test"
 } $null
 if ((Test-JsonError -Resp $prov) -or -not $prov.databaseName) { Bad "TF-05" ($prov.message) }
 elseif ($prov.databaseName -notlike "metrix_tenant_*") { Bad "TF-05" "databaseName=$($prov.databaseName)" }
@@ -313,6 +314,7 @@ else {
     password        = "TenantBPass123"
     confirmPassword = "TenantBPass123"
     adminNombre     = "Admin B"
+    adminEmail      = "adminb$suffix@metrix.test"
   } $null
   if ((Test-JsonError -Resp $provB) -or -not $provB.codigoEmpresa) { Bad "TF-18" ($provB.message) }
   elseif ($provB.codigoEmpresa -eq $codigoA) { Bad "TF-18" "codigos iguales" }

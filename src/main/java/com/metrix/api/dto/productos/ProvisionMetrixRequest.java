@@ -1,5 +1,6 @@
 package com.metrix.api.dto.productos;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -20,4 +21,9 @@ public class ProvisionMetrixRequest {
 
     /** Nombre del administrador del restaurante (opcional). */
     private String adminNombre;
+
+    @NotBlank(message = "El correo del administrador es obligatorio")
+    @Email(message = "El correo del administrador no tiene un formato valido")
+    @Size(max = 120)
+    private String adminEmail;
 }

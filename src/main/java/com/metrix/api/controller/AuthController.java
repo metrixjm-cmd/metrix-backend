@@ -34,7 +34,11 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "Iniciar sesión", description = "Autentica al usuario con número de usuario y contraseña, devuelve un token JWT válido.")
+    @Operation(
+            summary = "Iniciar sesión",
+            description = "Autentica con código de empresa, #Usuario y contraseña. "
+                    + "Admin 0 usa codigoEmpresa=METRIX. El código se puede omitir solo si el "
+                    + "#Usuario sigue siendo único en toda la plataforma.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Autenticación exitosa, token JWT devuelto"),
             @ApiResponse(responseCode = "401", description = "Credenciales inválidas")

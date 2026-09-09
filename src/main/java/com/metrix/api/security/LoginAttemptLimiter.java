@@ -9,7 +9,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Frena la fuerza bruta de credenciales contando fallos <b>por número de usuario</b>.
+ * Frena la fuerza bruta de credenciales contando fallos por par
+ * {@code codigoEmpresa + número de usuario}.
  * <p>
  * Complementa a {@code RateLimitFilter}, que cuenta por cliente. Las dos capas hacen
  * falta: el filtro cuenta por IP, y una IP es barata — un atacante con varias
@@ -45,33 +46,33 @@ public class LoginAttemptLimiter {
      * @return true si la cuenta está en periodo de bloqueo y no debe intentarse
      *         autenticar
      */
-    public boolean isBlocked(String numeroUsuario) {
-        Attempts a = byUser.get(key(numeroUsuario));
+    public boolean isBlocked(String codigoEmpresa, String numeroUsuario) {
+        Attempts a = byUser.get(key(codigoEmpresa, numeroUsuario));
         if (a == null || a.failures() < MAX_FAILURES) return false;
 
         if (Instant.now().isAfter(a.lastFailure().plus(LOCKOUT))) {
-            byUser.remove(key(numeroUsuario));
+            byUser.remove(key(codigoEmpresa, numeroUsuario));
             return false;
         }
         return true;
     }
 
-    public void recordFailure(String numeroUsuario) {
+    public void recordFailure(String codigoEmpresa, String numeroUsuario) {
         purgeStale();
         byUser.merge(
-                key(numeroUsuario),
+                key(codigoEmpresa, numeroUsuario),
                 new Attempts(1, Instant.now()),
                 (prev, fresh) -> new Attempts(prev.failures() + 1, fresh.lastFailure()));
 
-        Attempts now = byUser.get(key(numeroUsuario));
+        Attempts now = byUser.get(key(codigoEmpresa, numeroUsuario));
         if (now != null && now.failures() == MAX_FAILURES) {
             log.warn("[LoginAttempt] cuenta bloqueada {} min tras {} fallos: {}",
-                     LOCKOUT.toMinutes(), MAX_FAILURES, key(numeroUsuario));
+                     LOCKOUT.toMinutes(), MAX_FAILURES, key(codigoEmpresa, numeroUsuario));
         }
     }
 
-    public void recordSuccess(String numeroUsuario) {
-        byUser.remove(key(numeroUsuario));
+    public void recordSuccess(String codigoEmpresa, String numeroUsuario) {
+        byUser.remove(key(codigoEmpresa, numeroUsuario));
     }
 
     /**
@@ -84,7 +85,9 @@ public class LoginAttemptLimiter {
     }
 
     /** Normaliza para que variar mayúsculas no estrene contador. */
-    private String key(String numeroUsuario) {
-        return numeroUsuario == null ? "" : numeroUsuario.trim().toUpperCase();
+    private String key(String codigoEmpresa, String numeroUsuario) {
+        String user = numeroUsuario == null ? "" : numeroUsuario.trim().toUpperCase();
+        String code = codigoEmpresa == null ? "" : codigoEmpresa.trim().toUpperCase();
+        return code + "|" + user;
     }
 }

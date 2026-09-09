@@ -77,7 +77,8 @@ public class ProductosController {
     }
 
     @PostMapping("/orders/{orderId}/provision")
-    @Operation(summary = "Crear METRIX y administrador secundario")
+    @Operation(summary = "Crear METRIX y administrador",
+            description = "Devuelve codigoEmpresa y loginUrl con ?empresa= para el login.")
     public ResponseEntity<ProvisionMetrixResponse> provisionOrder(
             @PathVariable String orderId,
             @Valid @RequestBody ProvisionMetrixRequest request) {

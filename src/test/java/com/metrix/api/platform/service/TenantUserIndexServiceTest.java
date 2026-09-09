@@ -3,7 +3,6 @@ package com.metrix.api.platform.service;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.TenantAdminIndex;
-import com.metrix.api.platform.repository.PlatformUserRepository;
 import com.metrix.api.platform.repository.TenantAdminIndexRepository;
 import com.metrix.api.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -27,7 +26,6 @@ import static org.mockito.Mockito.when;
 class TenantUserIndexServiceTest {
 
     @Mock private TenantAdminIndexRepository indexRepository;
-    @Mock private PlatformUserRepository platformUserRepository;
     @Mock private UserRepository userRepository;
 
     private TenantUserIndexService service;
@@ -36,8 +34,7 @@ class TenantUserIndexServiceTest {
     void setUp() {
         TenantDatabaseNames names = new TenantDatabaseNames(
                 "mongodb://localhost:27017/metrix_db", "metrix_platform");
-        service = new TenantUserIndexService(
-                indexRepository, platformUserRepository, userRepository, names);
+        service = new TenantUserIndexService(indexRepository, userRepository, names);
     }
 
     @AfterEach
@@ -46,19 +43,39 @@ class TenantUserIndexServiceTest {
     }
 
     @Test
-    void isTaken_whenIndexedInAnotherTenant() {
-        when(platformUserRepository.existsByNumeroUsuario("GER-X")).thenReturn(false);
-        when(indexRepository.existsByNumeroUsuario("GER-X")).thenReturn(true);
+    void isTaken_sameTenantCode() {
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("TACOS-A3F2", "GER001"))
+                .thenReturn(true);
 
-        assertTrue(service.isTaken("GER-X"));
+        assertTrue(service.isTaken("GER001", "TACOS-A3F2"));
     }
 
     @Test
-    void assertAvailable_rejectsPlatformAdminNumero() {
-        when(platformUserRepository.existsByNumeroUsuario("ADMIN001")).thenReturn(true);
+    void isTaken_otherTenantDoesNotBlock() {
+        TenantContext.setCodigoEmpresa("PIZZA-91BE");
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("PIZZA-91BE", "GER001"))
+                .thenReturn(false);
+        when(userRepository.existsByNumeroUsuario("GER001")).thenReturn(false);
+
+        assertFalse(service.isTaken("GER001"));
+    }
+
+    @Test
+    void assertAvailable_allowsPlatformAdminNumeroInTenant() {
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("TACOS-A3F2", "ADMIN001"))
+                .thenReturn(false);
+        when(userRepository.existsByNumeroUsuario("ADMIN001")).thenReturn(false);
+
+        service.assertNumeroUsuarioAvailable("ADMIN001", "TACOS-A3F2");
+    }
+
+    @Test
+    void assertAvailable_rejectsDuplicateInSameTenant() {
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("TACOS-A3F2", "GER001"))
+                .thenReturn(true);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> service.assertNumeroUsuarioAvailable("ADMIN001"));
+                () -> service.assertNumeroUsuarioAvailable("GER001", "TACOS-A3F2"));
         assertEquals("El #Usuario ya está en uso. Elige otro.", ex.getMessage());
     }
 
@@ -66,32 +83,36 @@ class TenantUserIndexServiceTest {
     void indexCurrentTenantUser_usesTenantContext() {
         TenantContext.setDatabaseName("metrix_tenant_acme_abcd1234");
         TenantContext.setInstanceId("inst-1");
-        when(indexRepository.existsByNumeroUsuario("EJE001")).thenReturn(false);
+        TenantContext.setCodigoEmpresa("ACME-ABCD");
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("ACME-ABCD", "EJE001"))
+                .thenReturn(false);
 
         service.indexCurrentTenantUser("EJE001");
 
         ArgumentCaptor<TenantAdminIndex> captor = ArgumentCaptor.forClass(TenantAdminIndex.class);
         verify(indexRepository).save(captor.capture());
         assertEquals("EJE001", captor.getValue().getNumeroUsuario());
+        assertEquals("ACME-ABCD", captor.getValue().getCodigoEmpresa());
         assertEquals("metrix_tenant_acme_abcd1234", captor.getValue().getDatabaseName());
         assertEquals("inst-1", captor.getValue().getInstanceId());
     }
 
     @Test
     void index_skipsIfAlreadyPresent() {
-        when(indexRepository.existsByNumeroUsuario("ADM-T")).thenReturn(true);
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("X-1111", "ADM-T"))
+                .thenReturn(true);
 
-        service.index("ADM-T", "metrix_tenant_x_11111111", "id-1", "Acme");
+        service.index("ADM-T", "metrix_tenant_x_11111111", "id-1", "Acme", "X-1111");
 
         verify(indexRepository, never()).save(any());
     }
 
     @Test
-    void isTaken_falseWhenEverywhereFree() {
-        when(platformUserRepository.existsByNumeroUsuario("NEW1")).thenReturn(false);
-        when(indexRepository.existsByNumeroUsuario("NEW1")).thenReturn(false);
+    void isTaken_falseWhenTenantAndLocalFree() {
+        when(indexRepository.existsByCodigoEmpresaAndNumeroUsuario("ACME-ABCD", "NEW1"))
+                .thenReturn(false);
         when(userRepository.existsByNumeroUsuario("NEW1")).thenReturn(false);
 
-        assertFalse(service.isTaken("NEW1"));
+        assertFalse(service.isTaken("NEW1", "ACME-ABCD"));
     }
 }

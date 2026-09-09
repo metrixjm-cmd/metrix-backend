@@ -10,6 +10,7 @@ public final class TenantContext {
 
     private static final ThreadLocal<String> DATABASE = new ThreadLocal<>();
     private static final ThreadLocal<String> INSTANCE_ID = new ThreadLocal<>();
+    private static final ThreadLocal<String> CODIGO_EMPRESA = new ThreadLocal<>();
     private static final ThreadLocal<Boolean> PLATFORM_ADMIN = ThreadLocal.withInitial(() -> false);
 
     private TenantContext() {
@@ -31,6 +32,14 @@ public final class TenantContext {
         return INSTANCE_ID.get();
     }
 
+    public static void setCodigoEmpresa(String codigoEmpresa) {
+        CODIGO_EMPRESA.set(codigoEmpresa);
+    }
+
+    public static String getCodigoEmpresa() {
+        return CODIGO_EMPRESA.get();
+    }
+
     public static void setPlatformAdmin(boolean platformAdmin) {
         PLATFORM_ADMIN.set(platformAdmin);
     }
@@ -42,6 +51,7 @@ public final class TenantContext {
     public static void clear() {
         DATABASE.remove();
         INSTANCE_ID.remove();
+        CODIGO_EMPRESA.remove();
         PLATFORM_ADMIN.remove();
     }
 }

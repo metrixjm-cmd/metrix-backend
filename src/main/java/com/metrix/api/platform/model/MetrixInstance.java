@@ -34,6 +34,11 @@ public class MetrixInstance {
     @Field("database_name")
     private String databaseName;
 
+    /** Código público de login (único). Admin 0 usa METRIX. */
+    @Indexed(unique = true)
+    @Field("codigo_empresa")
+    private String codigoEmpresa;
+
     @Field("empresa_nombre")
     private String empresaNombre;
 

@@ -34,9 +34,11 @@ public class PlatformAdminService {
     private final TenantAdminIndexRepository tenantAdminIndexRepository;
     private final TenantDatabaseNames tenantDatabaseNames;
     private final MongoClient mongoClient;
+    private final EmpresaCodigoAllocator empresaCodigoAllocator;
 
     public List<MetrixInstanceResponse> listInstances() {
         return instanceRepository.findAllByOrderByCreatedAtDesc().stream()
+                .peek(empresaCodigoAllocator::ensure)
                 .map(this::toResponse)
                 .toList();
     }
@@ -197,6 +199,7 @@ public class PlatformAdminService {
         return MetrixInstanceResponse.builder()
                 .id(instance.getId())
                 .databaseName(instance.getDatabaseName())
+                .codigoEmpresa(instance.getCodigoEmpresa())
                 .empresaNombre(instance.getEmpresaNombre())
                 .licensePackageId(instance.getLicensePackageId())
                 .licensePackageNombre(instance.getLicensePackageNombre())

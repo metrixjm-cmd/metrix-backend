@@ -92,13 +92,28 @@ if ((Test-JsonError -Resp $prov) -or -not $prov.databaseName) { Bad "TF-05" ($pr
 elseif ($prov.databaseName -notlike "metrix_tenant_*") { Bad "TF-05" "databaseName=$($prov.databaseName)" }
 else { Ok "TF-05" $prov.databaseName }
 
+if (-not $prov.codigoEmpresa) { Bad "TF-05b" "falta codigoEmpresa" }
+elseif ($prov.loginUrl -notlike "*empresa=$($prov.codigoEmpresa)*") { Bad "TF-05b" "loginUrl=$($prov.loginUrl)" }
+else { Ok "TF-05b" $prov.codigoEmpresa }
+
+$codigoA = $prov.codigoEmpresa
 $tenantLogin = Invoke-Json POST "$Base/auth/login" @{
+  codigoEmpresa = $codigoA
   numeroUsuario = $adminUser
   password      = "TenantPass123"
 } $null
 if ((Test-JsonError -Resp $tenantLogin) -or -not $tenantLogin.token) { Bad "TF-06" ($tenantLogin.message) }
 elseif ($tenantLogin.platformAdmin -eq $true) { Bad "TF-06" "platformAdmin deberia ser false" }
 else { Ok "TF-06" "tenant token ok" }
+
+$wrongCode = Invoke-Json POST "$Base/auth/login" @{
+  codigoEmpresa = "NOPE-0000"
+  numeroUsuario = $adminUser
+  password      = "TenantPass123"
+} $null
+if ((Test-JsonError -Resp $wrongCode) -and $wrongCode.status -in 401, 403) { Ok "TF-06b" "codigo ajeno rechazado" }
+elseif (Test-JsonError -Resp $wrongCode) { Bad "TF-06b" "status $($wrongCode.status)" }
+else { Bad "TF-06b" "debio ser 401" }
 
 # ── Banco de Datos / licencia (Fase 1): núcleo 200, premium 403 en Base ────
 $feats = @()
@@ -163,12 +178,22 @@ if ((Test-JsonError -Resp $forbiddenPkgs) -and $forbiddenPkgs.status -in 401, 40
 }
 
 $admin0 = Invoke-Json POST "$Base/auth/login" @{
+  codigoEmpresa = "METRIX"
   numeroUsuario = "ADMIN001"
   password      = "Admin123456"
 } $null
 if ((Test-JsonError -Resp $admin0) -or -not $admin0.token) { Bad "TF-08" ($admin0.message) }
 elseif ($admin0.platformAdmin -ne $true) { Bad "TF-08" "Admin 0 sin platformAdmin" }
 else { Ok "TF-08" "Admin 0 ok" }
+
+$admin0Wrong = Invoke-Json POST "$Base/auth/login" @{
+  codigoEmpresa = "METRIX"
+  numeroUsuario = $adminUser
+  password      = "TenantPass123"
+} $null
+if ((Test-JsonError -Resp $admin0Wrong) -and $admin0Wrong.status -in 401, 403) { Ok "TF-08b" "METRIX no autentica tenant" }
+elseif (Test-JsonError -Resp $admin0Wrong) { Bad "TF-08b" "status $($admin0Wrong.status)" }
+else { Bad "TF-08b" "debio ser 401" }
 
 $instances = Invoke-Json GET "$Base/platform/instances" $null $admin0.token
 $instanceId = $null
@@ -204,6 +229,7 @@ if ((Test-JsonError -Resp $gerente) -or -not $gerente.id) { Bad "TF-11" ("create
 else { Ok "TF-11" "gerente $($gerente.numeroUsuario)" }
 
 $gerenteLogin = Invoke-Json POST "$Base/auth/login" @{
+  codigoEmpresa = $codigoA
   numeroUsuario = $gerenteUser
   password      = "GerentePass123"
 } $null
@@ -239,6 +265,7 @@ if ($instanceId) {
   }
 
   $blockedLogin = Invoke-Json POST "$Base/auth/login" @{
+    codigoEmpresa = $codigoA
     numeroUsuario = $adminUser
     password      = "TenantPass123"
   } $null
@@ -262,6 +289,86 @@ if ($instanceId) {
   Bad "TF-15" "sin instanceId"
   Bad "TF-16" "skip"
   Bad "TF-17" "skip"
+}
+
+# ── Login por codigoEmpresa: mismo ADMIN001 en dos tenants ───────────────
+$orderB = Invoke-Json POST "$Base/productos/orders" @{
+  packageId             = $PackageId
+  empresaNombre         = "QA Tenant B $suffix"
+  contactoNombre        = "QA B"
+  contactoEmail         = "qab$suffix@metrix.test"
+  sucursalesContratadas = 1
+} $null
+if ((Test-JsonError -Resp $orderB) -or -not $orderB.id) { Bad "TF-18" ($orderB.message) }
+else {
+  $paidB = Invoke-Json POST "$Base/productos/orders/$($orderB.id)/pay" @{
+    cardholderName = "QA"
+    cardNumber     = "4242424242424242"
+    expiryMonth    = "12"
+    expiryYear     = "29"
+    cvv            = "123"
+  } $null
+  $provB = Invoke-Json POST "$Base/productos/orders/$($orderB.id)/provision" @{
+    numeroUsuario   = "ADMIN001"
+    password        = "TenantBPass123"
+    confirmPassword = "TenantBPass123"
+    adminNombre     = "Admin B"
+  } $null
+  if ((Test-JsonError -Resp $provB) -or -not $provB.codigoEmpresa) { Bad "TF-18" ($provB.message) }
+  elseif ($provB.codigoEmpresa -eq $codigoA) { Bad "TF-18" "codigos iguales" }
+  else { Ok "TF-18" "ADMIN001 en tenant B $($provB.codigoEmpresa)" }
+
+  $loginA = Invoke-Json POST "$Base/auth/login" @{
+    codigoEmpresa = $codigoA
+    numeroUsuario = $adminUser
+    password      = "TenantPass123"
+  } $null
+  $loginB = Invoke-Json POST "$Base/auth/login" @{
+    codigoEmpresa = $provB.codigoEmpresa
+    numeroUsuario = "ADMIN001"
+    password      = "TenantBPass123"
+  } $null
+  if ((Test-JsonError -Resp $loginA) -or (Test-JsonError -Resp $loginB)) {
+    Bad "TF-19" "login A o B fallo"
+  } elseif ($loginA.databaseName -eq $loginB.databaseName) {
+    Bad "TF-19" "misma databaseName"
+  } else { Ok "TF-19" "BDs distintas" }
+
+  if (-not (Test-JsonError -Resp $loginB) -and $loginB.token) {
+    $storeB = Invoke-Json POST "$Base/stores" @{ nombre = "Sucursal B $suffix" } $loginB.token
+    $gerB = Invoke-Json POST "$Base/users" @{
+      nombre        = "Gerente B"
+      puesto        = "Gerente"
+      storeId       = $storeB.id
+      turno         = "MATUTINO"
+      numeroUsuario = $gerenteUser
+      password      = "GerenteBPass1"
+      roles         = @("GERENTE")
+    } $loginB.token
+    if ((Test-JsonError -Resp $gerB) -or -not $gerB.id) { Bad "TF-20" ($gerB.message) }
+    else { Ok "TF-20" "GERENTE repetido en B" }
+
+    $gerBLogin = Invoke-Json POST "$Base/auth/login" @{
+      codigoEmpresa = $provB.codigoEmpresa
+      numeroUsuario = $gerenteUser
+      password      = "GerenteBPass1"
+    } $null
+    if ((Test-JsonError -Resp $gerBLogin) -or -not $gerBLogin.token) { Bad "TF-21" ($gerBLogin.message) }
+    elseif ($gerBLogin.databaseName -ne $loginB.databaseName) { Bad "TF-21" "BD distinta a B" }
+    else { Ok "TF-21" "GERENTE B en su codigo" }
+  } else {
+    Bad "TF-20" "skip"
+    Bad "TF-21" "skip"
+  }
+
+  $crossPass = Invoke-Json POST "$Base/auth/login" @{
+    codigoEmpresa = $codigoA
+    numeroUsuario = "ADMIN001"
+    password      = "TenantBPass123"
+  } $null
+  if ((Test-JsonError -Resp $crossPass) -and $crossPass.status -in 401, 403) { Ok "TF-22" "password de B no entra a A" }
+  elseif (Test-JsonError -Resp $crossPass) { Bad "TF-22" "status $($crossPass.status)" }
+  else { Bad "TF-22" "debio ser 401" }
 }
 
 if ($fail -gt 0) { Write-Host "`n$fail fallos" -ForegroundColor Red; exit 1 }

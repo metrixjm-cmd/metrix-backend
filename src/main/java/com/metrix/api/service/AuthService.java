@@ -4,6 +4,7 @@ import com.metrix.api.dto.AuthRequest;
 import com.metrix.api.dto.AuthResponse;
 import com.metrix.api.exception.TooManyLoginAttemptsException;
 import com.metrix.api.model.User;
+import com.metrix.api.platform.EmpresaCodigos;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.model.PlatformUser;
@@ -42,21 +43,28 @@ public class AuthService {
 
     public AuthResponse login(AuthRequest request) {
         String numeroUsuario = request.getNumeroUsuario();
+        String codigoEmpresa = EmpresaCodigos.normalize(request.getCodigoEmpresa());
 
-        if (loginAttemptLimiter.isBlocked(numeroUsuario)) {
+        if (!EmpresaCodigos.isValidFormat(codigoEmpresa)) {
+            throw new IllegalArgumentException("El código de empresa no es válido.");
+        }
+
+        if (loginAttemptLimiter.isBlocked(codigoEmpresa, numeroUsuario)) {
             throw new TooManyLoginAttemptsException(
                     "Demasiados intentos fallidos. Vuelve a intentarlo en unos minutos.");
         }
 
-        TenantLoginResolver.LoginResolution resolution = tenantLoginResolver.resolve(numeroUsuario);
+        TenantLoginResolver.LoginResolution resolution =
+                tenantLoginResolver.resolve(codigoEmpresa, numeroUsuario);
         if (resolution.type() == TenantLoginResolver.LoginType.NOT_FOUND) {
-            loginAttemptLimiter.recordFailure(numeroUsuario);
+            loginAttemptLimiter.recordFailure(codigoEmpresa, numeroUsuario);
             throw new BadCredentialsException("Credenciales incorrectas");
         }
 
         try {
             if (resolution.type() == TenantLoginResolver.LoginType.PLATFORM) {
-                return loginPlatformAdmin(resolution.platformUser(), request.getPassword(), numeroUsuario);
+                return loginPlatformAdmin(resolution.platformUser(), request.getPassword(),
+                        EmpresaCodigos.PLATFORM, numeroUsuario);
             }
 
             if (resolution.type() == TenantLoginResolver.LoginType.TENANT
@@ -67,34 +75,37 @@ public class AuthService {
             TenantContext.setPlatformAdmin(false);
             TenantContext.setDatabaseName(resolution.databaseName());
             TenantContext.setInstanceId(resolution.instanceId());
+            TenantContext.setCodigoEmpresa(resolution.codigoEmpresa());
 
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(numeroUsuario, request.getPassword())
             );
 
-            loginAttemptLimiter.recordSuccess(numeroUsuario);
+            loginAttemptLimiter.recordSuccess(codigoEmpresa, numeroUsuario);
 
             User user = userRepository.findByNumeroUsuario(numeroUsuario)
                     .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-            return buildTenantAuthResponse(user, resolution.databaseName(), resolution.instanceId(), false);
+            return buildTenantAuthResponse(user, resolution.databaseName(), resolution.instanceId(),
+                    false, resolution.codigoEmpresa(), resolution.empresaNombre());
         } catch (AuthenticationException e) {
-            loginAttemptLimiter.recordFailure(numeroUsuario);
+            loginAttemptLimiter.recordFailure(codigoEmpresa, numeroUsuario);
             throw e;
         }
     }
 
     private AuthResponse loginPlatformAdmin(PlatformUser platformUser, String rawPassword,
-                                            String numeroUsuario) {
+                                            String codigoEmpresa, String numeroUsuario) {
         if (!passwordEncoder.matches(rawPassword, platformUser.getPassword())) {
-            loginAttemptLimiter.recordFailure(numeroUsuario);
+            loginAttemptLimiter.recordFailure(codigoEmpresa, numeroUsuario);
             throw new BadCredentialsException("Credenciales incorrectas");
         }
 
-        loginAttemptLimiter.recordSuccess(numeroUsuario);
+        loginAttemptLimiter.recordSuccess(codigoEmpresa, numeroUsuario);
         String operationalDb = tenantDatabaseNames.getDefaultOperationalDatabase();
         TenantContext.setPlatformAdmin(true);
         TenantContext.setDatabaseName(operationalDb);
+        TenantContext.setCodigoEmpresa(EmpresaCodigos.PLATFORM);
 
         Map<String, Object> extraClaims = new java.util.HashMap<>();
         extraClaims.put("roles", platformUser.getRoles());
@@ -104,6 +115,8 @@ public class AuthService {
         extraClaims.put("platformAdmin", true);
         extraClaims.put("databaseName", operationalDb);
         extraClaims.put("instanceId", "");
+        extraClaims.put("codigoEmpresa", EmpresaCodigos.PLATFORM);
+        extraClaims.put("empresaNombre", "");
 
         org.springframework.security.core.userdetails.User userDetails =
                 new org.springframework.security.core.userdetails.User(
@@ -126,11 +139,14 @@ public class AuthService {
                 .databaseName(operationalDb)
                 .instanceId(null)
                 .licensedFeatures(null)
+                .codigoEmpresa(EmpresaCodigos.PLATFORM)
+                .empresaNombre(null)
                 .build();
     }
 
     private AuthResponse buildTenantAuthResponse(User user, String databaseName,
-                                                 String instanceId, boolean platformAdmin) {
+                                                 String instanceId, boolean platformAdmin,
+                                                 String codigoEmpresa, String empresaNombre) {
         String storeName = "";
         if (user.getStoreId() != null && !user.getStoreId().isBlank()) {
             storeName = storeRepository.findById(user.getStoreId())
@@ -149,6 +165,8 @@ public class AuthService {
         extraClaims.put("platformAdmin", platformAdmin);
         extraClaims.put("databaseName", databaseName != null ? databaseName : "");
         extraClaims.put("instanceId", instanceId != null ? instanceId : "");
+        extraClaims.put("codigoEmpresa", codigoEmpresa != null ? codigoEmpresa : "");
+        extraClaims.put("empresaNombre", empresaNombre != null ? empresaNombre : "");
 
         org.springframework.security.core.userdetails.User userDetails =
                 new org.springframework.security.core.userdetails.User(
@@ -174,6 +192,8 @@ public class AuthService {
                 .onTrial(billing.onTrial())
                 .trialEndsAt(billing.trialEndsAt())
                 .orderId(billing.orderId())
+                .codigoEmpresa(codigoEmpresa)
+                .empresaNombre(empresaNombre)
                 .build();
     }
 }

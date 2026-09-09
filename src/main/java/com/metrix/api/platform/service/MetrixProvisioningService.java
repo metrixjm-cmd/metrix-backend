@@ -29,6 +29,7 @@ public class MetrixProvisioningService {
     private final TenantCatalogBootstrap tenantCatalogBootstrap;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmpresaCodigoAllocator empresaCodigoAllocator;
 
     @Value("${metrix.platform.database-name:metrix_platform}")
     private String platformDatabaseName;
@@ -37,6 +38,7 @@ public class MetrixProvisioningService {
                                     String rawPassword, String adminNombre) {
         String instanceId = UUID.randomUUID().toString();
         String databaseName = buildDatabaseName(order.getEmpresaNombre(), instanceId);
+        String codigoEmpresa = empresaCodigoAllocator.allocate(order.getEmpresaNombre(), instanceId);
 
         String nombreAdmin = adminNombre != null && !adminNombre.isBlank()
                 ? adminNombre.trim()
@@ -45,6 +47,7 @@ public class MetrixProvisioningService {
         MetrixInstance instance = MetrixInstance.builder()
                 .id(instanceId)
                 .databaseName(databaseName)
+                .codigoEmpresa(codigoEmpresa)
                 .empresaNombre(order.getEmpresaNombre())
                 .licensePackageId(order.getPackageSnapshot().getPackageId())
                 .licensePackageNombre(order.getPackageSnapshot().getNombre())
@@ -60,10 +63,11 @@ public class MetrixProvisioningService {
 
         createTenantAdmin(databaseName, numeroUsuario, rawPassword, nombreAdmin, order.getContactoEmail());
 
-        tenantUserIndexService.index(numeroUsuario, databaseName, instanceId, order.getEmpresaNombre());
+        tenantUserIndexService.index(numeroUsuario, databaseName, instanceId,
+                order.getEmpresaNombre(), codigoEmpresa);
 
-        log.info("[Provision] METRIX '{}' → BD {} (admin {})",
-                order.getEmpresaNombre(), databaseName, numeroUsuario);
+        log.info("[Provision] METRIX '{}' → BD {} (admin {}, codigo {})",
+                order.getEmpresaNombre(), databaseName, numeroUsuario, codigoEmpresa);
 
         return instance;
     }

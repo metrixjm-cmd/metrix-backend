@@ -11,5 +11,6 @@ public class ProvisionMetrixResponse {
     private String databaseName;
     private String adminNumeroUsuario;
     private String loginUrl;
+    private String codigoEmpresa;
     private String message;
 }

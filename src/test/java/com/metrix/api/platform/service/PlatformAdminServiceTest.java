@@ -45,6 +45,8 @@ class PlatformAdminServiceTest {
     private MongoClient mongoClient;
     @Mock
     private MongoDatabase mongoDatabase;
+    @Mock
+    private EmpresaCodigoAllocator empresaCodigoAllocator;
 
     @InjectMocks
     private PlatformAdminService service;

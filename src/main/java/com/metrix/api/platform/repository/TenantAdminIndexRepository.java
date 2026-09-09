@@ -10,7 +10,15 @@ public interface TenantAdminIndexRepository extends MongoRepository<TenantAdminI
 
     Optional<TenantAdminIndex> findByNumeroUsuario(String numeroUsuario);
 
+    List<TenantAdminIndex> findAllByNumeroUsuario(String numeroUsuario);
+
+    long countByNumeroUsuario(String numeroUsuario);
+
+    Optional<TenantAdminIndex> findByCodigoEmpresaAndNumeroUsuario(String codigoEmpresa, String numeroUsuario);
+
     boolean existsByNumeroUsuario(String numeroUsuario);
+
+    boolean existsByCodigoEmpresaAndNumeroUsuario(String codigoEmpresa, String numeroUsuario);
 
     List<TenantAdminIndex> findByInstanceId(String instanceId);
 }

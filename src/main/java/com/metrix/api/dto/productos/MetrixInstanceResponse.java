@@ -14,6 +14,7 @@ public class MetrixInstanceResponse {
 
     private String id;
     private String databaseName;
+    private String codigoEmpresa;
     private String empresaNombre;
     private String licensePackageId;
     private String licensePackageNombre;

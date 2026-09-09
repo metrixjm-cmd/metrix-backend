@@ -44,4 +44,7 @@ public class AuthResponse {
     private boolean onTrial;
     private java.time.Instant trialEndsAt;
     private String orderId;
+    /** Código público de login del restaurante (METRIX para Admin 0). */
+    private String codigoEmpresa;
+    private String empresaNombre;
 }

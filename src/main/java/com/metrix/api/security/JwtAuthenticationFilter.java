@@ -88,11 +88,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Object value = claims.get("instanceId");
             return value instanceof String s ? s : null;
         });
+        String codigoEmpresa = jwtService.extractClaim(jwt, claims -> {
+            Object value = claims.get("codigoEmpresa");
+            return value instanceof String s ? s : null;
+        });
 
         TenantContext.setPlatformAdmin(Boolean.TRUE.equals(platformAdmin));
         TenantContext.setDatabaseName(
                 tenantDatabaseNames.resolveOperationalDatabase(databaseName, Boolean.TRUE.equals(platformAdmin)));
         TenantContext.setInstanceId(instanceId);
+        TenantContext.setCodigoEmpresa(codigoEmpresa);
     }
 
     private UserDetails loadUserDetails(String jwt, String numeroUsuario) {

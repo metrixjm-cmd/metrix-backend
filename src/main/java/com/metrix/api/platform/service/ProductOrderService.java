@@ -35,7 +35,6 @@ public class ProductOrderService {
     private final ProductPricingCalculator pricingCalculator;
     private final PaymentGateway paymentGateway;
     private final MetrixProvisioningService provisioningService;
-    private final TenantUserIndexService tenantUserIndexService;
     private final MercadoPagoProperties paymentsProperties;
     private final ObjectProvider<MercadoPagoPaymentGateway> mercadoPagoGateway;
     private final MercadoPagoWebhookSignatureValidator webhookSignatureValidator;
@@ -312,7 +311,6 @@ public class ProductOrderService {
         }
 
         String numeroUsuario = request.getNumeroUsuario().trim().toUpperCase(Locale.ROOT);
-        validateUsernameAvailable(numeroUsuario);
 
         MetrixInstance instance = provisioningService.provision(
                 order,
@@ -329,7 +327,8 @@ public class ProductOrderService {
                 .instanceId(instance.getId())
                 .databaseName(instance.getDatabaseName())
                 .adminNumeroUsuario(instance.getAdminNumeroUsuario())
-                .loginUrl("/auth/login")
+                .codigoEmpresa(instance.getCodigoEmpresa())
+                .loginUrl("/auth/login?empresa=" + instance.getCodigoEmpresa())
                 .message(order.isOnTrial()
                         ? "METRIX en periodo de prueba. Inicia sesión con tus credenciales."
                         : "METRIX creado correctamente. Inicia sesión con tus credenciales.")
@@ -421,10 +420,6 @@ public class ProductOrderService {
             instance.setStatus(MetrixInstanceStatus.ACTIVE);
             instanceRepository.save(instance);
         });
-    }
-
-    private void validateUsernameAvailable(String numeroUsuario) {
-        tenantUserIndexService.assertNumeroUsuarioAvailable(numeroUsuario);
     }
 
     private ProductOrder findOrder(String orderId) {

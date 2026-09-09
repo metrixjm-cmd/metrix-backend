@@ -13,8 +13,8 @@ import org.springframework.data.mongodb.core.mapping.Field;
 import java.time.Instant;
 
 /**
- * Índice global de login: resuelve {@code numeroUsuario} → BD del tenant.
- * Incluye al ADMIN de provision y a cualquier colaborador dado de alta después.
+ * Índice de login: resuelve {@code codigoEmpresa + numeroUsuario} → BD del tenant.
+ * {@code numeroUsuario} se puede repetir entre restaurantes.
  */
 @Data
 @Builder
@@ -26,9 +26,13 @@ public class TenantAdminIndex {
     @Id
     private String id;
 
-    @Indexed(unique = true)
+    @Indexed
     @Field("numero_usuario")
     private String numeroUsuario;
+
+    @Indexed
+    @Field("codigo_empresa")
+    private String codigoEmpresa;
 
     @Field("instance_id")
     private String instanceId;

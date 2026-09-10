@@ -10,7 +10,6 @@ import com.metrix.api.platform.repository.MetrixInstanceRepository;
 import com.metrix.api.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -30,9 +29,6 @@ public class MetrixProvisioningService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmpresaCodigoAllocator empresaCodigoAllocator;
-
-    @Value("${metrix.platform.database-name:metrix_platform}")
-    private String platformDatabaseName;
 
     public MetrixInstance provision(ProductOrder order, String numeroUsuario,
                                     String rawPassword, String adminNombre, String adminEmail) {

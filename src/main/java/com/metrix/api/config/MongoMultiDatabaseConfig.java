@@ -4,6 +4,7 @@ import com.metrix.api.platform.TenantAwareMongoDatabaseFactory;
 import com.mongodb.ConnectionString;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +20,7 @@ import org.springframework.data.mongodb.repository.config.EnableMongoRepositorie
  * Configuración dual de MongoDB:
  * <ul>
  *   <li>{@code mongoTemplate} — datos operativos del tenant (ruteado por {@link com.metrix.api.platform.TenantContext})</li>
- *   <li>{@code platformMongoTemplate} — catálogo, órdenes e instancias METRIX (fija en {@code metrix_platform}, sin {@link TenantContext})</li>
+ *   <li>{@code platformMongoTemplate} — catálogo, órdenes e instancias METRIX (BD fija, sin {@link TenantContext})</li>
  * </ul>
  */
 @Configuration
@@ -32,7 +33,7 @@ public class MongoMultiDatabaseConfig {
     @Value("${spring.data.mongodb.uri}")
     private String mongoUri;
 
-    @Value("${metrix.platform.database-name:metrix_platform}")
+    @Value("${metrix.platform.database-name:}")
     private String platformDatabaseName;
 
     @Bean
@@ -61,12 +62,25 @@ public class MongoMultiDatabaseConfig {
      */
     @Bean
     public MongoDatabaseFactory platformMongoDatabaseFactory(MongoClient mongoClient) {
-        return new SimpleMongoClientDatabaseFactory(mongoClient, platformDatabaseName);
+        return new SimpleMongoClientDatabaseFactory(mongoClient, resolvePlatformDatabase());
     }
 
+    /**
+     * El {@link Qualifier} no es opcional: {@code mongoDatabaseFactory} es {@code @Primary} y
+     * Spring resuelve la primaria antes que el nombre del parámetro, así que sin él este template
+     * recibía la fábrica ruteada por {@link com.metrix.api.platform.TenantContext} y los
+     * repositorios de plataforma escribían dentro de la BD del tenant activo.
+     */
     @Bean(name = "platformMongoTemplate")
-    public MongoTemplate platformMongoTemplate(MongoDatabaseFactory platformMongoDatabaseFactory,
-                                               MappingMongoConverter mongoConverter) {
+    public MongoTemplate platformMongoTemplate(
+            @Qualifier("platformMongoDatabaseFactory") MongoDatabaseFactory platformMongoDatabaseFactory,
+            MappingMongoConverter mongoConverter) {
         return new MongoTemplate(platformMongoDatabaseFactory, mongoConverter);
+    }
+
+    private String resolvePlatformDatabase() {
+        return platformDatabaseName == null || platformDatabaseName.isBlank()
+                ? new ConnectionString(mongoUri).getDatabase()
+                : platformDatabaseName;
     }
 }

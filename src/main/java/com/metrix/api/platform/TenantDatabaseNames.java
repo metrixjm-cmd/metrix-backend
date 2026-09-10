@@ -15,9 +15,11 @@ public class TenantDatabaseNames {
 
     public TenantDatabaseNames(
             @Value("${spring.data.mongodb.uri}") String mongoUri,
-            @Value("${metrix.platform.database-name:metrix_platform}") String platformDatabase) {
+            @Value("${metrix.platform.database-name:}") String platformDatabase) {
         this.defaultOperationalDatabase = new ConnectionString(mongoUri).getDatabase();
-        this.platformDatabase = platformDatabase;
+        this.platformDatabase = platformDatabase == null || platformDatabase.isBlank()
+                ? this.defaultOperationalDatabase
+                : platformDatabase;
     }
 
     /** BD operativa legacy / demo (incidencias, tareas, usuarios del tenant principal). */

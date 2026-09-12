@@ -77,6 +77,16 @@ metrix:
       numero-usuario: ${METRIX_PLATFORM_ADMIN_USER:ADMIN001}
       password: ${METRIX_PLATFORM_ADMIN_PASSWORD:Admin123456}
 
+  password-reset:
+    ttl-hours: ${METRIX_PASSWORD_RESET_TTL_HOURS:24}
+
+  mail:
+    host: ${METRIX_MAIL_HOST:}
+    port: ${METRIX_MAIL_PORT:587}
+    username: ${METRIX_MAIL_USERNAME:}
+    password: ${METRIX_MAIL_PASSWORD:}
+    from: ${METRIX_MAIL_FROM:metrixjm@gmail.com}
+
   payments:
     # simulated (default local) | mercadopago
     provider: ${METRIX_PAYMENTS_PROVIDER:simulated}

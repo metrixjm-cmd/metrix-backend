@@ -75,6 +75,12 @@ public class Notification {
     @Field("store_id")
     private String storeId;
 
+    @Field("instance_id")
+    private String instanceId;
+
+    @Field("password_reset_request_id")
+    private String passwordResetRequestId;
+
     @Builder.Default
     @Field("read")
     private boolean read = false;

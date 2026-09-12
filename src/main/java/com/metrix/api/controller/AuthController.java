@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.*;
 /**
  * Controller de autenticación para METRIX.
  * <p>
- * Único endpoint público (ver SecurityConfig): {@code POST /api/v1/auth/login}.
+ * Endpoints públicos (ver SecurityConfig): {@code POST /api/v1/auth/login}
+ * y {@code /api/v1/auth/password-reset/**}.
  * <p>
  * El alta de usuarios vive en {@code POST /api/v1/users}, que aplica la política de
  * roles (un GERENTE sólo crea EJECUTADOR de su sucursal). Aquí existía un

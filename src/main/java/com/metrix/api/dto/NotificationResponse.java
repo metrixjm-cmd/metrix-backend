@@ -23,6 +23,8 @@ public class NotificationResponse {
     private String incidentId;
     private String examId;
     private String storeId;
+    private String instanceId;
+    private String passwordResetRequestId;
     private boolean read;
     private Instant timestamp;
 }

@@ -27,6 +27,12 @@ public class SuspendedInstanceFilter extends OncePerRequestFilter {
     private final PlatformAdminService platformAdminService;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path != null && path.startsWith("/api/v1/auth/password-reset");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         if (!TenantContext.isPlatformAdmin()) {

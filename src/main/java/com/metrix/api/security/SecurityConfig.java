@@ -60,10 +60,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                 // ── Rutas públicas ─────────────────────────────────
-                // Sólo el login. Antes esto era /auth/** y dejaba abierto un
-                // /auth/register que aceptaba el rol desde el cuerpo y devolvía
-                // el JWT: cualquiera se fabricaba una cuenta ADMIN sin token.
+                // Sólo login y el reset de contraseña de licencia. Antes esto era /auth/**
+                // y dejaba abierto un /auth/register que aceptaba el rol desde el cuerpo
+                // y devolvía el JWT: cualquiera se fabricaba una cuenta ADMIN sin token.
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/auth/password-reset/**").permitAll()
                 .requestMatchers("/api/v1/productos/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/mercadopago").permitAll()
                 .requestMatchers("/actuator/health").permitAll()

@@ -2,6 +2,7 @@ package com.metrix.api.controller;
 
 import com.metrix.api.dto.LicensePackageResponse;
 import com.metrix.api.platform.TenantContext;
+import com.metrix.api.platform.service.LicensePasswordResetService;
 import com.metrix.api.platform.service.PlatformAdminService;
 import com.metrix.api.security.JwtAuthenticationFilter;
 import com.metrix.api.security.LicenseFeatureFilter;
@@ -86,6 +87,9 @@ class PlatformAdminAccessWebMvcTest {
     @MockBean
     private PlatformAdminService platformAdminService;
 
+    @MockBean
+    private LicensePasswordResetService licensePasswordResetService;
+
     @AfterEach
     void clearTenant() {
         TenantContext.clear();
@@ -123,6 +127,24 @@ class PlatformAdminAccessWebMvcTest {
         when(platformAdminService.listInstances()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/platform/instances")
+                        .with(user("ADMIN001").roles("ADMIN", "PLATFORM_ADMIN")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void tenantAdmin_cannotListPasswordResets() throws Exception {
+        TenantContext.setPlatformAdmin(false);
+        mockMvc.perform(get("/api/v1/platform/password-resets")
+                        .with(user("TENANTADM").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void platformAdmin_canListPasswordResets() throws Exception {
+        TenantContext.setPlatformAdmin(true);
+        when(licensePasswordResetService.list(null, null)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/platform/password-resets")
                         .with(user("ADMIN001").roles("ADMIN", "PLATFORM_ADMIN")))
                 .andExpect(status().isOk());
     }

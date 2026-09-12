@@ -185,6 +185,8 @@ public class NotificationService {
                 .incidentId(event.getIncidentId())
                 .examId(event.getExamId())
                 .storeId(event.getStoreId())
+                .instanceId(event.getInstanceId())
+                .passwordResetRequestId(event.getPasswordResetRequestId())
                 .read(false)
                 .createdAt(event.getTimestamp() != null ? event.getTimestamp() : Instant.now())
                 .build());
@@ -201,6 +203,8 @@ public class NotificationService {
                 .incidentId(n.getIncidentId())
                 .examId(n.getExamId())
                 .storeId(n.getStoreId())
+                .instanceId(n.getInstanceId())
+                .passwordResetRequestId(n.getPasswordResetRequestId())
                 .read(n.isRead())
                 .timestamp(n.getCreatedAt())
                 .build();

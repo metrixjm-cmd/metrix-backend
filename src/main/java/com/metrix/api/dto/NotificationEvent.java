@@ -18,7 +18,7 @@ import java.time.Instant;
  *   <li>{@code TASK_ASSIGNED}   – nueva tarea asignada al EJECUTADOR.</li>
  *   <li>{@code TASK_STARTED}    – EJECUTADOR inició una tarea (notifica al GERENTE).</li>
  *   <li>{@code TASK_COMPLETED}  – tarea completada a tiempo (notifica al GERENTE).</li>
- *   <li>{@code TASK_FAILED}     – tarea fallida (notifica al GERENTE y ADMIN).</li>
+ *   <li>{@code LICENSE_PASSWORD_RESET_REQUESTED} – un ADMIN de licencia olvidó su contraseña (notifica a Admin 0).</li>
  * </ul>
  * <p>
  * Severidad ({@code severity}):
@@ -60,6 +60,12 @@ public class NotificationEvent {
 
     /** ID de la sucursal origen del evento. */
     private String storeId;
+
+    /** Instancia METRIX relacionada (reset de contraseña de licencia). */
+    private String instanceId;
+
+    /** Solicitud de reset de contraseña de licencia. */
+    private String passwordResetRequestId;
 
     /** Timestamp de generación del evento. */
     private Instant timestamp;

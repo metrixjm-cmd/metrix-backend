@@ -258,11 +258,22 @@ public class PlatformAdminService {
         Integer maxUsuarios = snap != null ? snap.getMaxUsuarios() : null;
         Integer maxSucursales = snap != null ? snap.getMaxSucursales() : null;
         Integer sucursalesContratadas = order != null ? order.getSucursalesContratadas() : null;
+        // No mezclar int/Integer en el ternario: unboxea null cuando no hay orden.
+        Integer effectiveMaxSucursales = order != null
+                ? Integer.valueOf(TenantLicenseGuard.resolveMaxSucursales(order))
+                : maxSucursales;
         List<String> featureCodes = List.of();
         if (snap != null && snap.getFeatureCodes() != null && !snap.getFeatureCodes().isEmpty()) {
             featureCodes = List.copyOf(snap.getFeatureCodes());
         } else if (instance.getLicensePackageId() != null) {
             featureCodes = LicenseFeatureCodes.defaultsForPackageId(instance.getLicensePackageId());
+        }
+
+        String planNombre = instance.getLicensePackageNombre();
+        if (planNombre == null || planNombre.isBlank()) {
+            planNombre = snap != null && snap.getNombre() != null && !snap.getNombre().isBlank()
+                    ? snap.getNombre()
+                    : instance.getLicensePackageId();
         }
 
         return MetrixInstanceResponse.builder()
@@ -271,7 +282,8 @@ public class PlatformAdminService {
                 .codigoEmpresa(instance.getCodigoEmpresa())
                 .empresaNombre(instance.getEmpresaNombre())
                 .licensePackageId(instance.getLicensePackageId())
-                .licensePackageNombre(instance.getLicensePackageNombre())
+                .licensePackageNombre(planNombre)
+                .pricingModel(snap != null ? snap.getPricingModel() : null)
                 .orderId(instance.getOrderId())
                 .adminNumeroUsuario(instance.getAdminNumeroUsuario())
                 .adminNombre(instance.getAdminNombre())
@@ -283,6 +295,8 @@ public class PlatformAdminService {
                 .createdAt(instance.getCreatedAt())
                 .maxUsuarios(maxUsuarios)
                 .maxSucursales(maxSucursales)
+                .effectiveMaxSucursales(effectiveMaxSucursales != null && effectiveMaxSucursales > 0
+                        ? effectiveMaxSucursales : null)
                 .sucursalesContratadas(sucursalesContratadas)
                 .featureCodes(featureCodes)
                 .paidAt(order != null ? order.getPaidAt() : null)

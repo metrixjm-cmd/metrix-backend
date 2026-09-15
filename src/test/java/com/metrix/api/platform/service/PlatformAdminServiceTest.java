@@ -129,6 +129,36 @@ class PlatformAdminServiceTest {
         var list = service.listInstances();
         assertEquals(1, list.size());
         assertTrue(list.get(0).getFeatureCodes().contains("EXAMS"));
+        assertEquals("METRIX Pro", list.get(0).getLicensePackageNombre());
+    }
+
+    @Test
+    void list_proOrder_exposesPlanMaxNotContractedOne() {
+        when(instanceRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(
+                MetrixInstance.builder()
+                        .id("inst-pro")
+                        .licensePackageId("pro")
+                        .licensePackageNombre("METRIX Pro")
+                        .orderId("ord-pro")
+                        .status(MetrixInstanceStatus.ACTIVE)
+                        .build()));
+        when(productOrderRepository.findById("ord-pro")).thenReturn(Optional.of(
+                ProductOrder.builder()
+                        .id("ord-pro")
+                        .sucursalesContratadas(1)
+                        .packageSnapshot(ProductOrderPackageSnapshot.builder()
+                                .packageId("pro")
+                                .nombre("METRIX Pro")
+                                .pricingModel(com.metrix.api.model.LicensePricingModel.FLAT_MONTHLY)
+                                .maxUsuarios(50)
+                                .maxSucursales(5)
+                                .build())
+                        .build()));
+
+        var row = service.listInstances().get(0);
+        assertEquals("METRIX Pro", row.getLicensePackageNombre());
+        assertEquals(5, row.getEffectiveMaxSucursales());
+        assertEquals(1, row.getSucursalesContratadas());
     }
 
     @Test

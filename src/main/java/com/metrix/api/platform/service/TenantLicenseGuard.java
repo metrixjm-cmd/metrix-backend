@@ -1,5 +1,6 @@
 package com.metrix.api.platform.service;
 
+import com.metrix.api.model.LicensePricingModel;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.model.MetrixInstance;
@@ -127,16 +128,25 @@ public class TenantLicenseGuard {
     }
 
     /**
-     * Cupo efectivo: sucursales contratadas en la compra; si falta, el max del snapshot.
+     * Cupo operativo de sucursales.
+     * <p>
+     * En {@code PER_BRANCH} el cliente pagó N sucursales: ese N es el cupo
+     * (acotado al máximo del plan). En planes de cuota fija ({@code FLAT_MONTHLY},
+     * {@code PER_USER}) el precio no depende de cuántas sucursales anotó el
+     * checkout: rige {@code maxSucursales} del snapshot (p. ej. Pro = 5).
      */
     static int resolveMaxSucursales(ProductOrder order) {
-        if (order.getSucursalesContratadas() > 0) {
-            return order.getSucursalesContratadas();
-        }
         ProductOrderPackageSnapshot snap = order.getPackageSnapshot();
-        if (snap != null && snap.getMaxSucursales() != null && snap.getMaxSucursales() > 0) {
-            return snap.getMaxSucursales();
+        int planMax = snap != null && snap.getMaxSucursales() != null ? snap.getMaxSucursales() : 0;
+        int contracted = order.getSucursalesContratadas();
+        LicensePricingModel model = snap != null ? snap.getPricingModel() : null;
+
+        if (model == LicensePricingModel.PER_BRANCH && contracted > 0) {
+            return planMax > 0 ? Math.min(contracted, planMax) : contracted;
         }
-        return 0;
+        if (planMax > 0) {
+            return planMax;
+        }
+        return Math.max(contracted, 0);
     }
 }

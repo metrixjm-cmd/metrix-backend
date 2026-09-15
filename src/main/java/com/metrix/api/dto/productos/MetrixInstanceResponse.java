@@ -1,5 +1,6 @@
 package com.metrix.api.dto.productos;
 
+import com.metrix.api.model.LicensePricingModel;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
 import com.metrix.api.platform.model.MetrixInstanceSuspensionReason;
 import lombok.Builder;
@@ -18,6 +19,7 @@ public class MetrixInstanceResponse {
     private String empresaNombre;
     private String licensePackageId;
     private String licensePackageNombre;
+    private LicensePricingModel pricingModel;
     private String orderId;
     private String adminNumeroUsuario;
     private String adminNombre;
@@ -29,6 +31,8 @@ public class MetrixInstanceResponse {
     private Instant createdAt;
     private Integer maxUsuarios;
     private Integer maxSucursales;
+    /** Cupo que aplica el guard (plan fijo vs sucursales pagadas en PER_BRANCH). */
+    private Integer effectiveMaxSucursales;
     private Integer sucursalesContratadas;
     private List<String> featureCodes;
     private Instant paidAt;

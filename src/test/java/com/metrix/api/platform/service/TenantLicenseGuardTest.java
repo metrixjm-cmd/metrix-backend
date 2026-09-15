@@ -1,5 +1,6 @@
 package com.metrix.api.platform.service;
 
+import com.metrix.api.model.LicensePricingModel;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
 import com.metrix.api.platform.model.MetrixInstance;
@@ -84,16 +85,34 @@ class TenantLicenseGuardTest {
     }
 
     @Test
-    void createStore_blocksAtContractedBranches() {
-        stubOrder(snapshot(50, 5), 2);
+    void createStore_blocksAtContractedBranches_whenPerBranch() {
+        stubOrder(snapshot(50, 5, LicensePricingModel.PER_BRANCH), 2);
         when(storeRepository.countByActivoTrue()).thenReturn(2L);
         IllegalStateException ex = assertThrows(IllegalStateException.class, guard::assertCanCreateStore);
         org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("sucursales"));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("(2)"));
     }
 
     @Test
-    void createStore_allowsUnderContractedBranches() {
-        stubOrder(snapshot(50, 5), 2);
+    void createStore_allowsUnderContractedBranches_whenPerBranch() {
+        stubOrder(snapshot(50, 5, LicensePricingModel.PER_BRANCH), 2);
+        when(storeRepository.countByActivoTrue()).thenReturn(1L);
+        assertDoesNotThrow(guard::assertCanCreateStore);
+    }
+
+    @Test
+    void createStore_flatMonthly_usesPlanMaxNotCheckoutCount() {
+        stubOrder(snapshot(50, 5, LicensePricingModel.FLAT_MONTHLY), 1);
+        when(storeRepository.countByActivoTrue()).thenReturn(1L);
+        assertDoesNotThrow(guard::assertCanCreateStore);
+        when(storeRepository.countByActivoTrue()).thenReturn(5L);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, guard::assertCanCreateStore);
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("(5)"));
+    }
+
+    @Test
+    void createStore_missingPricingModel_usesPlanMax() {
+        stubOrder(snapshot(50, 5, null), 1);
         when(storeRepository.countByActivoTrue()).thenReturn(1L);
         assertDoesNotThrow(guard::assertCanCreateStore);
     }
@@ -171,10 +190,16 @@ class TenantLicenseGuardTest {
     }
 
     private static ProductOrderPackageSnapshot snapshot(Integer maxUsuarios, Integer maxSucursales) {
+        return snapshot(maxUsuarios, maxSucursales, null);
+    }
+
+    private static ProductOrderPackageSnapshot snapshot(
+            Integer maxUsuarios, Integer maxSucursales, LicensePricingModel pricingModel) {
         return ProductOrderPackageSnapshot.builder()
                 .packageId("base")
                 .maxUsuarios(maxUsuarios)
                 .maxSucursales(maxSucursales)
+                .pricingModel(pricingModel)
                 .build();
     }
 }

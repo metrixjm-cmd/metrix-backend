@@ -402,7 +402,7 @@ public class TaskServiceImpl implements TaskService {
      * <ol>
      *   <li>Resuelve el MongoDB _id del usuario autenticado.</li>
      *   <li>Valida que la tarea exista, esté activa y en estado {@code IN_PROGRESS}.</li>
-     *   <li>Valida que el usuario sea el colaborador asignado.</li>
+     *   <li>Valida que el usuario sea el asignado, o un GERENTE/ADMIN de su alcance.</li>
      *   <li>Sube el archivo a GCS vía {@link GcsService}.</li>
      *   <li>Agrega la URL al sub-documento {@code evidence} y persiste.</li>
      * </ol>
@@ -425,9 +425,18 @@ public class TaskServiceImpl implements TaskService {
                     "Estado actual: " + task.getExecution().getStatus());
         }
 
-        if (!task.getAssignedUserId().equals(user.getId())) {
-            throw new IllegalStateException(
-                    "Solo el colaborador asignado puede agregar evidencias a esta tarea.");
+        boolean isAdmin = user.getRoles() != null && user.getRoles().contains(Role.ADMIN);
+        boolean isGerente = user.getRoles() != null && user.getRoles().contains(Role.GERENTE);
+        boolean isAssignee = isTaskAssignee(user, task);
+        if (!isAssignee && !isAdmin && !isGerente) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Solo el colaborador asignado, un gerente o un administrador pueden agregar evidencias.");
+        }
+        if (!isAssignee && isGerente && !isAdmin) {
+            User assignee = userRepository.findById(task.getAssignedUserId())
+                    .or(() -> userRepository.findByNumeroUsuario(task.getAssignedUserId()))
+                    .orElse(null);
+            rolePolicy.assertGerenteCanManageTask(user, assignee, task.getStoreId());
         }
 
         String tipo = "IMAGE".equalsIgnoreCase(mediaType) ? "img" : "vid";

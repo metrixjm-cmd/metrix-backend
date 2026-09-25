@@ -99,7 +99,7 @@ public interface TaskService {
      * Reglas de negocio:
      * <ul>
      *   <li>La tarea debe estar en estado {@code IN_PROGRESS}.</li>
-     *   <li>El usuario autenticado debe ser el colaborador asignado a la tarea.</li>
+     *   <li>Puede subir el colaborador asignado, o un ADMIN/GERENTE de su alcance.</li>
      * </ul>
      *
      * @param taskId            MongoDB _id de la tarea

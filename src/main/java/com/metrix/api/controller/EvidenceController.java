@@ -25,8 +25,8 @@ import java.util.Set;
  * <p>
  * Restricciones de acceso:
  * <ul>
- *   <li>Solo {@code EJECUTADOR} puede subir evidencias.</li>
- *   <li>El EJECUTADOR debe ser el colaborador asignado a la tarea.</li>
+ *   <li>{@code EJECUTADOR}, {@code GERENTE} y {@code ADMIN} pueden subir evidencias.</li>
+ *   <li>El EJECUTADOR debe ser el colaborador asignado; GERENTE/ADMIN operan en su alcance.</li>
  *   <li>La tarea debe estar en estado {@code IN_PROGRESS}.</li>
  * </ul>
  * <p>
@@ -64,10 +64,10 @@ public class EvidenceController {
      * @param auth     contexto de autenticación JWT del EJECUTADOR
      * @return {@link EvidenceUploadResponse} con la URL persistida en GCS
      */
-    @Operation(summary = "Subir evidencia de ejecución (imagen o video)", description = "Sube una imagen o video como evidencia de ejecución de una tarea. Solo EJECUTADOR asignado a la tarea, que debe estar en estado IN_PROGRESS.")
+    @Operation(summary = "Subir evidencia de ejecución (imagen o video)", description = "Sube una imagen o video como evidencia de ejecución de una tarea. EJECUTADOR asignado, GERENTE o ADMIN. La tarea debe estar en estado IN_PROGRESS.")
     @ApiResponse(responseCode = "201", description = "Evidencia subida exitosamente a GCS")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasRole('EJECUTADOR')")
+    @PreAuthorize("hasAnyRole('EJECUTADOR', 'GERENTE', 'ADMIN')")
     public ResponseEntity<EvidenceUploadResponse> upload(
             @PathVariable String taskId,
             @RequestParam("file") MultipartFile file,

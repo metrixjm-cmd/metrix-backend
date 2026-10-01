@@ -28,6 +28,8 @@ public class LicensePackageResponse {
     private boolean precioPersonalizado;
     private Integer minUsuarios;
     private Integer maxUsuarios;
+    private int usuariosPorPaquete;
+    private BigDecimal precioPaqueteUsuarios;
     private Integer minSucursales;
     private Integer maxSucursales;
     private String soporte;

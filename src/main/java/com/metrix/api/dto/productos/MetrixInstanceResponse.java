@@ -30,6 +30,8 @@ public class MetrixInstanceResponse {
     private MetrixInstanceSuspensionReason suspensionReason;
     private Instant createdAt;
     private Integer maxUsuarios;
+    /** Cupo del plan más el paquete adicional si sigue pagado. */
+    private Integer effectiveMaxUsuarios;
     private Integer maxSucursales;
     /** Cupo que aplica el guard (plan fijo vs sucursales pagadas en PER_BRANCH). */
     private Integer effectiveMaxSucursales;

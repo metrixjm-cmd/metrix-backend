@@ -11,6 +11,7 @@ import com.metrix.api.platform.repository.LicensePackageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -102,6 +103,12 @@ public class LicensePackageServiceImpl implements LicensePackageService {
         entity.setPrecioImplementacion(request.getPrecioImplementacion());
         entity.setMinUsuarios(request.getMinUsuarios());
         entity.setMaxUsuarios(request.getMaxUsuarios());
+        if (request.getUsuariosPorPaquete() != null) {
+            entity.setUsuariosPorPaquete(request.getUsuariosPorPaquete());
+        }
+        if (request.getPrecioPaqueteUsuarios() != null) {
+            entity.setPrecioPaqueteUsuarios(request.getPrecioPaqueteUsuarios());
+        }
         entity.setMinSucursales(request.getMinSucursales());
         entity.setMaxSucursales(request.getMaxSucursales());
         entity.setSoporte(trimOrEmpty(request.getSoporte()));
@@ -130,6 +137,8 @@ public class LicensePackageServiceImpl implements LicensePackageService {
         entity.setPrecioPersonalizado(seed.isPrecioPersonalizado());
         entity.setMinUsuarios(seed.getMinUsuarios());
         entity.setMaxUsuarios(seed.getMaxUsuarios());
+        entity.setUsuariosPorPaquete(seed.getUsuariosPorPaquete());
+        entity.setPrecioPaqueteUsuarios(seed.getPrecioPaqueteUsuarios());
         entity.setMinSucursales(seed.getMinSucursales());
         entity.setMaxSucursales(seed.getMaxSucursales());
         entity.setSoporte(seed.getSoporte());
@@ -164,6 +173,10 @@ public class LicensePackageServiceImpl implements LicensePackageService {
                 .precioPersonalizado(entity.isPrecioPersonalizado())
                 .minUsuarios(entity.getMinUsuarios())
                 .maxUsuarios(entity.getMaxUsuarios())
+                .usuariosPorPaquete(resolveUsuariosPorPaquete(entity))
+                .precioPaqueteUsuarios(entity.getPrecioPaqueteUsuarios() == null
+                        ? BigDecimal.ZERO
+                        : entity.getPrecioPaqueteUsuarios())
                 .minSucursales(entity.getMinSucursales())
                 .maxSucursales(entity.getMaxSucursales())
                 .soporte(entity.getSoporte())
@@ -183,5 +196,10 @@ public class LicensePackageServiceImpl implements LicensePackageService {
 
     private String trimOrEmpty(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    public static int resolveUsuariosPorPaquete(LicensePackage entity) {
+        Integer size = entity.getUsuariosPorPaquete();
+        return size == null || size < 1 ? 10 : size;
     }
 }

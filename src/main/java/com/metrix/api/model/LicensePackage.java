@@ -69,6 +69,21 @@ public class LicensePackage {
     @Field("max_usuarios")
     private Integer maxUsuarios;
 
+    /**
+     * Usuarios que suma el único paquete adicional de esta licencia.
+     * {@code null} se trata como 10.
+     */
+    @Builder.Default
+    @Field("usuarios_por_paquete")
+    private Integer usuariosPorPaquete = 10;
+
+    /**
+     * Precio del paquete adicional, vigente 30 días por pago.
+     * {@code null} o cero: el paquete no se ofrece.
+     */
+    @Field("precio_paquete_usuarios")
+    private BigDecimal precioPaqueteUsuarios;
+
     @Field("min_sucursales")
     private Integer minSucursales;
 

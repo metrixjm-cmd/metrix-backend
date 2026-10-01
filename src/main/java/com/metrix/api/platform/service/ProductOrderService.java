@@ -38,6 +38,7 @@ public class ProductOrderService {
     private final MercadoPagoProperties paymentsProperties;
     private final ObjectProvider<MercadoPagoPaymentGateway> mercadoPagoGateway;
     private final MercadoPagoWebhookSignatureValidator webhookSignatureValidator;
+    private final UserPackService userPackService;
 
     public ProductOrderResponse createOrder(CreateProductOrderRequest request) {
         LicensePackage pkg = licensePackageRepository.findById(request.getPackageId())
@@ -189,6 +190,10 @@ public class ProductOrderService {
             return WebhookAckResponse.builder().received(true).applied(false).build();
         }
 
+        if (userPackService.isPaymentAlreadyApplied(dataId)) {
+            return WebhookAckResponse.builder().received(true).applied(false).build();
+        }
+
         Optional<ProductOrder> byPayment = orderRepository.findByMpPaymentId(dataId);
         if (byPayment.isPresent()) {
             ProductOrder existing = byPayment.get();
@@ -208,6 +213,11 @@ public class ProductOrderService {
         MercadoPagoPaymentGateway.MpPayment payment = mp.fetchPayment(dataId);
         if (payment == null) {
             return WebhookAckResponse.builder().received(true).applied(false).build();
+        }
+
+        Optional<WebhookAckResponse> userPack = userPackService.handleMercadoPagoPayment(payment);
+        if (userPack != null && userPack.isPresent()) {
+            return userPack.get();
         }
 
         if (!payment.isApproved()) {

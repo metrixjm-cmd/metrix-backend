@@ -77,6 +77,7 @@ public class SecurityConfig {
                 // ── Admin 0 — plataforma (no el ADMIN de un restaurante) ──
                 .requestMatchers("/api/v1/platform/**").hasRole("PLATFORM_ADMIN")
                 .requestMatchers("/api/v1/license-packages/**").hasRole("PLATFORM_ADMIN")
+                .requestMatchers("/api/v1/license/user-pack/**").hasRole("ADMIN")
 
                 // ── Rutas protegidas por rol ───────────────────────
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")

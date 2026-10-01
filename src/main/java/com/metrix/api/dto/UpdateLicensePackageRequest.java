@@ -3,6 +3,7 @@ package com.metrix.api.dto;
 import com.metrix.api.model.LicenseAccent;
 import com.metrix.api.model.LicensePricingModel;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -46,6 +47,14 @@ public class UpdateLicensePackageRequest {
 
     private Integer minUsuarios;
     private Integer maxUsuarios;
+
+    /** Tamaño del único paquete extra de usuarios. {@code null} no modifica. */
+    @Min(1)
+    private Integer usuariosPorPaquete;
+
+    /** Precio del paquete extra (30 días). {@code 0} lo oculta. {@code null} no modifica. */
+    @DecimalMin(value = "0.0", inclusive = true)
+    private BigDecimal precioPaqueteUsuarios;
     private Integer minSucursales;
     private Integer maxSucursales;
 

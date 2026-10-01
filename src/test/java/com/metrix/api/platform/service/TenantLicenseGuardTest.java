@@ -19,6 +19,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,6 +76,48 @@ class TenantLicenseGuardTest {
         stubOrder(snapshot(15, 3), 2);
         when(userRepository.countByActivoTrue()).thenReturn(14L);
         assertDoesNotThrow(guard::assertCanCreateUser);
+    }
+
+    @Test
+    void createUser_activePackRaisesLimit() {
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .orderId("ord-1")
+                .extraUsuarios(10)
+                .extraUsuariosHasta(Instant.now().plus(5, ChronoUnit.DAYS))
+                .build();
+        when(metrixInstanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+        when(productOrderRepository.findById("ord-1")).thenReturn(Optional.of(
+                ProductOrder.builder()
+                        .id("ord-1")
+                        .packageSnapshot(snapshot(15, 2))
+                        .sucursalesContratadas(1)
+                        .build()));
+        when(userRepository.countByActivoTrue()).thenReturn(20L);
+        assertDoesNotThrow(guard::assertCanCreateUser);
+        when(userRepository.countByActivoTrue()).thenReturn(25L);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, guard::assertCanCreateUser);
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("(25)"));
+    }
+
+    @Test
+    void createUser_expiredPackDoesNotRaiseLimit() {
+        MetrixInstance instance = MetrixInstance.builder()
+                .id("inst-1")
+                .orderId("ord-1")
+                .extraUsuarios(10)
+                .extraUsuariosHasta(Instant.now().minus(1, ChronoUnit.DAYS))
+                .build();
+        when(metrixInstanceRepository.findById("inst-1")).thenReturn(Optional.of(instance));
+        when(productOrderRepository.findById("ord-1")).thenReturn(Optional.of(
+                ProductOrder.builder()
+                        .id("ord-1")
+                        .packageSnapshot(snapshot(15, 2))
+                        .sucursalesContratadas(1)
+                        .build()));
+        when(userRepository.countByActivoTrue()).thenReturn(15L);
+        IllegalStateException ex = assertThrows(IllegalStateException.class, guard::assertCanCreateUser);
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("venció"));
     }
 
     @Test

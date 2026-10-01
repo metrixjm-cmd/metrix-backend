@@ -74,6 +74,18 @@ public class MetrixInstance {
     @Field("suspension_reason")
     private MetrixInstanceSuspensionReason suspensionReason;
 
+    /** Usuarios del paquete adicional vigente. 0 si nunca se contrató. */
+    @Builder.Default
+    @Field("extra_usuarios")
+    private int extraUsuarios = 0;
+
+    /** Fin del periodo pagado del paquete adicional. */
+    @Field("extra_usuarios_hasta")
+    private Instant extraUsuariosHasta;
+
+    @Field("extra_usuarios_order_id")
+    private String extraUsuariosOrderId;
+
     @CreatedDate
     @Field("created_at")
     private Instant createdAt;

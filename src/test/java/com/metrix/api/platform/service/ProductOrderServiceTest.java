@@ -51,6 +51,7 @@ class ProductOrderServiceTest {
     @Mock private MercadoPagoProperties paymentsProperties;
     @Mock private ObjectProvider<MercadoPagoPaymentGateway> mercadoPagoGateway;
     @Mock private MercadoPagoWebhookSignatureValidator webhookSignatureValidator;
+    @Mock private UserPackService userPackService;
 
     @InjectMocks private ProductOrderService service;
 

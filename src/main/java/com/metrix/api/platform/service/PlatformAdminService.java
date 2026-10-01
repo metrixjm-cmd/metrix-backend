@@ -4,6 +4,7 @@ import com.metrix.api.dto.productos.MetrixInstanceResponse;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.platform.TenantDatabaseNames;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
+import com.metrix.api.platform.license.UserPackPolicy;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.MetrixInstanceStatus;
 import com.metrix.api.platform.model.MetrixInstanceSuspensionReason;
@@ -256,6 +257,8 @@ public class PlatformAdminService {
         ProductOrderPackageSnapshot snap = order != null ? order.getPackageSnapshot() : null;
 
         Integer maxUsuarios = snap != null ? snap.getMaxUsuarios() : null;
+        int extraUsuarios = UserPackPolicy.activeExtra(instance, Instant.now());
+        Integer effectiveMaxUsuarios = maxUsuarios == null ? null : maxUsuarios + extraUsuarios;
         Integer maxSucursales = snap != null ? snap.getMaxSucursales() : null;
         Integer sucursalesContratadas = order != null ? order.getSucursalesContratadas() : null;
         // No mezclar int/Integer en el ternario: unboxea null cuando no hay orden.
@@ -294,6 +297,7 @@ public class PlatformAdminService {
                 .suspensionReason(instance.getSuspensionReason())
                 .createdAt(instance.getCreatedAt())
                 .maxUsuarios(maxUsuarios)
+                .effectiveMaxUsuarios(effectiveMaxUsuarios)
                 .maxSucursales(maxSucursales)
                 .effectiveMaxSucursales(effectiveMaxSucursales != null && effectiveMaxSucursales > 0
                         ? effectiveMaxSucursales : null)

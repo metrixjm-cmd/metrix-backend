@@ -3,6 +3,7 @@ package com.metrix.api.platform.service;
 import com.metrix.api.model.LicensePricingModel;
 import com.metrix.api.platform.TenantContext;
 import com.metrix.api.platform.license.LicenseFeatureCodes;
+import com.metrix.api.platform.license.UserPackPolicy;
 import com.metrix.api.platform.model.MetrixInstance;
 import com.metrix.api.platform.model.ProductOrder;
 import com.metrix.api.platform.model.ProductOrderPackageSnapshot;
@@ -14,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -31,7 +33,11 @@ public class TenantLicenseGuard {
     private final StoreRepository storeRepository;
 
     public void assertCanCreateUser() {
-        ProductOrder order = resolveOrderOrNull();
+        MetrixInstance instance = resolveInstanceOrNull();
+        if (instance == null) {
+            return;
+        }
+        ProductOrder order = resolveOrder(instance);
         if (order == null) {
             return;
         }
@@ -39,11 +45,17 @@ public class TenantLicenseGuard {
         if (maxUsuarios == null || maxUsuarios <= 0) {
             return;
         }
+        int extra = UserPackPolicy.activeExtra(instance, Instant.now());
+        int limit = maxUsuarios + extra;
         long current = userRepository.countByActivoTrue();
-        if (current >= maxUsuarios) {
+        if (current >= limit) {
+            String hint = extra > 0
+                    ? "Desactiva colaboradores o espera la renovación del paquete adicional."
+                    : UserPackPolicy.expired(instance, Instant.now())
+                    ? "El paquete adicional venció. Renuévalo desde Más usuarios o desactiva colaboradores."
+                    : "Compra el paquete de usuarios adicionales o desactiva colaboradores.";
             throw new IllegalStateException(
-                    "Límite de usuarios del plan alcanzado (" + maxUsuarios
-                            + "). Actualiza tu licencia o desactiva colaboradores.");
+                    "Límite de usuarios del plan alcanzado (" + limit + "). " + hint);
         }
     }
 
@@ -99,6 +111,11 @@ public class TenantLicenseGuard {
     }
 
     private ProductOrder resolveOrderOrNull() {
+        MetrixInstance instance = resolveInstanceOrNull();
+        return instance == null ? null : resolveOrder(instance);
+    }
+
+    private MetrixInstance resolveInstanceOrNull() {
         if (TenantContext.isPlatformAdmin()) {
             return null;
         }
@@ -106,8 +123,11 @@ public class TenantLicenseGuard {
         if (instanceId == null || instanceId.isBlank()) {
             return null;
         }
-        MetrixInstance instance = metrixInstanceRepository.findById(instanceId).orElse(null);
-        if (instance == null || instance.getOrderId() == null || instance.getOrderId().isBlank()) {
+        return metrixInstanceRepository.findById(instanceId).orElse(null);
+    }
+
+    private ProductOrder resolveOrder(MetrixInstance instance) {
+        if (instance.getOrderId() == null || instance.getOrderId().isBlank()) {
             return null;
         }
         return productOrderRepository.findById(instance.getOrderId()).orElse(null);

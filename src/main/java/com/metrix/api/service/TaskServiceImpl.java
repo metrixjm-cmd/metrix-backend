@@ -282,26 +282,22 @@ public class TaskServiceImpl implements TaskService {
      * IN_PROGRESS → COMPLETED
      * <p>
      * Regla de negocio (Obj. #4 + KPI #1):
-     * Una tarea solo puede marcarse COMPLETED si {@code now ≤ dueAt}.
-     * Si el plazo venció, el sistema rechaza la transición: el operador
-     * debe usar FAILED para registrar la ejecución tardía con su causa.
-     *
-     * @throws IllegalStateException si el plazo ya venció
+     * La tarea puede marcarse COMPLETED aunque el plazo ya haya vencido. En ese
+     * caso se registra como ejecución fuera de plazo ({@code onTime = false}),
+     * para que el KPI de puntualidad siga siendo veraz. El aviso de vencimiento
+     * (y la fecha límite) se muestra en el frontend.
+     * <p>
+     * {@code dueAt == null} (tareas recurrentes) significa sin plazo => a tiempo.
      */
     private void applyCompleted(Task task, Execution execution, Instant dueAt, Instant now) {
         if (task.getProcesses() != null && task.getProcesses().stream().anyMatch(step -> !step.isCompleted())) {
             throw new IllegalStateException(
                     "No se puede marcar la tarea como COMPLETED porque aún tiene procesos pendientes.");
         }
-        if (now.isAfter(dueAt)) {
-            throw new IllegalStateException(
-                    "El plazo de la tarea venció el " + dueAt + ". " +
-                    "Para registrar ejecución tardía utilice el estatus FAILED con los comentarios de causa.");
-        }
         validateCompletionRequirements(task, execution);
         execution.setStatus(TaskStatus.COMPLETED);
         execution.setFinishedAt(now);
-        execution.setOnTime(true);  // Garantizado: la validación anterior descarta now > dueAt
+        execution.setOnTime(dueAt == null || !now.isAfter(dueAt));
     }
 
     /**

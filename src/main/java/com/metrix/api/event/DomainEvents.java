@@ -38,6 +38,12 @@ public final class DomainEvents {
             String comments
     ) {}
 
+    /** Cambio de una tarea que no es de estado (por ejemplo un paso). Solo refresca listas. */
+    public record TaskUpdatedEvent(
+            String taskId,
+            String assignedUserId
+    ) {}
+
     // ── Incident Events ───────────────────────────────────────────────────
 
     public record IncidentCreatedEvent(

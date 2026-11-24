@@ -3,6 +3,7 @@ package com.metrix.api.event;
 import com.metrix.api.dto.NotificationEvent;
 import com.metrix.api.event.DomainEvents.TaskCreatedEvent;
 import com.metrix.api.event.DomainEvents.TaskStatusChangedEvent;
+import com.metrix.api.event.DomainEvents.TaskUpdatedEvent;
 import com.metrix.api.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,12 @@ public class TaskEventListener {
                 .build();
         notificationService.sendToUser(event.assignedUserId(), assigned);
         notificationService.sendToManagerOfAssignee(event.assignedUserId(), assigned);
+        notificationService.pushTaskSync(event.assignedUserId(), event.taskId());
+    }
+
+    @EventListener
+    public void onTaskUpdated(TaskUpdatedEvent event) {
+        notificationService.pushTaskSync(event.assignedUserId(), event.taskId());
     }
 
     @EventListener
@@ -80,5 +87,6 @@ public class TaskEventListener {
                 .storeId(event.storeId())
                 .timestamp(Instant.now())
                 .build());
+        notificationService.pushTaskSync(event.assignedUserId(), event.taskId());
     }
 }

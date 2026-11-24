@@ -164,6 +164,15 @@ public class Task {
     @Field("recurrence_end_time")
     private String recurrenceEndTime;
 
+    /** Día operativo (yyyy-MM-dd) al que pertenece la ejecución abierta. */
+    @Field("cycle_date")
+    private String cycleDate;
+
+    /** Días ya cerrados. El de hoy no está aquí. */
+    @Builder.Default
+    @Field("day_history")
+    private List<RecurringDay> dayHistory = new ArrayList<>();
+
     // ── Ejecución (execution) ────────────────────────────────────────────
 
     /**

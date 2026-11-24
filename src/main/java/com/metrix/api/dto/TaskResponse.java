@@ -68,6 +68,9 @@ public class TaskResponse {
     private List<String> recurrenceDays = new ArrayList<>();
     private String recurrenceStartTime;
     private String recurrenceEndTime;
+    private String cycleDate;
+    @Builder.Default
+    private List<com.metrix.api.model.RecurringDay> dayHistory = new ArrayList<>();
 
     // meta
     private String createdBy;

@@ -136,6 +136,7 @@ public class AlertScheduler {
                 notificationService.sendToUser(task.getAssignedUserId(), event);
             }
             notificationService.sendToManagerOfAssignee(task.getAssignedUserId(), event);
+            notificationService.pushTaskSync(task.getAssignedUserId(), task.getId());
             log.debug("TASK_OVERDUE - taskId: {} | critical: {}", task.getId(), task.isCritical());
         }
 

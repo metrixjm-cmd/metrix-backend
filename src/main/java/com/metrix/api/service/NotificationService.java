@@ -12,8 +12,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -121,6 +123,32 @@ public class NotificationService {
                 .forEach(admin -> sendToUser(admin.getId(), event));
     }
 
+    /**
+     * Avisa a quien ve la tarea (asignado, su gerente y los ADMIN) para que
+     * recarguen la lista. No se guarda en la campana.
+     */
+    public void pushTaskSync(String assigneeUserId, String taskId) {
+        if (taskId == null || taskId.isBlank()) return;
+
+        Set<String> recipients = new LinkedHashSet<>();
+        if (assigneeUserId != null && !assigneeUserId.isBlank()) {
+            recipients.add(assigneeUserId);
+            userRepository.findById(assigneeUserId).ifPresent(assignee -> {
+                String managerId = assignee.getManagerOwnerId();
+                if (managerId != null && !managerId.isBlank()) {
+                    recipients.add(managerId);
+                }
+            });
+        }
+        userRepository.findByRolesContaining(Role.ADMIN)
+                .forEach(admin -> recipients.add(admin.getId()));
+
+        String payload = "{\"taskId\":\"" + taskId + "\"}";
+        for (String userId : recipients) {
+            deliverRaw(userId, "task-sync", payload);
+        }
+    }
+
     public int activeConnections() {
         return emitters.size();
     }
@@ -218,6 +246,17 @@ public class NotificationService {
      * mandar el id del evento haría que la misma notificación apareciera dos veces.
      * Es además el id que {@code markRead} espera.
      */
+    private void deliverRaw(String userId, String eventName, String json) {
+        SseEmitter emitter = emitters.get(userId);
+        if (emitter == null) return;
+        try {
+            emitter.send(SseEmitter.event().name(eventName).data(json));
+        } catch (IOException e) {
+            emitters.remove(userId, emitter);
+            log.warn("Error entregando {} a {}: {}", eventName, userId, e.getMessage());
+        }
+    }
+
     private void deliverToLocalEmitter(String userId, Notification saved) {
         SseEmitter emitter = emitters.get(userId);
         if (emitter == null) return;

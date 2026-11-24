@@ -9,6 +9,7 @@ import com.metrix.api.dto.TaskResponse;
 import com.metrix.api.dto.UpdateStatusRequest;
 import com.metrix.api.event.DomainEvents.TaskCreatedEvent;
 import com.metrix.api.event.DomainEvents.TaskStatusChangedEvent;
+import com.metrix.api.event.DomainEvents.TaskUpdatedEvent;
 import com.metrix.api.exception.ResourceNotFoundException;
 import com.metrix.api.model.*;
 import com.metrix.api.repository.TaskEvidenceRepository;
@@ -54,6 +55,7 @@ public class TaskServiceImpl implements TaskService {
     private final GcsService               gcsService;
     private final ApplicationEventPublisher eventPublisher;
     private final RolePolicy               rolePolicy;
+    private final RecurringCycleRoller    recurringCycleRoller;
 
     // ── Crear Tarea ──────────────────────────────────────────────────────
 
@@ -99,6 +101,7 @@ public class TaskServiceImpl implements TaskService {
                 .recurrenceDays(request.getRecurrenceDays() != null ? request.getRecurrenceDays() : List.of())
                 .recurrenceStartTime(request.getRecurrenceStartTime())
                 .recurrenceEndTime(request.getRecurrenceEndTime())
+                .cycleDate(request.isRecurring() ? recurringCycleRoller.todayIso(Instant.now()) : null)
                 .execution(Execution.builder()
                         .status(TaskStatus.PENDING)
                         .evidence(new Evidence())
@@ -282,26 +285,22 @@ public class TaskServiceImpl implements TaskService {
      * IN_PROGRESS → COMPLETED
      * <p>
      * Regla de negocio (Obj. #4 + KPI #1):
-     * Una tarea solo puede marcarse COMPLETED si {@code now ≤ dueAt}.
-     * Si el plazo venció, el sistema rechaza la transición: el operador
-     * debe usar FAILED para registrar la ejecución tardía con su causa.
-     *
-     * @throws IllegalStateException si el plazo ya venció
+     * La tarea puede marcarse COMPLETED aunque el plazo ya haya vencido. En ese
+     * caso se registra como ejecución fuera de plazo ({@code onTime = false}),
+     * para que el KPI de puntualidad siga siendo veraz. El aviso de vencimiento
+     * (y la fecha límite) se muestra en el frontend.
+     * <p>
+     * {@code dueAt == null} (tareas recurrentes) significa sin plazo => a tiempo.
      */
     private void applyCompleted(Task task, Execution execution, Instant dueAt, Instant now) {
         if (task.getProcesses() != null && task.getProcesses().stream().anyMatch(step -> !step.isCompleted())) {
             throw new IllegalStateException(
                     "No se puede marcar la tarea como COMPLETED porque aún tiene procesos pendientes.");
         }
-        if (now.isAfter(dueAt)) {
-            throw new IllegalStateException(
-                    "El plazo de la tarea venció el " + dueAt + ". " +
-                    "Para registrar ejecución tardía utilice el estatus FAILED con los comentarios de causa.");
-        }
         validateCompletionRequirements(task, execution);
         execution.setStatus(TaskStatus.COMPLETED);
         execution.setFinishedAt(now);
-        execution.setOnTime(true);  // Garantizado: la validación anterior descarta now > dueAt
+        execution.setOnTime(dueAt == null || !now.isAfter(dueAt));
     }
 
     /**
@@ -559,6 +558,7 @@ public class TaskServiceImpl implements TaskService {
         }
 
         Task saved = taskRepository.save(task);
+        eventPublisher.publishEvent(new TaskUpdatedEvent(saved.getId(), saved.getAssignedUserId()));
         return toResponse(saved, resolveUserName(saved.getAssignedUserId()));
     }
 
@@ -729,6 +729,9 @@ public class TaskServiceImpl implements TaskService {
     // ── Mapper Task → TaskResponse ───────────────────────────────────────
 
     private TaskResponse toResponse(Task task, String assignedName) {
+        if (recurringCycleRoller.roll(task, Instant.now())) {
+            taskRepository.save(task);
+        }
         Execution exec     = task.getExecution();
         Evidence  evidence = exec.getEvidence() != null ? exec.getEvidence() : new Evidence();
 
@@ -759,6 +762,8 @@ public class TaskServiceImpl implements TaskService {
                 .recurrenceDays(task.getRecurrenceDays() != null ? task.getRecurrenceDays() : List.of())
                 .recurrenceStartTime(task.getRecurrenceStartTime())
                 .recurrenceEndTime(task.getRecurrenceEndTime())
+                .cycleDate(task.getCycleDate())
+                .dayHistory(task.getDayHistory() != null ? task.getDayHistory() : List.of())
                 .createdBy(task.getCreatedBy())
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())

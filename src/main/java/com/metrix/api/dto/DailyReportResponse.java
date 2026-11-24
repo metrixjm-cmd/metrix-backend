@@ -41,4 +41,6 @@ public class DailyReportResponse {
     private int totalCompleted;
     private int totalFailed;
     private int totalPending;
+    /** Completadas del día con plazo vencido ({@code onTime = false}). */
+    private int totalCompletedLate;
 }

@@ -81,7 +81,7 @@ public interface TaskService {
      * Reglas de negocio (ver {@code TaskServiceImpl}):
      * <ul>
      *   <li>PENDING → IN_PROGRESS: registra {@code startedAt = now}.</li>
-     *   <li>IN_PROGRESS → COMPLETED: solo si {@code now ≤ dueAt}; calcula {@code onTime=true}.</li>
+     *   <li>IN_PROGRESS → COMPLETED: permitido aun con plazo vencido; {@code onTime} = (dueAt null o now ≤ dueAt).</li>
      *   <li>IN_PROGRESS → FAILED: requiere {@code comments}; {@code onTime=false}; incrementa reworkCount.</li>
      *   <li>COMPLETED|FAILED → cualquier estado: transición ilegal → {@link IllegalStateException}.</li>
      * </ul>

@@ -1,0 +1,15 @@
+# Ambiente prueba: solo Mongo local. La API se levanta con Maven para tener
+# Swagger y recarga. No usa Atlas ni Cloud Run.
+name: metrix-prueba
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: metrix-prueba-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - metrix-prueba-data:/data/db
+
+volumes:
+  metrix-prueba-data:

@@ -8,8 +8,10 @@ metrix:
     bucket-name: ${GCS_BUCKET_NAME}
     project-id: ${GCS_PROJECT_ID:}
     credentials-path: ${GCS_CREDENTIALS_PATH:}
-    local-fallback-enabled: false
-    local-evidence-endpoint-enabled: false
+    # El workflow de producción manda false. El ensayo local de deploy puede
+    # poner true para arrancar sin credenciales de GCS.
+    local-fallback-enabled: ${GCS_LOCAL_FALLBACK_ENABLED:false}
+    local-evidence-endpoint-enabled: ${GCS_LOCAL_EVIDENCE_ENDPOINT_ENABLED:false}
     signed-urls-enabled: true
     signed-url-duration-minutes: ${GCS_SIGNED_URL_DURATION_MINUTES:60}
 

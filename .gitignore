@@ -11,6 +11,10 @@ target/
 # Runtime uploads
 uploads/
 
+# Secretos de los ambientes locales. No van al repo.
+.env.prueba
+.env.deploy
+
 # Local Claude Code settings
 .claude/settings.local.json
 .gstack/

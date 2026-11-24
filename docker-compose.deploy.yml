@@ -1,0 +1,40 @@
+# Ambiente deploy: la misma imagen del Dockerfile que sube GitHub Actions,
+# con el perfil docker, contra un Mongo local. No llama a gcloud ni a Atlas.
+name: metrix-deploy
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: metrix-deploy-mongo
+    ports:
+      - "27018:27017"
+    volumes:
+      - metrix-deploy-data:/data/db
+
+  api:
+    build: .
+    image: metrix-backend:deploy
+    container_name: metrix-deploy-api
+    depends_on:
+      - mongo
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env.deploy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: "8080"
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/metrix_deploy
+      METRIX_ANALYTICS_URL: http://host.docker.internal:8001/api/v1/analytics
+      CORS_ALLOWED_ORIGINS: http://localhost:4200,http://localhost:4201,http://localhost:8081
+      GCS_BUCKET_NAME: metrix-deploy-local
+      GCS_PROJECT_ID: local
+      GCS_LOCAL_FALLBACK_ENABLED: "true"
+      GCS_LOCAL_EVIDENCE_ENDPOINT_ENABLED: "false"
+      METRIX_PUBLIC_API_URL: http://localhost:8081
+      METRIX_FRONTEND_BASE_URL: http://localhost:4201
+      METRIX_PAYMENTS_PROVIDER: simulated
+      METRIX_PLATFORM_DATABASE: metrix_platform
+
+volumes:
+  metrix-deploy-data:

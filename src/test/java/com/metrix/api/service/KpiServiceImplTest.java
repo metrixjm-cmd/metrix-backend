@@ -59,12 +59,46 @@ class KpiServiceImplTest {
                 .build();
     }
 
+    private Task completed(Boolean onTime) {
+        return Task.builder()
+                .shift("MATUTINO")
+                .reworkCount(0)
+                .execution(Execution.builder().status(TaskStatus.COMPLETED).onTime(onTime).build())
+                .build();
+    }
+
     private Task criticalTask(TaskStatus status) {
         return Task.builder()
                 .shift("MATUTINO")
                 .critical(true)
                 .execution(Execution.builder().status(status).build())
                 .build();
+    }
+
+    // ── Completadas fuera de plazo ───────────────────────────────────────
+
+    @Test
+    void completadaFueraDePlazo_bajaOnTimeYQuedaContada() {
+        List<Task> tasks = List.of(
+                completed(true),
+                completed(false),
+                task(TaskStatus.FAILED, 0, "MATUTINO"));
+
+        KpiSummaryResponse summary = kpiService.getSummaryForTasks(tasks, "GLOBAL", "all");
+
+        assertEquals(33.33, summary.getOnTimeRate(), 0.01,
+                "La completada tarde entra al denominador del On-Time y no al numerador");
+        assertEquals(1L, summary.getCompletedLate());
+        assertEquals(2L, summary.getPipelineCompleted());
+    }
+
+    @Test
+    void onTimeNulo_noCuentaComoFueraDePlazo() {
+        KpiSummaryResponse summary = kpiService.getSummaryForTasks(
+                List.of(completed(null), completed(true)), "GLOBAL", "all");
+
+        assertEquals(0L, summary.getCompletedLate());
+        assertEquals(50.0, summary.getOnTimeRate(), 0.01);
     }
 
     // ── Delegación Efectiva ──────────────────────────────────────────────

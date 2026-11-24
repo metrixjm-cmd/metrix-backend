@@ -92,6 +92,10 @@ public class ReportServiceImpl implements ReportService {
 
         long completed = dayTasks.stream()
                 .filter(t -> t.getExecution().getStatus() == TaskStatus.COMPLETED).count();
+        long completedLate = dayTasks.stream()
+                .filter(t -> t.getExecution().getStatus() == TaskStatus.COMPLETED
+                        && Boolean.FALSE.equals(t.getExecution().getOnTime()))
+                .count();
         long failed    = dayTasks.stream()
                 .filter(t -> t.getExecution().getStatus() == TaskStatus.FAILED).count();
         long pending   = dayTasks.stream()
@@ -109,6 +113,7 @@ public class ReportServiceImpl implements ReportService {
                 .correctionSpeed(correctionSpeed)
                 .totalAssigned(dayTasks.size())
                 .totalCompleted((int) completed)
+                .totalCompletedLate((int) completedLate)
                 .totalFailed((int) failed)
                 .totalPending((int) pending)
                 .build();
@@ -134,6 +139,7 @@ public class ReportServiceImpl implements ReportService {
                     + "   |   Fecha: " + report.getReportDate(), cellFont));
             doc.add(new Paragraph("Tareas del día: " + report.getTotalAssigned()
                     + "  Completadas: " + report.getTotalCompleted()
+                    + "  Fuera de plazo: " + report.getTotalCompletedLate()
                     + "  Fallidas: " + report.getTotalFailed()
                     + "  Pendientes: " + report.getTotalPending(), cellFont));
             doc.add(Chunk.NEWLINE);
@@ -149,6 +155,7 @@ public class ReportServiceImpl implements ReportService {
                 addHeaderCell(kpiTable, "Valor", headerFont);
                 addKpiRow(kpiTable, "Over-all", formatKpi(kpi.getIgeo()), cellFont);
                 addKpiRow(kpiTable, "On-Time Rate", formatKpiPct(kpi.getOnTimeRate()), cellFont);
+                addKpiRow(kpiTable, "Completadas fuera de plazo", String.valueOf(kpi.getCompletedLate()), cellFont);
                 addKpiRow(kpiTable, "Re-trabajo", formatKpiPct(kpi.getReworkRate()), cellFont);
                 addKpiRow(kpiTable, "Críticas Pendientes", String.valueOf(kpi.getCriticalPending()), cellFont);
                 doc.add(kpiTable);
@@ -251,6 +258,7 @@ public class ReportServiceImpl implements ReportService {
                 createDataRow(kpiSheet, r++, dataStyle, "Fecha", report.getReportDate().toString());
                 createDataRow(kpiSheet, r++, dataStyle, "Total Asignadas", String.valueOf(report.getTotalAssigned()));
                 createDataRow(kpiSheet, r++, dataStyle, "Completadas", String.valueOf(report.getTotalCompleted()));
+                createDataRow(kpiSheet, r++, dataStyle, "Completadas fuera de plazo", String.valueOf(report.getTotalCompletedLate()));
                 createDataRow(kpiSheet, r++, dataStyle, "Fallidas", String.valueOf(report.getTotalFailed()));
                 createDataRow(kpiSheet, r, dataStyle, "Pendientes", String.valueOf(report.getTotalPending()));
             }

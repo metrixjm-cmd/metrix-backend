@@ -46,6 +46,12 @@ public class KpiSummaryResponse {
     private long pipelineCompleted;
     private long pipelineFailed;
 
+    /**
+     * Completadas con {@code onTime = false}: se cerraron después del plazo.
+     * Entran al On-Time Rate como no puntuales y quedan visibles por separado.
+     */
+    private long completedLate;
+
     // Sparklines (últimas 10 tareas cerradas, orden ASC por createdAt)
     private List<Integer> sparklineOnTime;    // 100 = onTime, 0 = no
     private List<Double>  sparklineIgeo;      // IGEO rolling per task

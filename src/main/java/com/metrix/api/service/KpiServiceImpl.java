@@ -670,6 +670,7 @@ public class KpiServiceImpl implements KpiService {
                 .pipelineInProgress(pipelineCount(context, contextId, tasks, "IN_PROGRESS"))
                 .pipelineCompleted(pipelineCount(context, contextId, tasks, "COMPLETED"))
                 .pipelineFailed(pipelineCount(context, contextId, tasks, "FAILED"))
+                .completedLate(countCompletedLate(tasks))
                 .sparklineOnTime(buildOnTimeSparkline(last10))
                 .sparklineIgeo(buildIgeoSparkline(last10))
                 .sparklineTaskTitles(buildTaskTitles(last10))
@@ -677,6 +678,18 @@ public class KpiServiceImpl implements KpiService {
     }
 
     // ── Fórmulas KPI ──────────────────────────────────────────────────────
+
+    /**
+     * Completadas fuera de plazo. Solo {@code onTime == false}: un null es
+     * "aún no cerrada" o dato viejo sin marca, y no se cuenta como tardía.
+     */
+    private long countCompletedLate(List<Task> tasks) {
+        return tasks.stream()
+                .filter(t -> t.getExecution() != null
+                        && t.getExecution().getStatus() == TaskStatus.COMPLETED
+                        && Boolean.FALSE.equals(t.getExecution().getOnTime()))
+                .count();
+    }
 
     /** KPI #1 — On-Time Rate: % de tareas cerradas que se completaron a tiempo. */
     private double computeOnTimeRate(List<Task> closedTasks) {
@@ -914,6 +927,7 @@ public class KpiServiceImpl implements KpiService {
                 .pipelineInProgress(0)
                 .pipelineCompleted(0)
                 .pipelineFailed(0)
+                .completedLate(0)
                 .sparklineOnTime(Collections.emptyList())
                 .sparklineIgeo(Collections.emptyList())
                 .sparklineTaskTitles(Collections.emptyList())
